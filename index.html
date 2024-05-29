@@ -21,10 +21,15 @@
     </script>
 </head>
 <body>
-    <a-scene embedded>
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
         <!-- Basic 3D Box for non-AR view -->
         <a-box position="0 1.5 -3" rotation="0 45 0" color="#4CC3D9" log></a-box>
         <a-sky color="#ECECEC"></a-sky>
+        
+        <!-- AR Marker -->
+        <a-marker preset="hiro">
+            <a-box position="0 0.5 0" rotation="0 45 0" color="#EF2D5E"></a-box>
+        </a-marker>
         
         <a-entity camera></a-entity>
     </a-scene>
