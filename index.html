@@ -9,17 +9,12 @@
         body { margin: 0; overflow: hidden; }
     </style>
     <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            console.log('Document loaded');
-        });
-
         AFRAME.registerComponent('log', {
             init: function () {
                 console.log('Component initialized');
             }
         });
 
-        // Detect if AR.js is available
         AFRAME.registerComponent('ar-check', {
             init: function () {
                 console.log('AR check initialized');
