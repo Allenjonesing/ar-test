@@ -2,25 +2,16 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>AR and 3D Scene</title>
+    <title>Basic 3D Scene</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-ar@3.0.1/dist/aframe-ar.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; }
     </style>
 </head>
 <body>
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-        <!-- Basic 3D Box for non-AR view -->
+    <a-scene>
         <a-box position="0 1.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
         <a-sky color="#ECECEC"></a-sky>
-        
-        <!-- AR Marker -->
-        <a-marker preset="hiro">
-            <a-box position="0 0.5 0" rotation="0 45 0" color="#EF2D5E"></a-box>
-        </a-marker>
-        
-        <a-entity camera></a-entity>
     </a-scene>
 </body>
 </html>
