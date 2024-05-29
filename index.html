@@ -25,7 +25,7 @@
                 console.log('AR check initialized');
                 if (!AFRAME.utils.device.isMobile()) {
                     console.log('Non-mobile device detected. Disabling AR.');
-                    this.el.sceneEl.setAttribute('arjs', 'trackingMethod: best; sourceType: none; debugUIEnabled: false;');
+                    this.el.sceneEl.setAttribute('arjs', 'sourceType: none;');
                 } else {
                     console.log('Mobile device detected. Enabling AR.');
                     this.el.sceneEl.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
