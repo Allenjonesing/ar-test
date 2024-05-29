@@ -8,11 +8,22 @@
     <style>
         body { margin: 0; overflow: hidden; }
     </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            console.log('Document loaded');
+        });
+
+        AFRAME.registerComponent('log', {
+            init: function () {
+                console.log('Component initialized');
+            }
+        });
+    </script>
 </head>
 <body>
     <a-scene embedded>
         <!-- Basic 3D Box for non-AR view -->
-        <a-box position="0 1.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
+        <a-box position="0 1.5 -3" rotation="0 45 0" color="#4CC3D9" log></a-box>
         <a-sky color="#ECECEC"></a-sky>
         
         <a-entity camera></a-entity>
