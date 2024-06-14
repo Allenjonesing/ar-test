@@ -1,0 +1,49 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+#news {
+    margin-top: 20px;
+}
+
+.news-article {
+    border-bottom: 1px solid #ccc;
+    padding: 10px 0;
+}
+
+.news-article:last-child {
+    border-bottom: none;
+}
+
+.news-title {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.news-description {
+    margin-top: 5px;
+    color: #666;
+}
+
+.news-activity {
+    margin-top: 10px;
+    color: #444;
+}
+
+.activity-options {
+    margin-top: 10px;
+}
+
+.activity-options button {
+    margin-right: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
