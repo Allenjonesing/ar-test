@@ -162,38 +162,40 @@ function MLP(config) {
 
 // GPT Block
 function Block(config) {
-  const inputs = tf.input({ shape: [config.blockSize, config.nEmbd] });
-  let x1, x2;
-
-  x1 = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(inputs);
-  x1 = CausalSelfAttention_(config).apply(x1);
-  x1 = tf.layers.add().apply([inputs, x1]);
-
-  x2 = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(x1);
-  x2 = MLP(config).apply(x2);
-  x2 = tf.layers.add().apply([x1, x2]);
-
-  return tf.model({ inputs: inputs, outputs: x2 });
-}
-
+    const inputs = tf.input({ shape: [config.blockSize, config.nEmbd] });
+    let x1, x2;
+  
+    // Attention part
+    x1 = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(inputs);
+    x1 = new CausalSelfAttention_(config).apply(x1);  // Use 'new' keyword here
+    x1 = tf.layers.add().apply([inputs, x1]);
+  
+    // MLP part
+    x2 = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(x1);
+    x2 = MLP(config).apply(x2);
+    x2 = tf.layers.add().apply([x1, x2]);
+  
+    return tf.model({ inputs: inputs, outputs: x2 });
+  }
+  
 // GPT Model
 function GPT(config) {
-  const inputs = tf.input({ shape: [config.blockSize] });
-  let x = tf.layers.embedding({
-    inputDim: config.vocabSize,
-    outputDim: config.nEmbd
-  }).apply(inputs);
-
-  for (let i = 0; i < config.nLayer; i++) {
-    x = Block(config).apply(x);
+    const inputs = tf.input({ shape: [config.blockSize] });
+    let x = tf.layers.embedding({
+      inputDim: config.vocabSize,
+      outputDim: config.nEmbd
+    }).apply(inputs);
+  
+    for (let i = 0; i < config.nLayer; i++) {
+      x = Block(config).apply(x);  // Block is fine as a function
+    }
+  
+    x = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(x);
+    x = tf.layers.dense({ units: config.vocabSize }).apply(x);
+  
+    return tf.model({ inputs: inputs, outputs: x });
   }
-
-  x = tf.layers.layerNormalization({ epsilon: 1e-5 }).apply(x);
-  x = tf.layers.dense({ units: config.vocabSize }).apply(x);
-
-  return tf.model({ inputs: inputs, outputs: x });
-}
-
+  
 // GPT LM Head Model
 export class GPTLMHeadModel_ {
   constructor(config) {
