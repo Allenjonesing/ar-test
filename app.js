@@ -1,41 +1,62 @@
-//import * as tf from '@tensorflow/tfjs';
-import { GPTLMHeadModel } from './model.js';  // Importing the GPT model
+// Simple FSM structure for enemies
+class FSM {
+  constructor(initialState) {
+    this.state = initialState;
+  }
 
-const config = {
-  nLayer: 3,
-  nHead: 3,
-  nEmbd: 48,
-  vocabSize: 50257,  // Example vocab size for GPT-2
-  blockSize: 128,
-  dropout: 0.1,
-};
+  transition(newState) {
+    this.state = newState;
+  }
 
-async function loadModel() {
-  const model = GPTLMHeadModel(config);  // Loading the GPT model from local files
-  return model;
+  act() {
+    switch (this.state) {
+      case 'idle':
+        console.log('Enemy is idle');
+        break;
+      case 'aggro':
+        console.log('Enemy is chasing the player');
+        break;
+      case 'attack':
+        console.log('Enemy attacks!');
+        break;
+      case 'flee':
+        console.log('Enemy flees');
+        break;
+    }
+  }
 }
 
-async function generateNPCResponse(playerInput) {
-  const model = await loadModel();
+// Example Enemy Class
+class Enemy {
+  constructor(name) {
+    this.name = name;
+    this.health = Math.floor(Math.random() * 100);
+    this.fsm = new FSM('idle');  // Start in idle state
+  }
 
-  // Basic tokenization for demo purposes
-  const tokens = playerInput.split('').map(char => char.charCodeAt(0) % 100);  // Example tokenization
-  const paddedTokens = tokens.concat(Array(128 - tokens.length).fill(0));  // Padding
+  update() {
+    // Determine AI state transitions
+    if (this.health < 20) {
+      this.fsm.transition('flee');
+    } else {
+      this.fsm.transition('aggro');
+    }
 
-  // Convert the tokenized input into a tensor
-  const inputTensor = tf.tensor2d([paddedTokens], [1, 128], 'int32');  // Ensure blockSize matches
-
-  // Generate output using GPT model
-  const generatedTokens = await model.generate(inputTensor, 50);  // Example to generate 50 tokens
-  const npcResponse = generatedTokens.dataSync();
-
-  // Convert tokens back to text (basic conversion)
-  const npcResponseText = String.fromCharCode(...npcResponse.map(token => token % 128));  // Example conversion
-  return npcResponseText;
+    this.fsm.act();
+  }
 }
 
-document.getElementById('send-btn').addEventListener('click', async () => {
-  const userInput = document.getElementById('user-input').value;
-  const npcResponse = await generateNPCResponse(userInput);
-  document.getElementById('npc-response').innerText = `NPC: ${npcResponse}`;
-});
+// Initialize some enemies
+const enemies = [];
+for (let i = 0; i < 5; i++) {
+  enemies.push(new Enemy('Enemy ' + i));
+}
+
+// Main game loop
+function gameLoop() {
+  enemies.forEach(enemy => enemy.update());
+  requestAnimationFrame(gameLoop);
+}
+
+// Start the game loop
+gameLoop();

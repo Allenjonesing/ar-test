@@ -3,25 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI NPC Conversation</title>
-  <link rel="stylesheet" href="styles.css"> <!-- Optional, if you have styles -->
-  <!-- TensorFlow.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <title>Random RPG</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>AI NPC Conversation</h1>
-
-  <div>
-    <label for="user-input">You: </label>
-    <input type="text" id="user-input" placeholder="Type something..." />
-    <button id="send-btn">Send</button>
+  <div id="game">
+    <!-- Tile-based map and character will go here -->
   </div>
-
-  <div>
-    <p id="npc-response">NPC: (Waiting for input...)</p>
-  </div>
-
-  <!-- Include the GPT-2 model script -->
-  <script src="app.js" type="module"></script>
+  <script src="app.js"></script>
 </body>
 </html>

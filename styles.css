@@ -1,20 +1,20 @@
 body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-  }
-  
-  #game-area {
-    margin-top: 20px;
-  }
-  
-  #gameCanvas {
-    background-color: #f0f0f0;
-    border: 2px solid #000;
-  }
-  
-  #ai-response {
-    margin-top: 20px;
-    font-size: 18px;
-    color: #333;
-  }
-  
+  background-color: #000;
+  color: #fff;
+  font-family: "Press Start 2P", sans-serif; /* 8-bit style font */
+}
+
+#game {
+  width: 320px;
+  height: 240px;
+  background-color: #333;
+  border: 2px solid #fff;
+}
+
+.tile {
+  width: 32px;
+  height: 32px;
+  background-color: #555;
+  display: inline-block;
+  margin: 1px;
+}
