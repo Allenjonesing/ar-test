@@ -1,50 +1,40 @@
-// Set up the canvas for game rendering
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// Import TensorFlow.js and gpt-tfjs using ES module syntax
+import * as tf from '@tensorflow/tfjs'; // Ensure TensorFlow.js is loaded
+import { GPTLMHeadModel } from 'gpt-tfjs'; // Load the GPT model from gpt-tfjs
 
-// Draw the NPC (represented as a circle)
-const npc = { x: 250, y: 250, radius: 30, color: 'blue' };
+// Configuration for GPT model
+const config = {
+  nLayer: 3,
+  nHead: 3,
+  nEmbd: 48,
+  vocabSize: 3,
+  blockSize: 11,
+  dropout: 0.1
+};
 
-function drawNPC() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.beginPath();
-  ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
-  ctx.fillStyle = npc.color;
-  ctx.fill();
-  ctx.closePath();
-}
+// Initialize the GPT model
+const model = new GPTLMHeadModel(config);
 
-// Load GPT-2 model for text generation
-let model;
-async function loadModel() {
-  model = await gpt2.load(); // Load the GPT-2 model from the TensorFlow.js repository
-  console.log('GPT-2 model loaded');
-}
+// A dummy training dataset (for illustration purposes)
+const trainDataset = (inputs) => {
+  return tf.tensor(inputs);
+};
 
-// Generate an NPC response using GPT-2 based on player input
+// Generate NPC response based on player input
 async function generateNPCResponse(playerInput) {
-  // Use GPT-2 to generate text based on the player's input
-  const output = await model.generate(playerInput, { max_length: 50, temperature: 0.7 });
+  await model.train(trainDataset, { epochs: 10, verbose: true });
+
+  // Simulate input for the GPT model
+  const inputs = [2, 2, 2, 1, 0];
   
-  const npcResponse = output.generated_text;
+  // Generate output using GPT model
+  const idx = await model.generate(inputs, 6); // Generate 6 tokens based on input
 
-  // Display the generated NPC response
-  document.getElementById('ai-response').textContent = `NPC says: "${npcResponse}"`;
-
-  // Re-draw the NPC (you could change colors based on the response)
-  drawNPC();
+  // Display the generated output
+  console.log('Generated output:', idx.arraySync());
 }
 
-// Add event listener for player interaction (click on NPC)
-canvas.addEventListener('click', function (e) {
-  const dist = Math.sqrt(Math.pow(e.offsetX - npc.x, 2) + Math.pow(e.offsetY - npc.y, 2));
-
-  if (dist <= npc.radius) {
-    const playerInput = prompt("What would you like to say to the NPC?");  // Get player input
-    generateNPCResponse(playerInput);  // Generate NPC response
-  }
-});
-
-// Initial Setup
-drawNPC();
-loadModel();  // Load the GPT-2 model
+// Example: Run the model when the game starts
+(async () => {
+  await generateNPCResponse("Hello NPC!");
+})();

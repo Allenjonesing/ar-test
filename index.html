@@ -1,22 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simple NPC Conversation with TensorFlow.js</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Game</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>NPC Conversation Demo</h1>
-  
-  <div id="game-area">
     <canvas id="gameCanvas" width="500" height="500"></canvas>
-    <div id="ai-response">Click on the NPC to talk.</div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://unpkg.com/@xenova/tfjs-gpt2@latest"></script>
-    
-  <script src="app.js"></script>
+    <p id="ai-response"></p>
+    <script type="module" src="app.js"></script> <!-- Make sure to use type="module" -->
 </body>
 </html>
