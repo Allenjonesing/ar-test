@@ -1,40 +1,53 @@
-// Import TensorFlow.js and gpt-tfjs using ES module syntax
+import gpt from 'gpt-tfjs'; // Import GPT module
+
+// Access GPTLMHeadModel from the 'model' object
+const { GPTLMHeadModel, generate } = gpt.model;  // GPTLMHeadModel and generate function
+
 import * as tf from '@tensorflow/tfjs'; // Ensure TensorFlow.js is loaded
-import { GPTLMHeadModel } from 'gpt-tfjs'; // Load the GPT model from gpt-tfjs
 
 // Configuration for GPT model
 const config = {
   nLayer: 3,
   nHead: 3,
   nEmbd: 48,
-  vocabSize: 3,
-  blockSize: 11,
-  dropout: 0.1
+  vocabSize: 50257,  // This is standard for GPT-2 (change as needed)
+  blockSize: 128,    // This could be the max length of the conversation
+  dropout: 0.1,
 };
 
-// Initialize the GPT model
-const model = new GPTLMHeadModel(config);
-
-// A dummy training dataset (for illustration purposes)
-const trainDataset = (inputs) => {
-  return tf.tensor(inputs);
-};
-
-// Generate NPC response based on player input
-async function generateNPCResponse(playerInput) {
-  await model.train(trainDataset, { epochs: 10, verbose: true });
-
-  // Simulate input for the GPT model
-  const inputs = [2, 2, 2, 1, 0];
-  
-  // Generate output using GPT model
-  const idx = await model.generate(inputs, 6); // Generate 6 tokens based on input
-
-  // Display the generated output
-  console.log('Generated output:', idx.arraySync());
+// Load the GPT-2 model
+async function loadModel() {
+  const model = GPTLMHeadModel(config);  // Call GPTLMHeadModel to get the model
+  return model;
 }
 
-// Example: Run the model when the game starts
+// Generate an NPC response based on player input
+async function generateNPCResponse(playerInput) {
+  const model = await loadModel();
+
+  // Tokenize the player input (this is a simplified tokenization)
+  const tokens = playerInput.split('').map(char => char.charCodeAt(0) % config.vocabSize); // Basic char-to-code conversion
+
+  // Pad or adjust the tokens to match the model's blockSize
+  const paddedTokens = tokens.concat(Array(config.blockSize - tokens.length).fill(0));  // Padding
+
+  // Convert the tokenized input into a tensor
+  const inputTensor = tf.tensor2d([paddedTokens], [1, config.blockSize], 'int32');
+
+  // Generate output using GPT-2 model (generate 50 tokens based on input)
+  const generatedTokens = await generate(model, inputTensor, 50);  // Generate 50 tokens based on input
+
+  // Convert tokens back to text (very basic conversion, adjust as needed)
+  const npcResponse = generatedTokens.arraySync()[0]
+    .map(token => String.fromCharCode(token % config.vocabSize))
+    .join('');
+
+  // Return the generated NPC response
+  return npcResponse;
+}
+
+// Example: Run the conversation
 (async () => {
-  await generateNPCResponse("Hello NPC!");
+  const npcResponse = await generateNPCResponse("Hello NPC! How are you?");
+  console.log(`NPC says: ${npcResponse}`);
 })();
