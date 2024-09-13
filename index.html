@@ -1,14 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Game</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI NPC Conversation</title>
+  <link rel="stylesheet" href="styles.css"> <!-- Optional, if you have styles -->
+  <!-- TensorFlow.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 </head>
 <body>
-    <canvas id="gameCanvas" width="500" height="500"></canvas>
-    <p id="ai-response"></p>
-    <script type="module" src="app.js"></script> <!-- Make sure to use type="module" -->
+  <h1>AI NPC Conversation</h1>
+
+  <div>
+    <label for="user-input">You: </label>
+    <input type="text" id="user-input" placeholder="Type something..." />
+    <button id="send-btn">Send</button>
+  </div>
+
+  <div>
+    <p id="npc-response">NPC: (Waiting for input...)</p>
+  </div>
+
+  <!-- Include the GPT-2 model script -->
+  <script src="app.js" type="module"></script>
 </body>
 </html>
