@@ -28,7 +28,7 @@ const npcResponses = [
   "You shouldn't be here!"
 ];
 
-// Generate an NPC response based on player input
+// Generate an NPC response based on player input using cosine similarity
 async function generateNPCResponse(playerInput) {
   const embeddings = await model.embed([playerInput, ...npcResponses]);
 
@@ -36,13 +36,18 @@ async function generateNPCResponse(playerInput) {
   const playerEmbedding = embeddings.slice([0, 0], [1]); // First embedding is player input
   const npcEmbeddings = embeddings.slice([1, 0], [npcResponses.length]); // Remaining are NPC responses
 
-  // Compute cosine similarity between player input and each NPC response
   let maxSimilarity = -Infinity;
   let bestResponse = "";
 
   for (let i = 0; i < npcResponses.length; i++) {
     const npcEmbedding = npcEmbeddings.slice([i, 0], [1]);
-    const similarity = playerEmbedding.dot(npcEmbedding).dataSync()[0]; // Cosine similarity
+
+    // Normalize embeddings (calculate unit vectors)
+    const playerEmbeddingNorm = playerEmbedding.div(playerEmbedding.norm());
+    const npcEmbeddingNorm = npcEmbedding.div(npcEmbedding.norm());
+
+    // Calculate cosine similarity: sum(playerEmbeddingNorm * npcEmbeddingNorm)
+    const similarity = playerEmbeddingNorm.mul(npcEmbeddingNorm).sum().dataSync()[0];
 
     if (similarity > maxSimilarity) {
       maxSimilarity = similarity;

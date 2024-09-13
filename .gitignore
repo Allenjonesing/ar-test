@@ -3,3 +3,7 @@ node_modules/*
 .env
 
 .vercel
+gpt2_model/config.json
+gpt2_model/generation_config.json
+gpt2_model/tf_model.h5
+getAIModel.py
