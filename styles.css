@@ -11,10 +11,29 @@ body {
   border: 2px solid #fff;
 }
 
+/* Basic tile styles */
 .tile {
   width: 32px;
   height: 32px;
-  background-color: #555;
   display: inline-block;
   margin: 1px;
+}
+
+/* Specific tile types */
+.grass {
+  background-color: green;
+}
+
+.water {
+  background-color: blue;
+}
+
+.mountain {
+  background-color: gray;
+}
+
+.character {
+  background-image: url('path-to-sprite-sheet.png');
+  background-position: 0 0;  /* Adjust based on your sprite sheet */
+  background-size: contain;
 }
