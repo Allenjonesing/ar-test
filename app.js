@@ -31,37 +31,37 @@ async function loadModel() {
 
 // Use the model to predict the NPC's response tone
 async function interactWithNPC() {
-  // Pick a random NPC response
-  const randomIndex = Math.floor(Math.random() * npcResponses.length);
-  const npcResponse = npcResponses[randomIndex];
+    // Pick a random NPC response
+    const randomIndex = Math.floor(Math.random() * npcResponses.length);
+    const npcResponse = npcResponses[randomIndex];
+    
+    // Display the response in the UI
+    document.getElementById('ai-response').textContent = `NPC says: "${npcResponse}"`;
+    
+    // Use the Toxicity model to evaluate the response
+    const predictions = await model.classify([npcResponse]);
   
-  // Display the response in the UI
-  document.getElementById('ai-response').textContent = `NPC says: "${npcResponse}"`;
+    // Determine toxicity and adjust NPC mood based on any toxic prediction
+    let isToxic = false;
+    predictions.forEach(prediction => {
+      if (prediction.results[0].match) {
+        isToxic = true;
+      }
+    });
   
-  // Use the Toxicity model to evaluate the response
-  const predictions = await model.classify([npcResponse]);
-
-  // Determine toxicity and adjust NPC mood based on prediction
-  let isToxic = false;
-  predictions.forEach(prediction => {
-    if (prediction.results[0].match) {
-      isToxic = true;
+    // Change NPC color based on the tone (friendly = green, neutral = blue, hostile = red)
+    if (isToxic) {
+      npc.color = 'red';  // Hostile/Toxic
+    } else if (randomIndex === 1) {
+      npc.color = 'blue'; // Neutral
+    } else {
+      npc.color = 'green'; // Friendly
     }
-  });
-
-  // Change NPC color based on the tone (friendly = green, neutral = blue, hostile = red)
-  if (isToxic) {
-    npc.color = 'red';  // Hostile
-  } else if (randomIndex === 1) {
-    npc.color = 'blue'; // Neutral
-  } else {
-    npc.color = 'green'; // Friendly
+  
+    // Re-draw the NPC with updated color
+    drawNPC();
   }
-
-  // Re-draw the NPC with updated color
-  drawNPC();
-}
-
+  
 // Add event listener for player interaction (click on NPC)
 canvas.addEventListener('click', function (e) {
   const dist = Math.sqrt(Math.pow(e.offsetX - npc.x, 2) + Math.pow(e.offsetY - npc.y, 2));
