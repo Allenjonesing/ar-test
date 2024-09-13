@@ -14,60 +14,56 @@ function drawNPC() {
   ctx.closePath();
 }
 
-// Predefined NPC responses (friendly, neutral, hostile)
-const npcResponses = [
-  "Hello there, traveler! How can I assist you today?",
-  "I have no time for idle chit-chat.",
-  "Get out of my way before I lose my patience!"
-];
-
-// Load TensorFlow.js Toxicity model
+// Load Universal Sentence Encoder Model
 let model;
 async function loadModel() {
-  const threshold = 0.9; // Model threshold to classify toxicity
-  model = await toxicity.load(threshold);
-  console.log('Toxicity model loaded');
+  model = await use.load();  // Load Universal Sentence Encoder model
+  console.log('USE model loaded');
 }
 
-// Use the model to predict the NPC's response tone
-async function interactWithNPC() {
-    // Pick a random NPC response
-    const randomIndex = Math.floor(Math.random() * npcResponses.length);
-    const npcResponse = npcResponses[randomIndex];
-    
-    // Display the response in the UI
-    document.getElementById('ai-response').textContent = `NPC says: "${npcResponse}"`;
-    
-    // Use the Toxicity model to evaluate the response
-    const predictions = await model.classify([npcResponse]);
-  
-    // Determine toxicity and adjust NPC mood based on any toxic prediction
-    let isToxic = false;
-    predictions.forEach(prediction => {
-      if (prediction.results[0].match) {
-        isToxic = true;
-      }
-    });
-  
-    // Change NPC color based on the tone (friendly = green, neutral = blue, hostile = red)
-    if (isToxic) {
-      npc.color = 'red';  // Hostile/Toxic
-    } else if (randomIndex === 1) {
-      npc.color = 'blue'; // Neutral
-    } else {
-      npc.color = 'green'; // Friendly
+// Predefined NPC responses
+const npcResponses = [
+  "Hello! How can I assist you today?",
+  "I'm busy right now, try again later.",
+  "You shouldn't be here!"
+];
+
+// Generate an NPC response based on player input
+async function generateNPCResponse(playerInput) {
+  const embeddings = await model.embed([playerInput, ...npcResponses]);
+
+  // Calculate similarity between player input and predefined NPC responses
+  const playerEmbedding = embeddings.slice([0, 0], [1]); // First embedding is player input
+  const npcEmbeddings = embeddings.slice([1, 0], [npcResponses.length]); // Remaining are NPC responses
+
+  // Compute cosine similarity between player input and each NPC response
+  let maxSimilarity = -Infinity;
+  let bestResponse = "";
+
+  for (let i = 0; i < npcResponses.length; i++) {
+    const npcEmbedding = npcEmbeddings.slice([i, 0], [1]);
+    const similarity = playerEmbedding.dot(npcEmbedding).dataSync()[0]; // Cosine similarity
+
+    if (similarity > maxSimilarity) {
+      maxSimilarity = similarity;
+      bestResponse = npcResponses[i];
     }
-  
-    // Re-draw the NPC with updated color
-    drawNPC();
   }
-  
+
+  // Display the best-matching NPC response
+  document.getElementById('ai-response').textContent = `NPC says: "${bestResponse}"`;
+
+  // Re-draw the NPC (you could change colors based on the response)
+  drawNPC();
+}
+
 // Add event listener for player interaction (click on NPC)
 canvas.addEventListener('click', function (e) {
   const dist = Math.sqrt(Math.pow(e.offsetX - npc.x, 2) + Math.pow(e.offsetY - npc.y, 2));
-  
+
   if (dist <= npc.radius) {
-    interactWithNPC();
+    const playerInput = prompt("What would you like to say to the NPC?");  // Get player input
+    generateNPCResponse(playerInput);  // Generate NPC response
   }
 });
 
