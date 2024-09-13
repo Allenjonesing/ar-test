@@ -14,49 +14,22 @@ function drawNPC() {
   ctx.closePath();
 }
 
-// Load Universal Sentence Encoder Model
+// Load GPT-2 model for text generation
 let model;
 async function loadModel() {
-  model = await use.load();  // Load Universal Sentence Encoder model
-  console.log('USE model loaded');
+  model = await gpt2.load(); // Load the GPT-2 model from the TensorFlow.js repository
+  console.log('GPT-2 model loaded');
 }
 
-// Predefined NPC responses
-const npcResponses = [
-  "Hello! How can I assist you today?",
-  "I'm busy right now, try again later.",
-  "You shouldn't be here!"
-];
-
-// Generate an NPC response based on player input using cosine similarity
+// Generate an NPC response using GPT-2 based on player input
 async function generateNPCResponse(playerInput) {
-  const embeddings = await model.embed([playerInput, ...npcResponses]);
+  // Use GPT-2 to generate text based on the player's input
+  const output = await model.generate(playerInput, { max_length: 50, temperature: 0.7 });
+  
+  const npcResponse = output.generated_text;
 
-  // Calculate similarity between player input and predefined NPC responses
-  const playerEmbedding = embeddings.slice([0, 0], [1]); // First embedding is player input
-  const npcEmbeddings = embeddings.slice([1, 0], [npcResponses.length]); // Remaining are NPC responses
-
-  let maxSimilarity = -Infinity;
-  let bestResponse = "";
-
-  for (let i = 0; i < npcResponses.length; i++) {
-    const npcEmbedding = npcEmbeddings.slice([i, 0], [1]);
-
-    // Normalize embeddings (calculate unit vectors)
-    const playerEmbeddingNorm = playerEmbedding.div(playerEmbedding.norm());
-    const npcEmbeddingNorm = npcEmbedding.div(npcEmbedding.norm());
-
-    // Calculate cosine similarity: sum(playerEmbeddingNorm * npcEmbeddingNorm)
-    const similarity = playerEmbeddingNorm.mul(npcEmbeddingNorm).sum().dataSync()[0];
-
-    if (similarity > maxSimilarity) {
-      maxSimilarity = similarity;
-      bestResponse = npcResponses[i];
-    }
-  }
-
-  // Display the best-matching NPC response
-  document.getElementById('ai-response').textContent = `NPC says: "${bestResponse}"`;
+  // Display the generated NPC response
+  document.getElementById('ai-response').textContent = `NPC says: "${npcResponse}"`;
 
   // Re-draw the NPC (you could change colors based on the response)
   drawNPC();
@@ -74,4 +47,4 @@ canvas.addEventListener('click', function (e) {
 
 // Initial Setup
 drawNPC();
-loadModel();
+loadModel();  // Load the GPT-2 model
