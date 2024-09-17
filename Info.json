@@ -1,0 +1,1118 @@
+{
+    "Locations": [
+        {
+            "Name": "Skyhold Citadel",
+            "Description": "A floating fortress held aloft by ancient magic, Skyhold Citadel was once the heart of an advanced skyborne civilization. Now, it lies in ruin, filled with dangerous creatures and treasure waiting to be claimed. Storms rage around the citadel, and only the brave can weather the journey.",
+            "Heros": [
+                {
+                    "Name": "GOD",
+                    "Description": "Test Player with Max stats..",
+                    "Stats": {
+                        "health": 10000,
+                        "mana": 999,
+                        "atk": 999,
+                        "def": 999,
+                        "spd": 999,
+                        "eva": 999,
+                        "acc": 999,
+                        "magAtk": 999,
+                        "magDef": 999,
+                        "luk": 999,
+                        "wis": 999,
+                        "element": {
+                            "fire": -1,
+                            "ice": -1,
+                            "water": -1,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Stun",
+                            "Freeze",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Elara, Sky Sorceress",
+                    "Description": "Uses weather magic to fight.",
+                    "Stats": {
+                        "health": 2500,
+                        "mana": 450,
+                        "atk": 10,
+                        "def": 20,
+                        "spd": 40,
+                        "eva": 30,
+                        "acc": 20,
+                        "magAtk": 40,
+                        "magDef": 30,
+                        "luk": 0,
+                        "wis": 5,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Freeze",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Rokar, Thunder Knight",
+                    "Description": "Wields a thunder-charged hammer.",
+                    "Stats": {
+                        "health": 2000,
+                        "mana": 50,
+                        "atk": 50,
+                        "def": 40,
+                        "spd": 20,
+                        "eva": 10,
+                        "acc": 30,
+                        "magAtk": 10,
+                        "magDef": 5,
+                        "luk": 20,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 2,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Seren, Sky Archer",
+                    "Description": "Master of ranged attacks.",
+                    "Stats": {
+                        "health": 2500,
+                        "mana": 150,
+                        "atk": 30,
+                        "def": 20,
+                        "spd": 40,
+                        "eva": 40,
+                        "acc": 100,
+                        "magAtk": 20,
+                        "magDef": 10,
+                        "luk": 5,
+                        "wis": 5,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Kiran, Storm Warden",
+                    "Description": "Commands storms to aid in combat.",
+                    "Stats": {
+                        "health": 2000,
+                        "mana": 200,
+                        "atk": 20,
+                        "def": 15,
+                        "spd": 30,
+                        "eva": 10,
+                        "acc": 20,
+                        "magAtk": 50,
+                        "magDef": 30,
+                        "luk": 0,
+                        "wis": 20,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 2,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                }
+            ],
+            "Bosses": [
+                {
+                    "Name": "Zephyros, Storm Tyrant",
+                    "Description": "A massive, ancient dragon that controls lightning storms.",
+                    "Stats": {
+                        "health": 12000,
+                        "mana": 500,
+                        "atk": 95,
+                        "def": 80,
+                        "spd": 60,
+                        "eva": 50,
+                        "acc": 75,
+                        "magAtk": 95,
+                        "magDef": 85,
+                        "luk": 70,
+                        "wis": 90,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 3,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Aeolus, Sky Captain",
+                    "Description": "Leader of a band of sky pirates.",
+                    "Stats": {
+                        "health": 10000,
+                        "mana": 250,
+                        "atk": 85,
+                        "def": 70,
+                        "spd": 65,
+                        "eva": 60,
+                        "acc": 95,
+                        "magAtk": 30,
+                        "magDef": 60,
+                        "luk": 60,
+                        "wis": 65,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Thalor, Skyborne Golem",
+                    "Description": "A massive flying construct of stone.",
+                    "Stats": {
+                        "health": 13000,
+                        "mana": 200,
+                        "atk": 90,
+                        "def": 95,
+                        "spd": 40,
+                        "eva": 30,
+                        "acc": 60,
+                        "magAtk": 20,
+                        "magDef": 85,
+                        "luk": 30,
+                        "wis": 40,
+                        "element": {
+                            "fire": 0,
+                            "ice": 3,
+                            "water": 0,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Vana, Tempest Witch",
+                    "Description": "Powerful sorceress of wind and storm.",
+                    "Stats": {
+                        "health": 9000,
+                        "mana": 500,
+                        "atk": 30,
+                        "def": 30,
+                        "spd": 85,
+                        "eva": 90,
+                        "acc": 65,
+                        "magAtk": 95,
+                        "magDef": 80,
+                        "luk": 50,
+                        "wis": 85,
+                        "element": {
+                            "fire": 3,
+                            "ice": -1,
+                            "water": -1,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Riven, The Gale",
+                    "Description": "A sentient storm given form, humanoid and fierce.",
+                    "Stats": {
+                        "health": 10000,
+                        "mana": 450,
+                        "atk": 85,
+                        "def": 60,
+                        "spd": 90,
+                        "eva": 100,
+                        "acc": 70,
+                        "magAtk": 80,
+                        "magDef": 90,
+                        "luk": 20,
+                        "wis": 20,
+                        "element": {
+                            "fire": -1,
+                            "ice": -1,
+                            "water": -1,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                }
+            ],
+            "Enemies": [
+                {
+                    "Name": "Sky Pirate",
+                    "Description": "Airborne bandit with basic attacks.",
+                    "Stats": {
+                        "health": 300,
+                        "mana": 20,
+                        "atk": 20,
+                        "def": 10,
+                        "spd": 15,
+                        "eva": 10,
+                        "acc": 30,
+                        "magAtk": 0,
+                        "magDef": 10,
+                        "luk": 0,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Poison"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Thunder Hawk",
+                    "Description": "Electrified bird of prey.",
+                    "Stats": {
+                        "health": 700,
+                        "mana": 150,
+                        "atk": 20,
+                        "def": 5,
+                        "spd": 40,
+                        "eva": 80,
+                        "acc": 30,
+                        "magAtk": 30,
+                        "magDef": 5,
+                        "luk": 0,
+                        "wis": 5,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 3,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Stun"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Water Elemental",
+                    "Description": "Spirit of the water.",
+                    "Stats": {
+                        "health": 1000,
+                        "mana": 200,
+                        "atk": 0,
+                        "def": 200,
+                        "spd": 10,
+                        "eva": 70,
+                        "acc": 0,
+                        "magAtk": 155,
+                        "magDef": 10,
+                        "luk": 0,
+                        "wis": 2,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": -1,
+                            "lightning": 3
+                        },
+                        "immunities": [
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Floating Gargoyle",
+                    "Description": "Stone creature guarding the citadel.",
+                    "Stats": {
+                        "health": 2000,
+                        "mana": 20,
+                        "atk": 20,
+                        "def": 30,
+                        "spd": 10,
+                        "eva": 5,
+                        "acc": 30,
+                        "magAtk": 5,
+                        "magDef": 0,
+                        "luk": 5,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Storm Imp",
+                    "Description": "Mischievous small creature that summons storms.",
+                    "Stats": {
+                        "health": 500,
+                        "mana": 200,
+                        "atk": 10,
+                        "def": 10,
+                        "spd": 40,
+                        "eva": 40,
+                        "acc": 30,
+                        "magAtk": 80,
+                        "magDef": 10,
+                        "luk": 0,
+                        "wis": 5,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 3,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Freeze",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Wind Wraith",
+                    "Description": "Ghostly figure that moves through the air.",
+                    "Stats": {
+                        "health": 3000,
+                        "mana": 250,
+                        "atk": 50,
+                        "def": 40,
+                        "spd": 85,
+                        "eva": 75,
+                        "acc": 60,
+                        "magAtk": 70,
+                        "magDef": 60,
+                        "luk": 55,
+                        "wis": 65,
+                        "element": {
+                            "fire": 3,
+                            "ice": 2,
+                            "water": 1,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Poison",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Sky Serpent",
+                    "Description": "Flying snake that coils through the clouds.",
+                    "Stats": {
+                        "health": 500,
+                        "mana": 20,
+                        "atk": 20,
+                        "def": 10,
+                        "spd": 30,
+                        "eva": 40,
+                        "acc": 50,
+                        "magAtk": 10,
+                        "magDef": 10,
+                        "luk": 10,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Storm Knight",
+                    "Description": "Soldier of the ancient Skyhold army.",
+                    "Stats": {
+                        "health": 800,
+                        "mana": 25,
+                        "atk": 40,
+                        "def": 30,
+                        "spd": 20,
+                        "eva": 10,
+                        "acc": 40,
+                        "magAtk": 0,
+                        "magDef": 10,
+                        "luk": 10,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 1,
+                            "lightning": 2
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Poison"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Sky Golem",
+                    "Description": "Smaller stone defender of the citadel.",
+                    "Stats": {
+                        "health": 3000,
+                        "mana": 50,
+                        "atk": 20,
+                        "def": 40,
+                        "spd": 10,
+                        "eva": 0,
+                        "acc": 20,
+                        "magAtk": 0,
+                        "magDef": 10,
+                        "luk": 30,
+                        "wis": 0,
+                        "element": {
+                            "fire": 1,
+                            "ice": 2,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Freeze",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Aether Drake",
+                    "Description": "Lesser dragon that flies through the clouds.",
+                    "Stats": {
+                        "health": 2000,
+                        "mana": 100,
+                        "atk": 20,
+                        "def": 10,
+                        "spd": 30,
+                        "eva": 40,
+                        "acc": 40,
+                        "magAtk": 30,
+                        "magDef": 10,
+                        "luk": 10,
+                        "wis": 5,
+                        "element": {
+                            "fire": 0,
+                            "ice": 2,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "Name": "Emberstone Volcano",
+            "Description": "An active volcano teeming with molten lava rivers and jagged rock formations. The heat is unbearable, and fire elementals roam freely. Deep within the volcano, powerful creatures hoard treasures within caverns of obsidian.",
+            "Heros": [
+                {
+                    "Name": "Thalios, Flameborne",
+                    "Description": "Warrior infused with fire magic.",
+                    "Stats": {
+                        "health": 4000,
+                        "mana": 250,
+                        "atk": 40,
+                        "def": 30,
+                        "spd": 40,
+                        "eva": 30,
+                        "acc": 80,
+                        "magAtk": 50,
+                        "magDef": 65,
+                        "luk": 40,
+                        "wis": 10,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Stun"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Ilyra, Ice Weaver",
+                    "Description": "A cold mage, her spells freeze enemies.",
+                    "Stats": {
+                        "health": 5000,
+                        "mana": 400,
+                        "atk": 20,
+                        "def": 30,
+                        "spd": 40,
+                        "eva": 30,
+                        "acc": 70,
+                        "magAtk": 85,
+                        "magDef": 70,
+                        "luk": 10,
+                        "wis": 20,
+                        "element": {
+                            "fire": 3,
+                            "ice": -1,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Freeze",
+                            "Poison"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Dorn, Stonebreaker",
+                    "Description": "Earth warrior, resistant to volcanic heat.",
+                    "Stats": {
+                        "health": 4000,
+                        "mana": 150,
+                        "atk": 60,
+                        "def": 40,
+                        "spd": 30,
+                        "eva": 20,
+                        "acc": 70,
+                        "magAtk": 10,
+                        "magDef": 80,
+                        "luk": 10,
+                        "wis": 10,
+                        "element": {
+                            "fire": 0,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Sienna, Lava Witch",
+                    "Description": "A witch who controls molten magic.",
+                    "Stats": {
+                        "health": 6000,
+                        "mana": 450,
+                        "atk": 20,
+                        "def": 10,
+                        "spd": 70,
+                        "eva": 45,
+                        "acc": 65,
+                        "magAtk": 90,
+                        "magDef": 80,
+                        "luk": 0,
+                        "wis": 20,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Galvan, Thunder Paladin",
+                    "Description": "Charged with the power of lightning.",
+                    "Stats": {
+                        "health": 4000,
+                        "mana": 150,
+                        "atk": 40,
+                        "def": 30,
+                        "spd": 65,
+                        "eva": 20,
+                        "acc": 75,
+                        "magAtk": 70,
+                        "magDef": 20,
+                        "luk": 10,
+                        "wis": 5,
+                        "element": {
+                            "fire": 1,
+                            "ice": 1,
+                            "water": 3,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Stun",
+                            "Poison"
+                        ]
+                    }
+                }
+            ],
+            "Bosses": [
+                {
+                    "Name": "Kragos, Lava Titan",
+                    "Description": "A massive being made of molten rock.",
+                    "Stats": {
+                        "health": 13000,
+                        "mana": 600,
+                        "atk": 150,
+                        "def": 200,
+                        "spd": 35,
+                        "eva": 10,
+                        "acc": 65,
+                        "magAtk": 70,
+                        "magDef": 40,
+                        "luk": 25,
+                        "wis": 30,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Ignis, Fire Dragon",
+                    "Description": "A fiery dragon that guards the treasure at the heart of the volcano.",
+                    "Stats": {
+                        "health": 12000,
+                        "mana": 400,
+                        "atk": 90,
+                        "def": 80,
+                        "spd": 70,
+                        "eva": 80,
+                        "acc": 70,
+                        "magAtk": 85,
+                        "magDef": 55,
+                        "luk": 65,
+                        "wis": 55,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 2
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze",
+                            "Stun"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Morg, Flame Lord",
+                    "Description": "Warlord who controls fire elementals.",
+                    "Stats": {
+                        "health": 11000,
+                        "mana": 300,
+                        "atk": 35,
+                        "def": 40,
+                        "spd": 65,
+                        "eva": 45,
+                        "acc": 50,
+                        "magAtk": 90,
+                        "magDef": 85,
+                        "luk": 55,
+                        "wis": 95,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 0,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Poison",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Seraphine, Ember Queen",
+                    "Description": "Queen of the volcanic realm.",
+                    "Stats": {
+                        "health": 10000,
+                        "mana": 450,
+                        "atk": 30,
+                        "def": 95,
+                        "spd": 75,
+                        "eva": 55,
+                        "acc": 75,
+                        "magAtk": 90,
+                        "magDef": 85,
+                        "luk": 60,
+                        "wis": 90,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze",
+                            "Poison",
+                            "Stun"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Torr, Magma Golem",
+                    "Description": "Colossal being of molten lava and stone.",
+                    "Stats": {
+                        "health": 25000,
+                        "mana": 150,
+                        "atk": 90,
+                        "def": 95,
+                        "spd": 10,
+                        "eva": 5,
+                        "acc": 55,
+                        "magAtk": 50,
+                        "magDef": 20,
+                        "luk": 85,
+                        "wis": 20,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": -1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze",
+                            "Poison",
+                            "Stun"
+                        ]
+                    }
+                }
+            ],
+            "Enemies": [
+                {
+                    "Name": "Fire Elemental",
+                    "Description": "Creature of pure fire.",
+                    "Stats": {
+                        "health": 1200,
+                        "mana": 200,
+                        "atk": 10,
+                        "def": 500,
+                        "spd": 30,
+                        "eva": 90,
+                        "acc": 20,
+                        "magAtk": 60,
+                        "magDef": 20,
+                        "luk": 10,
+                        "wis": 5,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Stun",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Magma Hound",
+                    "Description": "A lava-infused dog-like creature.",
+                    "Stats": {
+                        "health": 800,
+                        "mana": 50,
+                        "atk": 30,
+                        "def": 20,
+                        "spd": 60,
+                        "eva": 30,
+                        "acc": 70,
+                        "magAtk": 10,
+                        "magDef": 5,
+                        "luk": 5,
+                        "wis": 0,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Poison",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Lava Slime",
+                    "Description": "A slow-moving blob of molten lava.",
+                    "Stats": {
+                        "health": 2500,
+                        "mana": 200,
+                        "atk": 10,
+                        "def": 100,
+                        "spd": 10,
+                        "eva": 0,
+                        "acc": 30,
+                        "magAtk": 60,
+                        "magDef": 20,
+                        "luk": 0,
+                        "wis": 5,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Obsidian Golem",
+                    "Description": "A smaller golem made from obsidian.",
+                    "Stats": {
+                        "health": 3000,
+                        "mana": 100,
+                        "atk": 80,
+                        "def": 85,
+                        "spd": 20,
+                        "eva": 5,
+                        "acc": 60,
+                        "magAtk": 10,
+                        "magDef": 5,
+                        "luk": 20,
+                        "wis": 0,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Freeze",
+                            "Poison",
+                            "burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Flame Sprite",
+                    "Description": "Small, fast fire elemental.",
+                    "Stats": {
+                        "health": 1500,
+                        "mana": 250,
+                        "atk": 10,
+                        "def": 300,
+                        "spd": 85,
+                        "eva": 80,
+                        "acc": 65,
+                        "magAtk": 50,
+                        "magDef": 30,
+                        "luk": 60,
+                        "wis": 80,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Molten Spider",
+                    "Description": "Lava-dwelling spider.",
+                    "Stats": {
+                        "health": 4000,
+                        "mana": 150,
+                        "atk": 70,
+                        "def": 55,
+                        "spd": 75,
+                        "eva": 65,
+                        "acc": 70,
+                        "magAtk": 50,
+                        "magDef": 60,
+                        "luk": 55,
+                        "wis": 50,
+                        "element": {
+                            "fire": 1,
+                            "ice": 3,
+                            "water": 0,
+                            "lightning": 2
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Poison"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Ash Wraith",
+                    "Description": "Spirit of an ancient volcanic warrior.",
+                    "Stats": {
+                        "health": 3000,
+                        "mana": 200,
+                        "atk": 50,
+                        "def": 40,
+                        "spd": 85,
+                        "eva": 70,
+                        "acc": 65,
+                        "magAtk": 70,
+                        "magDef": 60,
+                        "luk": 55,
+                        "wis": 65,
+                        "element": {
+                            "fire": 2,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Blazing Bat",
+                    "Description": "Lava bat that flies through molten caves.",
+                    "Stats": {
+                        "health": 2500,
+                        "mana": 150,
+                        "atk": 60,
+                        "def": 45,
+                        "spd": 75,
+                        "eva": 70,
+                        "acc": 65,
+                        "magAtk": 40,
+                        "magDef": 50,
+                        "luk": 50,
+                        "wis": 45,
+                        "element": {
+                            "fire": 1,
+                            "ice": 3,
+                            "water": 0,
+                            "lightning": 2
+                        },
+                        "immunities": [
+                            "Burn"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Rock Serpent",
+                    "Description": "Snake that thrives in volcanic rock.",
+                    "Stats": {
+                        "health": 3500,
+                        "mana": 200,
+                        "atk": 70,
+                        "def": 55,
+                        "spd": 60,
+                        "eva": 50,
+                        "acc": 65,
+                        "magAtk": 50,
+                        "magDef": 55,
+                        "luk": 45,
+                        "wis": 50,
+                        "element": {
+                            "fire": 2,
+                            "ice": 3,
+                            "water": 1,
+                            "lightning": 0
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Freeze"
+                        ]
+                    }
+                },
+                {
+                    "Name": "Searing Demon",
+                    "Description": "Small fiery demon of chaos.",
+                    "Stats": {
+                        "health": 4500,
+                        "mana": 250,
+                        "atk": 85,
+                        "def": 70,
+                        "spd": 75,
+                        "eva": 65,
+                        "acc": 75,
+                        "magAtk": 80,
+                        "magDef": 70,
+                        "luk": 70,
+                        "wis": 75,
+                        "element": {
+                            "fire": -1,
+                            "ice": 3,
+                            "water": 2,
+                            "lightning": 1
+                        },
+                        "immunities": [
+                            "Burn",
+                            "Poison",
+                            "Stun"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

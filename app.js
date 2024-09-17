@@ -1,183 +1,2688 @@
-class BattleScene extends Phaser.Scene {
-  constructor() {
-      super({ key: 'BattleScene' });
-      this.uiContainer = null;
-  }
+const costSavingMode = true;
+const genericEnemyBase64 = 'zc';
+const genericPlayerBase64 = 'zxc';
+const version = 'Alpha v0.3_NoAI';
 
-  preload() {
-      // Load player and opponent assets
-      this.load.image('player', 'path/to/player.png');  // Replace with actual path to the player sprite
-      this.load.image('opponent', 'path/to/opponent.png');  // Replace with the opponent sprite path
-  }
+// Constants for XP gain rates
+const XP_GAIN = {
+    attack: 10,  // Amount of XP gained for each attack action
+    defend: 8,   // Amount of XP gained for each defend action
+    speed: 5,    // Amount of XP gained for acting faster than enemy
+    magic: 12    // Amount of XP gained for using magic
+};
+let health = 100;
+let healthText;
+let target = null;
+let newsData = []; // Global variable to store news articles
+let setting = ''; // Global variable to store the game setting
+let enemyImageBase64 = '';
+let npcBase64image = '';
+let monsterDescription = '';
+let personas;
+let persona;
+let statRequirements = 'Ensure that the stats match the described creature. They must be in JSON like {health,mana,atk,def,spd,eva,magAtk,magDef,luk,wis,element: {fire, ice, water, lightning }, where health is 1000-10000, mana is 100-500, atk through wis are each 1-100, and the 4 elements are each a int between -1 and 3, where -1 is the strongest (Given to those of that element) and 3 is the weakest (Given to those that oppose this element). Include status immunities in the format {immunities: ["Poison", "Stun", "Burn", "Freeze"]}, only immune half of the statuses in this example.';
+let battleEnded = false;
 
-  create(data) {
-      // Player setup
-      this.player = this.physics.add.sprite(400, 300, 'player');
-      this.player.setCollideWorldBounds(true);
+// document.addEventListener('click', () => {
+//     if (yourAudioContext.state === 'suspended') {
+//         yourAudioContext.resume();
+//     }
+// });
 
-      // Opponent setup
-      this.opponent = this.physics.add.sprite(200, 200, 'opponent');
-      this.opponent.setCollideWorldBounds(true);
 
-      // Add cursors for player control
-      this.cursors = this.input.keyboard.createCursorKeys();
-
-      // Detect when player meets opponent
-      this.physics.add.collider(this.player, this.opponent, this.startEncounter, null, this);
-  }
-
-  update() {
-      // Player movement logic
-      if (this.cursors.left.isDown) {
-          this.player.setVelocityX(-160);
-      } else if (this.cursors.right.isDown) {
-          this.player.setVelocityX(160);
-      } else {
-          this.player.setVelocityX(0);
-      }
-
-      if (this.cursors.up.isDown) {
-          this.player.setVelocityY(-160);
-      } else if (this.cursors.down.isDown) {
-          this.player.setVelocityY(160);
-      } else {
-          this.player.setVelocityY(0);
-      }
-  }
-
-  startEncounter() {
-      // Pause the game when player encounters the opponent
-      this.physics.pause();
-      this.displayActionMenu();
-  }
-
-  displayActionMenu() {
-      // Clear existing UI elements if any
-      if (this.uiContainer) {
-          this.uiContainer.destroy(true);
-      }
-
-      // Create a container for all UI elements
-      this.uiContainer = this.add.container(0, 0);
-
-      // Set padding and element dimensions
-      const padding = this.scale.width / 15;
-      const buttonSpacing = 60;
-      const halfWidth = this.scale.width / 2;
-
-      // Help text at the very top
-      let menuTitle = this.add.text(halfWidth, padding, 'Choose an Action:', {
-          fontSize: '32px',
-          fill: '#fff'
-      }).setOrigin(0.5);
-
-      // Add the title to the container
-      this.uiContainer.add(menuTitle);
-
-      // Define the actions (Pass, Shoot, Hold, Use Technique)
-      const actions = ['Pass', 'Shoot', 'Hold', 'Use Technique'];
-
-      // Create buttons dynamically based on the actions
-      actions.forEach((actionName, index) => {
-          let x = halfWidth;  // Center the buttons horizontally
-          let y = padding + buttonSpacing * (index + 1) + 50;
-
-          // Create the action button
-          let actionButton = this.add.text(x, y, actionName, {
-              fontSize: '28px',
-              fill: '#fff',
-              backgroundColor: '#000',
-              padding: { left: 20, right: 20, top: 10, bottom: 10 }
-          }).setOrigin(0.5);
-
-          // Set the button as interactive
-          actionButton.setInteractive();
-
-          // Define action on click
-          actionButton.on('pointerdown', () => {
-              this.handleActionSelection(actionName);
-          });
-
-          // Add the button to the UI container
-          this.uiContainer.add(actionButton);
-      });
-
-      // Add a background for the action buttons
-      let actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(
-          padding, padding * 3, this.scale.width - padding * 2, actions.length * buttonSpacing + padding
-      );
-      this.uiContainer.add(actionBox);
-  }
-
-  handleActionSelection(actionName) {
-      console.log(`${actionName} selected`);
-
-      // Remove the UI container after selection
-      if (this.uiContainer) {
-          this.uiContainer.destroy(true);
-      }
-
-      // Logic to handle the selected action (e.g., pass, shoot, etc.)
-      switch (actionName) {
-          case 'Pass':
-              this.performPass();
-              break;
-          case 'Shoot':
-              this.performShoot();
-              break;
-          case 'Hold':
-              this.holdBall();
-              break;
-          case 'Use Technique':
-              this.useTechnique();
-              break;
-          default:
-              break;
-      }
-
-      // Resume the game after action selection
-      this.physics.resume();
-  }
-
-  performPass() {
-      console.log("Performing pass...");
-      // Add pass logic here
-  }
-
-  performShoot() {
-      console.log("Performing shoot...");
-      // Add shoot logic here
-  }
-
-  holdBall() {
-      console.log("Holding the ball...");
-      // Add hold logic here
-  }
-
-  useTechnique() {
-      console.log("Using technique...");
-      // Add technique logic here
-  }
+async function loadGameData() {
+    try {
+        const response = await fetch('./Info.json'); // Fetch the JSON file from the same directory
+        if (!response.ok) throw new Error('Failed to load game data.');
+        gameData = await response.json();
+        console.log("Game data loaded: ", gameData);
+        return gameData;
+    } catch (error) {
+        console.error('Error loading game data:', error);
+    }
 }
 
-// Main game configuration
+class ExplorationScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'ExplorationScene' });
+    }
+
+    preload() {
+        this.load.image('player', 'assets/player.png');
+        this.load.image('enemy', 'assets/enemy.png');
+    }
+
+    async create() {
+        this.scale.on('resize', this.resize, this);
+
+        // Add a loading text
+        let loadingText = this.add.text(window.innerWidth / 2, window.innerHeight / 2, `Loading Version: ${version}...`, {
+            fontSize: '32px',
+            fill: '#fff',
+            wordWrap: { width: window.innerWidth - 40 }
+        }).setOrigin(0.5).setAlign('center');
+
+        // Add a warning text
+        let warningText = this.add.text(window.innerWidth / 2, window.innerHeight - 50,
+            'Warning: This game may contain flashing lights that could potentially trigger seizures for people with photosensitive epilepsy. Viewer discretion is advised. Content generated by AI is not rated. Any resemblance to real persons, living or dead, brands, companies, or games is purely coincidental. By using this website, you agree to our terms and policies found at https://www.jonesingstudio.com/. Powered by OpenAI, NewsAPI.org, and Phaser. Game not yet rated. Copyright 2024 Jonesing Studio.', {
+            fontSize: '16px',
+            fill: '#fff',
+            wordWrap: { width: window.innerWidth - 40 },
+            align: 'center'
+        }).setOrigin(0.5);
+
+        // Load the game data from info.json
+        await loadGameData();
+
+        // Randomly select a location
+        //const randomLocation = gameData.Locations[Math.floor(Math.random() * gameData.Locations.length)];
+        const randomLocation = gameData.Locations[0];
+        this.selectedLocation = randomLocation;
+
+        // Fetch news data and generate AI responses
+        await fetchNews();
+        loadingText.setText(`${loadingText.text}\n\nBased on the article: ${newsData[0].title}`);
+
+        await generateAIResponses();
+        loadingText.setText(`${loadingText.text}\n\nYou'll play as: ${persona.name}, ${persona.description}`);
+        loadingText.setText(`${loadingText.text}\n\nYou'll be fighting: ${monsterDescription}`);
+
+        const newsArticle = newsData[0]; // Use the first article for the enemy
+        enemyImageBase64 = await generateEnemyImage(newsArticle, setting);
+
+        // Prep Base64 images
+        this.prepBase64Images();
+
+        // Randomly select a hero and multiple enemies from the selected location
+        const hero = randomLocation.Heros[Math.floor(Math.random() * randomLocation.Heros.length)];
+        console.log('hero: ', hero);
+        this.enemyObjects = randomLocation.Enemies.slice(0, 5); // Choose 5 small enemies
+        console.log('this.enemyObjects: ', this.enemyObjects);
+        this.bossObject = randomLocation.Bosses[Math.floor(Math.random() * randomLocation.Bosses.length)]; // Select 1 boss
+        console.log('this.bossObject: ', this.bossObject);
+
+        // Create player and set random hero from JSON data
+        this.player = this.physics.add.sprite(400, 300, 'player');
+        console.log('this.player: ', this.player);
+        this.player.description = `${hero.Name}, ${hero.Description}`;
+        console.log('this.player.description: ', this.player.description);
+        //this.player.stats = hero.Stats;
+        console.log('this.player.stats: ', this.player.stats);
+        this.playerObject = {
+            name: 'Player',
+            description: `${hero.Name}, ${hero.Description}`,
+            health: hero.Stats.health,
+            mana: hero.Stats.mana,
+            atk: hero.Stats.atk,
+            def: hero.Stats.def,
+            spd: hero.Stats.spd,
+            eva: hero.Stats.eva,
+            magAtk: hero.Stats.magAtk,
+            magDef: hero.Stats.magDef,
+            luk: hero.Stats.luk,
+            wis: hero.Stats.wis,
+            sprite: null,
+            actions: ['Attack', 'Defend', 'Spells', 'Skills'],
+            element: hero.Stats.element,
+            statusEffects: [],
+            immunities: hero.Stats.immunities || [],
+            Experience: {
+                atkXP: 0,
+                defXP: 0,
+                spdXP: 0,
+                magAtkXP: 0
+            },
+            KnownSkills: [
+                { name: "Slash", requiredLevel: 1, type: "physical", description: "A basic physical attack." }
+            ],
+            Level: 1
+        };
+
+        // Create enemies group and add small enemies
+        this.enemies = this.physics.add.group();
+        console.log('this.enemies: ', this.enemies);
+        this.formattedEnemyObjects = [];
+        console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        this.enemyObjects.forEach((enemyData, index) => {
+            console.log('enemyData: ', enemyData);
+            let enemySprite = this.enemies.create(600, 300, 'enemy');
+            enemySprite.description = `${enemyData.Name}, ${enemyData.Description}`;
+            console.log('enemySprite.description: ', enemySprite.description);
+            //enemySprite.stats = enemyData.Stats;
+            console.log('enemySprite.stats: ', enemySprite.stats);
+            let enemyObject = {
+                name: 'Enemy',
+                description: `${enemyData.Name}, ${enemyData.Description}`,
+                health: enemyData.Stats.health,
+                mana: enemyData.Stats.mana,
+                atk: enemyData.Stats.atk,
+                def: enemyData.Stats.def,
+                spd: enemyData.Stats.spd,
+                eva: enemyData.Stats.eva,
+                magAtk: enemyData.Stats.magAtk,
+                magDef: enemyData.Stats.magDef,
+                luk: enemyData.Stats.luk,
+                wis: enemyData.Stats.wis,
+                sprite: null,
+                //actions: this.generateEnemyActions(enemyData.Stats),
+                element: enemyData.Stats.element, // Example element multipliers
+                learnedElementalWeaknesses: {
+                    fire: 0,
+                    ice: 0,
+                    water: 0,
+                    lightning: 0,
+                    physical: 0 // Track physical attack damage
+                },
+                learnedStatusImmunities: [],
+                triedElements: {
+                    fire: false,
+                    ice: false,
+                    water: false,
+                    lightning: false,
+                    physical: false
+                },
+                statusEffects: [],
+                immunities: enemyData.Stats.immunities || []
+            };
+            console.log('enemyObject: ', enemyObject);
+
+            this.formattedEnemyObjects.push(enemyObject);
+            console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        });
+
+
+        // Add the boss at the end of the fight
+        console.log('this.enemyObjects: ', this.enemyObjects);
+        this.boss = this.physics.add.sprite(600, 300, 'enemy');
+        console.log('this.boss: ', this.boss);
+        this.boss.description = `${this.bossObject.Name}, ${this.bossObject.Description}`;
+        console.log('this.boss.description: ', this.boss.description);
+        //this.boss.stats = this.bossObject.Stats;
+        console.log('this.boss.stats: ', this.boss.stats);
+        console.log('this.bossObject: ', this.bossObject);
+        this.formattedBossObject = {
+            name: 'Enemy',
+            description: `${this.bossObject.Name}, ${this.bossObject.Description}`,
+            health: this.bossObject.Stats.health,
+            mana: this.bossObject.Stats.mana,
+            atk: this.bossObject.Stats.atk,
+            def: this.bossObject.Stats.def,
+            spd: this.bossObject.Stats.spd,
+            eva: this.bossObject.Stats.eva,
+            magAtk: this.bossObject.Stats.magAtk,
+            magDef: this.bossObject.Stats.magDef,
+            luk: this.bossObject.Stats.luk,
+            wis: this.bossObject.Stats.wis,
+            sprite: null,
+            //actions: this.generateEnemyActions(this.bossObject.Stats),
+            element: this.bossObject.Stats.element, // Example element multipliers
+            learnedElementalWeaknesses: {
+                fire: 0,
+                ice: 0,
+                water: 0,
+                lightning: 0,
+                physical: 0 // Track physical attack damage
+            },
+            learnedStatusImmunities: [],
+            triedElements: {
+                fire: false,
+                ice: false,
+                water: false,
+                lightning: false,
+                physical: false
+            },
+            statusEffects: [],
+            immunities: this.bossObject.Stats.immunities || []
+        };
+        console.log('this.formattedBossObject: ', this.formattedBossObject);
+
+        this.player.setCollideWorldBounds(true);
+
+        // Spawn enemies after data is ready
+        this.spawnEnemies();
+
+        // Remove the loading text and warning text after all steps are complete
+        loadingText.destroy();
+        warningText.destroy();
+    }
+
+    spawnEnemies() {
+        // Start the battle with the first enemy and progress through the list
+        console.log('spawnEnemies: ');
+        this.currentEnemyIndex = 0;
+
+        this.battleSequence();
+    }
+
+    battleSequence() {
+        console.log('battleSequence this.player: ', this.player);
+        console.log('battleSequence this.playerObject: ', this.playerObject);
+        console.log('battleSequence this.currentEnemyIndex: ', this.currentEnemyIndex);
+        console.log('battleSequence this.enemyObjects.length: ', this.enemyObjects.length);
+        if (this.currentEnemyIndex < this.formattedEnemyObjects.length) {
+            console.log('this.currentEnemyIndex: ', this.currentEnemyIndex);
+            let currentEnemy = this.formattedEnemyObjects[this.currentEnemyIndex];
+            console.log('Starting Enemy Battle');
+            console.log('currentEnemy: ', currentEnemy);
+            this.startBattle(this.playerObject, currentEnemy);
+            console.log('Started Enemy Battle');
+            // Transition to the next enemy after battle ends
+            //this.time.delayedCall(2000, () => this.battleSequence(index + 1), [], this);
+            this.currentEnemyIndex++;
+        } else {
+            // After all small enemies, fight the boss
+            console.log('this.formattedBossObject: ', this.formattedBossObject);
+            console.log('Starting BOSS Battle');
+            this.startBattle(this.playerObject, this.formattedBossObject);
+            console.log('Started BOSS Battle');
+        }
+    }
+
+    prepBase64Images() {
+        if (enemyImageBase64 && npcBase64image) {
+            this.textures.addBase64('enemyImageBase64', enemyImageBase64);
+            this.textures.addBase64('npcBase64image', npcBase64image);
+        }
+    }
+
+    startBattle(player, enemy) {
+        // Transition to the battle scene, passing necessary data
+        console.log('startBattle player: ', player);
+        console.log('startBattle enemy: ', enemy);
+        this.scene.start('BattleScene', { player: player, enemy: enemy });
+    }
+
+    displayNewsInfo(news, persona) {
+        this.add.text(20, 20, `In the ${randomLocation.Name}, ${randomLocation.Description}`, { fontSize: '24px', fill: '#fff', wordWrap: { width: window.innerWidth - 40 } });
+        this.add.text(20, 60, `You'll play as: ${persona.name}, ${persona.description}`, { fontSize: '24px', fill: '#fff', wordWrap: { width: window.innerWidth - 40 } });
+        this.add.text(20, 100, `You'll be fighting: ${monsterDescription}`, { fontSize: '24px', fill: '#fff', wordWrap: { width: window.innerWidth - 40 } });
+
+        if (enemyImageBase64) {
+            this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'enemyImageBase64').setScale(0.5); // Adjust the scale as necessary
+        }
+    }
+
+    update() {
+        if (this.input.activePointer.isDown) {
+            target = { x: this.input.activePointer.worldX, y: this.input.activePointer.worldY };
+        }
+
+        if (target) {
+            this.physics.moveTo(this.player, target.x, target.y, 100);
+        }
+
+        if (this.enemies && this.enemies.children) {
+            this.enemies.children.iterate((enemy) => {
+                this.physics.moveToObject(enemy, this.player, 50);
+                if (enemy.body.speed > 0) {
+                    enemy.body.setVelocity(0, 0);
+                }
+            });
+        }
+    }
+
+    resize(gameSize, baseSize, displaySize, resolution) {
+        let width = gameSize.width;
+        let height = gameSize.height;
+
+        if (width === undefined) { width = this.sys.game.config.width; }
+        if (height === undefined) { height = this.sys.game.config.height; }
+
+        this.cameras.resize(width, height);
+
+        // Adjust other elements like UI, if necessary
+    }
+
+
+}
+
+class BattleScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'BattleScene' });
+        this.helpMessages = [];
+        this.loadingIndicator = null;
+    }
+
+    async create(data) {
+        await loadGameData();
+
+        // Randomly select a location
+        const randomLocation = gameData.Locations[Math.floor(Math.random() * gameData.Locations.length)];
+        //const randomLocation = gameData.Locations[0];
+        this.selectedLocation = randomLocation;
+
+        // Fetch news data and generate AI responses
+        await fetchNews();
+
+        await generateAIResponses();
+
+        // Randomly select a hero and multiple enemies from the selected location
+        const hero = randomLocation.Heros[Math.floor(Math.random() * randomLocation.Heros.length)];
+        console.log('hero: ', hero);
+        this.enemyObjects = randomLocation.Enemies.slice(0, 5); // Choose 5 small enemies
+        console.log('this.enemyObjects: ', this.enemyObjects);
+        this.bossObject = randomLocation.Bosses[Math.floor(Math.random() * randomLocation.Bosses.length)]; // Select 1 boss
+        console.log('this.bossObject: ', this.bossObject);
+
+        // Create player and set random hero from JSON data
+        //this.player = this.physics.add.sprite(400, 300, 'player');
+        //console.log('this.player: ', this.player);
+        //this.player.description = `${hero.Name}, ${hero.Description}`;
+        //console.log('this.player.description: ', this.player.description);
+        //this.player.stats = hero.Stats;
+        //console.log('this.player.stats: ', this.player.stats);
+        this.playerObject = {
+            name: 'Player',
+            description: `${hero.Name}, ${hero.Description}`,
+            health: hero.Stats.health,
+            mana: hero.Stats.mana,
+            atk: hero.Stats.atk,
+            def: hero.Stats.def,
+            spd: hero.Stats.spd,
+            eva: hero.Stats.eva,
+            magAtk: hero.Stats.magAtk,
+            magDef: hero.Stats.magDef,
+            luk: hero.Stats.luk,
+            wis: hero.Stats.wis,
+            sprite: null,
+            actions: ['Attack', 'Defend', 'Spells', 'Skills'],
+            element: hero.Stats.element,
+            statusEffects: [],
+            immunities: hero.Stats.immunities || [],
+            Experience: {
+                atkXP: 0,
+                defXP: 0,
+                spdXP: 0,
+                magAtkXP: 0
+            },
+            KnownSkills: [
+                { name: "Slash", requiredLevel: 1, type: "physical", description: "A basic physical attack." }
+            ],
+            Level: 1
+        };
+
+        // Create enemies group and add small enemies
+        //this.enemies = this.physics.add.group();
+        //console.log('this.enemies: ', this.enemies);
+        this.formattedEnemyObjects = [];
+        console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        this.enemyObjects.forEach((enemyData, index) => {
+            console.log('enemyData: ', enemyData);
+            //let enemySprite = this.enemies.create(600, 300, 'enemy');
+            //enemySprite.description = `${enemyData.Name}, ${enemyData.Description}`;
+            //console.log('enemySprite.description: ', enemySprite.description);
+            //enemySprite.stats = enemyData.Stats;
+            //console.log('enemySprite.stats: ', enemySprite.stats);
+            let enemyObject = {
+                name: 'Enemy',
+                description: `${enemyData.Name}, ${enemyData.Description}`,
+                health: enemyData.Stats.health,
+                mana: enemyData.Stats.mana,
+                atk: enemyData.Stats.atk,
+                def: enemyData.Stats.def,
+                spd: enemyData.Stats.spd,
+                eva: enemyData.Stats.eva,
+                magAtk: enemyData.Stats.magAtk,
+                magDef: enemyData.Stats.magDef,
+                luk: enemyData.Stats.luk,
+                wis: enemyData.Stats.wis,
+                sprite: null,
+                //actions: this.generateEnemyActions(enemyData.Stats),
+                element: enemyData.Stats.element, // Example element multipliers
+                learnedElementalWeaknesses: {
+                    fire: 0,
+                    ice: 0,
+                    water: 0,
+                    lightning: 0,
+                    physical: 0 // Track physical attack damage
+                },
+                learnedStatusImmunities: [],
+                triedElements: {
+                    fire: false,
+                    ice: false,
+                    water: false,
+                    lightning: false,
+                    physical: false
+                },
+                statusEffects: [],
+                immunities: enemyData.Stats.immunities || []
+            };
+            console.log('enemyObject: ', enemyObject);
+
+            this.formattedEnemyObjects.push(enemyObject);
+            console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        });
+
+
+        // Add the boss at the end of the fight
+        //console.log('this.enemyObjects: ', this.enemyObjects);
+        //this.boss = this.physics.add.sprite(600, 300, 'enemy');
+        //console.log('this.boss: ', this.boss);
+        //this.boss.description = `${this.bossObject.Name}, ${this.bossObject.Description}`;
+        //console.log('this.boss.description: ', this.boss.description);
+        //this.boss.stats = this.bossObject.Stats;
+        //console.log('this.boss.stats: ', this.boss.stats);
+        //console.log('this.bossObject: ', this.bossObject);
+        this.formattedBossObject = {
+            name: 'Enemy',
+            description: `${this.bossObject.Name}, ${this.bossObject.Description}`,
+            health: this.bossObject.Stats.health,
+            mana: this.bossObject.Stats.mana,
+            atk: this.bossObject.Stats.atk,
+            def: this.bossObject.Stats.def,
+            spd: this.bossObject.Stats.spd,
+            eva: this.bossObject.Stats.eva,
+            magAtk: this.bossObject.Stats.magAtk,
+            magDef: this.bossObject.Stats.magDef,
+            luk: this.bossObject.Stats.luk,
+            wis: this.bossObject.Stats.wis,
+            sprite: null,
+            //actions: this.generateEnemyActions(this.bossObject.Stats),
+            element: this.bossObject.Stats.element, // Example element multipliers
+            learnedElementalWeaknesses: {
+                fire: 0,
+                ice: 0,
+                water: 0,
+                lightning: 0,
+                physical: 0 // Track physical attack damage
+            },
+            learnedStatusImmunities: [],
+            triedElements: {
+                fire: false,
+                ice: false,
+                water: false,
+                lightning: false,
+                physical: false
+            },
+            statusEffects: [],
+            immunities: this.bossObject.Stats.immunities || []
+        };
+        console.log('this.formattedBossObject: ', this.formattedBossObject);
+
+        //this.player.setCollideWorldBounds(true);
+
+        // Spawn enemies after data is ready
+        this.spawnEnemies();
+        // Randomly select a location
+        //const randomLocation = gameData.Locations[Math.floor(Math.random() * gameData.Locations.length)];
+        // this.selectedLocation = randomLocation;
+        this.scale.on('resize', this.resize, this), null, this.selectedLocation;
+
+        //this.player = data.player;
+        //this.enemy = data.enemy;
+        this.enemy.actions = this.generateEnemyActions(this.enemy);
+
+        // Show loading indicator
+        this.showLoadingIndicator();
+
+
+        // Randomly select a hero and an enemy from the selected location
+        //const hero = randomLocation.Heros[Math.floor(Math.random() * randomLocation.Heros.length)];
+        //const enemy = randomLocation.Bosses[Math.floor(Math.random() * randomLocation.Bosses.length)];
+
+
+        // Initialize player and enemy data
+        // const playerStats = await fetchPlayerStats();
+        // this.player = {
+        //     // name: 'Player',
+        //     // description: `${hero.Name}, ${hero.Description}`,
+        //     // health: hero.Stats.health,
+        //     // mana: hero.Stats.mana,
+        //     // atk: hero.Stats.atk,
+        //     // def: hero.Stats.def,
+        //     // spd: hero.Stats.spd,
+        //     // eva: hero.Stats.eva,
+        //     // magAtk: hero.Stats.magAtk,
+        //     // magDef: hero.Stats.magDef,
+        //     // luk: hero.Stats.luk,
+        //     // wis: hero.Stats.wis,
+        //     sprite: null,
+        //     actions: ['Attack', 'Defend', 'Spells', 'Skills'],
+        //     //element: hero.Stats.element,
+        //     statusEffects: [],
+        //     //immunities: hero.Stats.immunities || [],
+        //     Experience: {
+        //         atkXP: 0,
+        //         defXP: 0,
+        //         spdXP: 0,
+        //         magAtkXP: 0
+        //     },
+        //     KnownSkills: [
+        //         { name: "Slash", requiredLevel: 1, type: "physical", description: "A basic physical attack." }
+        //     ],
+        //     Level: 1
+        // };
+
+        // const enemyStats = await fetchEnemyStats();
+        // this.enemy = {
+        //     // name: 'Enemy',
+        //     // description: `${enemy.Name}, ${enemy.Description}`,
+        //     // health: enemy.Stats.health,
+        //     // mana: enemy.Stats.mana,
+        //     // atk: enemy.Stats.atk,
+        //     // def: enemy.Stats.def,
+        //     // spd: enemy.Stats.spd,
+        //     // eva: enemy.Stats.eva,
+        //     // magAtk: enemy.Stats.magAtk,
+        //     // magDef: enemy.Stats.magDef,
+        //     // luk: enemy.Stats.luk,
+        //     // wis: enemy.Stats.wis,
+        //     sprite: null,
+        //     actions: this.generateEnemyActions(this.enemy.Stats),
+        //     //element: enemy.Stats.element, // Example element multipliers
+        //     learnedElementalWeaknesses: {
+        //         fire: 0,
+        //         ice: 0,
+        //         water: 0,
+        //         lightning: 0,
+        //         physical: 0 // Track physical attack damage
+        //     },
+        //     learnedStatusImmunities: [],
+        //     triedElements: {
+        //         fire: false,
+        //         ice: false,
+        //         water: false,
+        //         lightning: false,
+        //         physical: false
+        //     },
+        //     statusEffects: [],
+        //     immunities: this.enemy.Stats.immunities || []
+        // };
+
+        // Hide loading indicator
+        this.hideLoadingIndicator();
+
+        // Generate enemy image based on news article and setting
+        if (newsData.length > 0) {
+            enemyImageBase64 = enemyImageBase64 || genericEnemyBase64 || 'asdf';
+            //if (enemyImageBase64) {
+            // Initialize turn order and current turn index
+            this.turnOrder = this.calculateTurnOrder();
+            this.currentTurnIndex = 0;
+
+            // Cooldown flag
+            this.isCooldown = false;
+
+            // Display UI elements
+            this.createUI(this.selectedLocation);
+
+            // Check whose turn it is and start the action immediately if it's the enemy's turn
+            if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
+                this.enemyAction();
+            } else {
+                this.showPlayerActions();
+            }
+            //} else {
+            //    console.error('Failed to generate enemy image');
+            //}
+        }
+    }
+
+    async beginBattleScene() {
+        await loadGameData();
+
+        // Randomly select a location
+        //const randomLocation = gameData.Locations[Math.floor(Math.random() * gameData.Locations.length)];
+        const randomLocation = gameData.Locations[0];
+        this.selectedLocation = randomLocation;
+
+        // Fetch news data and generate AI responses
+        await fetchNews();
+
+        await generateAIResponses();
+
+        // Randomly select a hero and multiple enemies from the selected location
+        const hero = randomLocation.Heros[Math.floor(Math.random() * randomLocation.Heros.length)];
+        console.log('hero: ', hero);
+        this.enemyObjects = randomLocation.Enemies
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 5); // Choose 5 random enemies
+            console.log('this.enemyObjects: ', this.enemyObjects);
+        this.bossObject = randomLocation.Bosses[Math.floor(Math.random() * randomLocation.Bosses.length)]; // Select 1 boss
+        console.log('this.bossObject: ', this.bossObject);
+
+        // Create player and set random hero from JSON data
+        //this.player = this.physics.add.sprite(400, 300, 'player');
+        //console.log('this.player: ', this.player);
+        //this.player.description = `${hero.Name}, ${hero.Description}`;
+        //console.log('this.player.description: ', this.player.description);
+        //this.player.stats = hero.Stats;
+        //console.log('this.player.stats: ', this.player.stats);
+        this.playerObject = {
+            name: 'Player',
+            description: `${hero.Name}, ${hero.Description}`,
+            health: hero.Stats.health,
+            mana: hero.Stats.mana,
+            atk: hero.Stats.atk,
+            def: hero.Stats.def,
+            spd: hero.Stats.spd,
+            eva: hero.Stats.eva,
+            magAtk: hero.Stats.magAtk,
+            magDef: hero.Stats.magDef,
+            luk: hero.Stats.luk,
+            wis: hero.Stats.wis,
+            sprite: null,
+            actions: ['Attack', 'Defend', 'Spells', 'Skills'],
+            element: hero.Stats.element,
+            statusEffects: [],
+            immunities: hero.Stats.immunities || [],
+            Experience: {
+                atkXP: 0,
+                defXP: 0,
+                spdXP: 0,
+                magAtkXP: 0
+            },
+            KnownSkills: [
+                { name: "Slash", requiredLevel: 1, type: "physical", description: "A basic physical attack." }
+            ],
+            Level: 1
+        };
+
+        // Create enemies group and add small enemies
+        //this.enemies = this.physics.add.group();
+        //console.log('this.enemies: ', this.enemies);
+        this.formattedEnemyObjects = [];
+        console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        this.enemyObjects.forEach((enemyData, index) => {
+            console.log('enemyData: ', enemyData);
+            //let enemySprite = this.enemies.create(600, 300, 'enemy');
+            //enemySprite.description = `${enemyData.Name}, ${enemyData.Description}`;
+            //console.log('enemySprite.description: ', enemySprite.description);
+            //enemySprite.stats = enemyData.Stats;
+            //console.log('enemySprite.stats: ', enemySprite.stats);
+            let enemyObject = {
+                name: 'Enemy',
+                description: `${enemyData.Name}, ${enemyData.Description}`,
+                health: enemyData.Stats.health,
+                mana: enemyData.Stats.mana,
+                atk: enemyData.Stats.atk,
+                def: enemyData.Stats.def,
+                spd: enemyData.Stats.spd,
+                eva: enemyData.Stats.eva,
+                magAtk: enemyData.Stats.magAtk,
+                magDef: enemyData.Stats.magDef,
+                luk: enemyData.Stats.luk,
+                wis: enemyData.Stats.wis,
+                sprite: null,
+                //actions: this.generateEnemyActions(enemyData.Stats),
+                element: enemyData.Stats.element, // Example element multipliers
+                learnedElementalWeaknesses: {
+                    fire: 0,
+                    ice: 0,
+                    water: 0,
+                    lightning: 0,
+                    physical: 0 // Track physical attack damage
+                },
+                learnedStatusImmunities: [],
+                triedElements: {
+                    fire: false,
+                    ice: false,
+                    water: false,
+                    lightning: false,
+                    physical: false
+                },
+                statusEffects: [],
+                immunities: enemyData.Stats.immunities || []
+            };
+            console.log('enemyObject: ', enemyObject);
+
+            this.formattedEnemyObjects.push(enemyObject);
+            console.log('this.formattedEnemyObjects: ', this.formattedEnemyObjects);
+        });
+
+
+        // Add the boss at the end of the fight
+        //console.log('this.enemyObjects: ', this.enemyObjects);
+        //this.boss = this.physics.add.sprite(600, 300, 'enemy');
+        //console.log('this.boss: ', this.boss);
+        //this.boss.description = `${this.bossObject.Name}, ${this.bossObject.Description}`;
+        //console.log('this.boss.description: ', this.boss.description);
+        //this.boss.stats = this.bossObject.Stats;
+        //console.log('this.boss.stats: ', this.boss.stats);
+        //console.log('this.bossObject: ', this.bossObject);
+        this.formattedBossObject = {
+            name: 'Enemy',
+            description: `${this.bossObject.Name}, ${this.bossObject.Description}`,
+            health: this.bossObject.Stats.health,
+            mana: this.bossObject.Stats.mana,
+            atk: this.bossObject.Stats.atk,
+            def: this.bossObject.Stats.def,
+            spd: this.bossObject.Stats.spd,
+            eva: this.bossObject.Stats.eva,
+            magAtk: this.bossObject.Stats.magAtk,
+            magDef: this.bossObject.Stats.magDef,
+            luk: this.bossObject.Stats.luk,
+            wis: this.bossObject.Stats.wis,
+            sprite: null,
+            //actions: this.generateEnemyActions(this.bossObject.Stats),
+            element: this.bossObject.Stats.element, // Example element multipliers
+            learnedElementalWeaknesses: {
+                fire: 0,
+                ice: 0,
+                water: 0,
+                lightning: 0,
+                physical: 0 // Track physical attack damage
+            },
+            learnedStatusImmunities: [],
+            triedElements: {
+                fire: false,
+                ice: false,
+                water: false,
+                lightning: false,
+                physical: false
+            },
+            statusEffects: [],
+            immunities: this.bossObject.Stats.immunities || []
+        };
+        console.log('this.formattedBossObject: ', this.formattedBossObject);
+
+        //this.player.setCollideWorldBounds(true);
+
+        // Spawn enemies after data is ready
+        this.spawnEnemies();
+    }
+
+    spawnEnemies() {
+        // Start the battle with the first enemy and progress through the list
+        console.log('spawnEnemies: ');
+        this.currentEnemyIndex = 0;
+
+        this.battleSequence();
+    }
+
+    battleSequence() {
+        console.log('battleSequence this.player: ', this.player);
+        console.log('battleSequence this.playerObject: ', this.playerObject);
+        console.log('battleSequence this.currentEnemyIndex: ', this.currentEnemyIndex);
+        console.log('battleSequence this.enemyObjects.length: ', this.enemyObjects.length);
+        if (this.currentEnemyIndex < this.formattedEnemyObjects.length) {
+            console.log('this.currentEnemyIndex: ', this.currentEnemyIndex);
+            let currentEnemy = this.formattedEnemyObjects[this.currentEnemyIndex];
+            console.log('Starting Enemy Battle');
+            console.log('currentEnemy: ', currentEnemy);
+            //this.startBattle(this.playerObject, currentEnemy);
+            this.player = this.playerObject;
+            this.enemy = currentEnemy;
+
+            console.log('Started Enemy Battle');
+            // Transition to the next enemy after battle ends
+            //this.time.delayedCall(2000, () => this.battleSequence(index + 1), [], this);
+            this.currentEnemyIndex++;
+        } else {
+            // After all small enemies, fight the boss
+            console.log('this.formattedBossObject: ', this.formattedBossObject);
+            console.log('Starting BOSS Battle');
+            this.player = this.playerObject;
+            this.enemy = this.formattedBossObject;
+
+            //this.startBattle(this.playerObject, this.formattedBossObject);
+            console.log('Started BOSS Battle');
+        }
+
+        if (this.enemyHealthText) {
+
+            this.enemy.actions = this.generateEnemyActions(this.enemy);
+
+            this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
+            this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
+            this.enemyDescription.setText(`${this.enemy.name}: ${this.enemy.description}`);
+            this.turnOrder = this.calculateTurnOrder();
+            this.currentTurnIndex = 0;
+
+            // Cooldown flag
+            this.isCooldown = false;
+
+            // Display UI elements
+            this.createUI(this.selectedLocation);
+
+            // Check whose turn it is and start the action immediately if it's the enemy's turn
+            if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
+                this.enemyAction();
+            } else {
+                this.showPlayerActions();
+            }
+        }
+
+    }
+
+    startBattle(player, enemy) {
+        // Transition to the battle scene, passing necessary data
+        console.log('startBattle player: ', player);
+        console.log('startBattle enemy: ', enemy);
+        //this.scene.start('BattleScene', { player: player, enemy: enemy });
+    }
+
+    showLoadingIndicator() {
+        this.loadingIndicator = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading...', {
+            fontSize: '32px',
+            fill: '#fff',
+            backgroundColor: '#000',
+            padding: { left: 10, right: 10, top: 10, bottom: 10 }
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: this.loadingIndicator,
+            alpha: { from: 1, to: 0.3 },
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    hideLoadingIndicator() {
+        if (this.loadingIndicator) {
+            this.loadingIndicator.destroy();
+            this.loadingIndicator = null;
+        }
+    }
+
+    addHelpText(message) {
+        this.helpMessages.push(message);
+        if (this.helpMessages.length > 3) {
+            this.helpMessages.shift(); // Remove the oldest message if we have more than 3
+        }
+        this.updateHelpTextDisplay();
+    }
+
+    updateHelpTextDisplay() {
+        if (this.helpMessages && Array.isArray(this.helpMessages)) {
+            this.helpText.setText(this.helpMessages.join('\n'));
+        } else {
+            this.helpText.setText('');
+        }
+    }
+
+    resize(gameSize, baseSize, displaySize, resolution, randomLocation) {
+        let width = gameSize.width;
+        let height = gameSize.height;
+
+        if (width === undefined) { width = this.sys.game.config.width; }
+        if (height === undefined) { height = this.sys.game.config.height; }
+
+        this.cameras.resize(width, height);
+
+        // Adjust other elements like UI, if necessary
+        this.createUI(this.selectedLocation); // Recreate the UI on resize
+    }
+
+    generateEnemyActions(stats) {
+        console.log('generateEnemyActions... stats: ', stats);
+        let actions = {
+            physical: ['Attack'],
+            skills: [],
+            magic: []
+        };
+
+        // Determine if attack is far greater than magic attack or vice versa
+        console.log('generateEnemyActions... stats.magAtk: ', stats.magAtk);
+        console.log('generateEnemyActions... stats.atk: ', stats.atk);
+        const isPhysicalOnly = stats.atk > 2 * stats.magAtk;
+        const isMagicOnly = stats.magAtk > 2 * stats.atk;
+        console.log('generateEnemyActions... isPhysicalOnly: ', isPhysicalOnly);
+        console.log('generateEnemyActions... isMagicOnly: ', isMagicOnly);
+
+        // Add skills if atk is high and not exclusively magic
+        if (!isMagicOnly) {
+            console.log('generateEnemyActions... stats.element.fire: ', stats.element.fire);
+            if (stats.element.fire <= 0) actions.skills.push('Burn');
+            console.log('generateEnemyActions... stats.element.ice: ', stats.element.ice);
+            if (stats.element.ice <= 0) actions.skills.push('Freeze');
+            console.log('generateEnemyActions... stats.element.lightning: ', stats.element.lightning);
+            if (stats.element.lightning <= 0) actions.skills.push('Stun');
+            console.log('generateEnemyActions... stats.element.water: ', stats.element.water);
+            if (stats.element.water <= 0) actions.skills.push('Poison');
+        }
+        console.log('generateEnemyActions... actions.skills: ', actions.skills);
+
+        // Add magic attacks based on elemental strengths and not exclusively physical
+        if (!isPhysicalOnly) {
+            // for (const [element, value] of Object.entries(stats.element)) {
+            //     if (value <= 0) { // Strong in this element
+            //         actions.magic.push(`${element.charAt(0).toUpperCase() + element.slice(1)} Spells`);
+            //     }
+            // }
+
+            // Add more magic attacks if magAtk is high
+            if (stats.magAtk > stats.atk) {
+                console.log('generateEnemyActions... stats.element.fire: ', stats.element.fire);
+                console.log('generateEnemyActions... stats.element.ice: ', stats.element.ice);
+                console.log('generateEnemyActions... stats.element.lightning: ', stats.element.lightning);
+                console.log('generateEnemyActions... stats.element.water: ', stats.element.water);
+                if (stats.element.fire <= 0) actions.magic.push('fire');
+                if (stats.element.ice <= 0) actions.magic.push('ice');
+                if (stats.element.lightning <= 0) actions.magic.push('lightning');
+                if (stats.element.water <= 0) actions.magic.push('water');
+            }
+
+            // Add healing spells
+            //actions.magic.push('Heal');
+        }
+        console.log('generateEnemyActions... actions.magic: ', actions.magic);
+        console.log('generateEnemyActions... actions: ', actions);
+
+        return actions;
+    }
+
+    update() {
+        if (!battleEnded) {
+            if (this.player && this.player.health <= 0) {
+                this.endBattle('lose');
+            } else if (this.enemy && this.enemy.health <= 0) {
+                battleEnded = true;
+                this.endBattle('win');
+            }
+        }
+    }
+
+    saveGameState() {
+        const gameData = getGameState();  // Fetch current game state
+        saveGame('save1', gameData);      // Save to IndexedDB
+        console.log('Game saved after battle.');
+    }
+
+
+    endBattle(result) {
+        battleEnded = true;
+        this.time.delayedCall(1000, () => {
+            if (result === 'win') {
+                // Handle victory logic
+                this.addHelpText('You Won! Gaining XP...');
+                //let origX = this.enemy.sprite.x;
+                this.enemy.sprite.visible = false; // Remove enemy sprite
+
+                // Save the game state
+                this.saveGameState();
+
+                // Trigger the next battle in the sequence
+                this.time.delayedCall(3000, () => {
+                    battleEnded = false;
+                    this.battleSequence();
+                    //this.enemy.sprite.visible  = true; // Remove enemy sprite
+
+                    //this.scene.start('ExplorationScene');//.battleSequence(); // Moves to the next enemy
+                }, [], this);
+
+            } else {
+                // Handle defeat logic
+                this.addHelpText('You Lost! Game Over... Please wait for the window to reload...');
+                this.player.sprite.destroy(); // Remove player sprite
+                this.time.delayedCall(5000, () => {
+                    // Refresh the whole page after the battle ends
+                    location.reload();
+                }, [], this);
+            }
+        }, [], this);
+    }
+
+    checkForLevelUp() {
+        // Check if the player has enough XP to level up
+        const XP_THRESHOLD = 100; // Example XP threshold for leveling up
+
+        if (this.player.Experience.atkXP >= XP_THRESHOLD) {
+            this.player.Level++;
+            this.player.Experience.atkXP -= XP_THRESHOLD;  // Carry over excess XP
+
+            console.log(`You've leveled up! Now level: ${this.player.Level}`);
+
+            // Trigger skill selection
+            this.displayLevelUpScreen();  // Allow player to choose new skills/spells
+        }
+    }
+
+    createUI(location) {
+        // Clear existing UI elements if any
+        if (this.uiContainer) {
+            this.uiContainer.destroy(true);
+        }
+
+        // Create a container for all UI elements
+        this.uiContainer = this.add.container(0, 0);
+
+        // Set padding and element dimensions
+        const padding = this.scale.width / 15;
+        const topMargin = 200;
+        const elementHeight = 30;
+        const actionButtonHeight = 50;
+        const halfWidth = this.scale.width / 2;
+
+        // Help text at the very top
+        this.helpText = this.add.text(padding, padding, '', {
+            fontSize: '24px',
+            fill: '#fff',
+            wordWrap: { width: this.scale.width - 2 * padding }
+        });
+        this.uiContainer.add(this.helpText);
+        this.addHelpText(`A battle has begun.`);
+
+        // Player health and mana
+        this.playerHealthText = this.add.text(padding, topMargin + elementHeight, `Health: ${this.player.health}`, { fontSize: '26px', fill: '#fff' });
+        this.playerManaText = this.add.text(padding, topMargin + elementHeight * 2, `Mana: ${this.player.mana}`, { fontSize: '20px', fill: '#fff' });
+
+        // Enemy health and mana
+        this.enemyHealthText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight, `Health: ${this.enemy.health}`, { fontSize: '26px', fill: '#fff' });
+        this.enemyManaText = this.add.text(this.scale.width - padding - 200, topMargin + elementHeight * 2, `Mana: ${this.enemy.mana}`, { fontSize: '20px', fill: '#fff' });
+
+        // Add borders around health and mana areas
+        const playerHealthBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, topMargin + elementHeight - 10, 200, 75);
+        const enemyHealthBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, topMargin + elementHeight - 10, 200, 75);
+        this.uiContainer.add(playerHealthBox);
+        this.uiContainer.add(enemyHealthBox);
+
+        // Player and enemy sprites
+        this.player.sprite = this.add.sprite(padding + 100, topMargin + elementHeight * 10 + 50, 'npcBase64image'); // Adjust position as necessary
+        this.enemy.sprite = this.add.sprite(this.scale.width - padding - 100, topMargin + elementHeight * 10 + 50, 'enemyImageBase64'); // Adjust position as necessary
+
+        // Add hover animations
+        this.add.tween({
+            targets: this.player.sprite,
+            y: this.player.sprite.y - 10,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.add.tween({
+            targets: this.enemy.sprite,
+            y: this.enemy.sprite.y - 10,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.uiContainer.add(this.player.sprite);
+        this.uiContainer.add(this.enemy.sprite);
+
+        // Player and enemy names and descriptions
+        this.playerDescriptionText = `${this.player.name}: ${this.player.description}`;
+        this.enemyDescriptionText = `${this.enemy.name}: ${this.enemy.description}`;
+
+        this.playerDescription = this.add.text(padding, this.scale.height / 2, this.playerDescriptionText, { fontSize: '24px', fill: '#fff', wordWrap: { width: 200 } });
+        this.enemyDescription = this.add.text(this.scale.width - padding - 200, this.scale.height / 2, this.enemyDescriptionText, { fontSize: '24px', fill: '#fff', wordWrap: { width: 200 } });
+
+        // Add borders around descriptions
+        this.playerDescriptionBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(padding - 10, this.scale.height / 2, 200, this.playerDescription.height + 20);
+        this.enemyDescriptionBox = this.add.graphics().lineStyle(2, 0xff0000).strokeRect(this.scale.width - padding - 210, this.scale.height / 2, 200, this.enemyDescription.height + 20);
+        this.uiContainer.add(this.playerDescriptionBox);
+        this.uiContainer.add(this.enemyDescriptionBox);
+
+        this.uiContainer.add(this.playerDescription);
+        this.uiContainer.add(this.enemyDescription);
+
+        // Turn order list
+        this.turnOrderText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Turns:', { fontSize: '36px', fill: '#fff' }).setOrigin(0.5);
+        this.updateTurnOrderDisplay();
+
+        // Add elements to the UI container
+        this.uiContainer.add([this.playerHealthText, this.playerManaText, this.enemyHealthText, this.enemyManaText, this.turnOrderText]);
+
+        // Action buttons at the bottom
+        this.actions = this.add.group();
+        const actionNames = ['Attack', 'Defend', 'Spells', 'Skills', 'Heal'];
+        const actionButtonWidth = (this.scale.width - padding * 2) / 5;
+
+        actionNames.forEach((actionName, index) => {
+            const x = (padding + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
+            const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
+                fontSize: '30px',
+                fill: '#fff',
+                backgroundColor: '#000',
+                padding: { left: 20, right: 20, top: 10, bottom: 10 }
+            }).setOrigin(0.5);
+            actionText.setInteractive();
+            actionText.on('pointerdown', () => this.handlePlayerAction(actionName));
+            this.actions.add(actionText);
+            this.uiContainer.add(actionText);
+        });
+
+        // Add animation and colorful effect to action buttons
+        this.actions.children.iterate(actionText => {
+            this.tweens.add({
+                targets: actionText,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Power1'
+            });
+        });
+
+        // Add action box around action buttons
+        this.actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(padding, this.scale.height - actionButtonHeight - padding * 2, this.scale.width - padding * 2, actionButtonHeight + padding);
+        this.uiContainer.add(this.actionBox);
+    }
+
+    chooseElement() {
+        const elements = ['fire', 'ice', 'water', 'lightning'];
+        return elements[Math.floor(Math.random() * elements.length)];
+    }
+
+    calculateTurnOrder() {
+        let participants = [
+            { name: 'Player', speed: this.player.spd, sprite: this.player.sprite },
+            { name: 'Enemy', speed: this.enemy.spd, sprite: this.enemy.sprite }
+        ];
+
+        let turnOrder = [];
+        let currentTime = [0, 0]; // Initialize current times for both participants
+        let totalTurns = 0;
+
+        // Calculate the total number of turns based on the highest speed
+        let totalParticipantTurns = 100; // Arbitrary large number to ensure enough turns are calculated
+        for (let i = 0; i < totalParticipantTurns; i++) {
+            let nextTurnIndex = currentTime[0] / participants[0].speed <= currentTime[1] / participants[1].speed ? 0 : 1;
+            turnOrder.push(participants[nextTurnIndex]);
+            currentTime[nextTurnIndex] += 1; // Increment the chosen participant's elapsed time
+            totalTurns++;
+        }
+
+        return turnOrder;
+    }
+
+    updateTurnOrderDisplay() {
+        if (this.turnOrderList) {
+            this.turnOrderList.destroy();
+        }
+
+        let orderText = '';
+        for (let i = 0; i < 10; i++) {
+            orderText += `${this.turnOrder[(this.currentTurnIndex + i) % this.turnOrder.length].name}\n`;
+        }
+
+        this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 200, orderText, { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
+
+        this.turnOrderList.alpha = 0;
+        this.tweens.add({
+            targets: this.turnOrderList,
+            alpha: 1,
+            duration: 500,
+            ease: 'Power1'
+        });
+    }
+
+    applyHealingEffect(target) {
+        let healingLight = this.add.graphics();
+        healingLight.fillStyle(0x00ff00, 0.5); // Green color with some transparency
+        healingLight.fillCircle(target.sprite.x, target.sprite.y, 50);
+        this.tweens.add({
+            targets: healingLight,
+            alpha: { from: 1, to: 0 },
+            duration: 1000,
+            ease: 'Power1',
+            onComplete: () => {
+                healingLight.destroy();
+            }
+        });
+    }
+
+    applyEffect(target, color) {
+        let effectLight = this.add.graphics();
+        effectLight.fillStyle(color, 0.5);
+        effectLight.fillCircle(target.x, target.y, 50);
+        this.tweens.add({
+            targets: effectLight,
+            alpha: { from: 1, to: 0 },
+            duration: 1000,
+            ease: 'Power1',
+            onComplete: () => {
+                effectLight.destroy();
+            }
+        });
+    }
+
+    handlePlayerAction(action, elementType = null) {
+        this.hideSubOptions(); // Ensure sub-options are hidden when a main action is chosen
+
+        if (!this.isCooldown && this.turnOrder[this.currentTurnIndex].name === 'Player') {
+            let damage = 0;
+            let healing = 0;
+            let critical = false;
+
+            if (action === 'Spells' && !elementType) {
+                this.showElementSelection();
+                return;
+            }
+
+            if (action === 'Attack') {
+                // Use calculateDamageZ with acc and eva parameters
+                damage = this.calculateDamage(this.player.atk, this.enemy.def, this.player.luk, this.enemy.eva, this.player.acc, this.enemy);
+                //this.showDamageIndicator(this.enemy, damage, critical);
+                this.addHelpText(`Player attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+
+                // Gain XP for attacking
+                //this.gainXP('attack'); // Gain XP for attack action
+
+                this.playAttackAnimation(this.player.sprite, this.enemy.sprite);
+            } else if (action === 'Spells') {
+                if (this.player.mana >= 10) {
+                    // Use calculateMagicDamageZ with wisdom (wis) and acc
+                    damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element[elementType], this.enemy.element[elementType], this.player.wis, this.enemy.wis);
+                    this.player.mana -= 10;
+                    this.addHelpText(`Player uses ${elementType} Spells! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+
+                    // Gain XP for casting a spell
+                    //this.gainXP('magic'); // Gain XP for magic action
+
+                    this.playMagicAttackAnimation(this.player, this.enemy, elementType, damage, critical, this.enemy.element[elementType]);
+                } else {
+                    this.addHelpText("Not enough mana!");
+                    return;
+                }
+            } else if (action === 'Defend') {
+                this.player.def *= 4; // Temporary defense boost
+                this.player.isDefending = true;
+                this.addHelpText('Player defends, boosting defense for this turn.');
+
+                // Gain XP for defending
+                //this.gainXP('defend'); // Gain XP for defend action
+            } else if (action === 'Skills') {
+                this.showSkillSelection();
+                return;
+            } else if (action === 'Heal') {
+                if (this.player.mana >= 15) {
+                    // Use calculateHealingZ for the healing calculation
+                    healing = this.calculateHealing(this.player.magAtk);
+                    this.player.mana -= 15;
+                    this.player.health += healing;
+                    this.addHelpText(`Player uses Heal! Restores ${healing} health.`);
+
+                    // Gain XP for healing
+                    //this.gainXP('magic'); // Gain XP for magic/healing action
+
+                    this.showDamageIndicator(this.player, -healing, critical);
+                    this.applyHealingEffect(this.player);
+                } else {
+                    this.addHelpText("Not enough mana!");
+                    return;
+                }
+            }
+
+            // Update health and mana displays
+            this.playerHealthText.setText(`Health: ${this.player.health}`);
+            this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
+            this.playerManaText.setText(`Mana: ${this.player.mana}`);
+            this.startCooldown();
+            this.hidePlayerActions();
+        }
+    }
+
+    gainXP(action) {
+        switch (action) {
+            case 'attack':
+                this.player.Experience.atkXP += XP_GAIN.attack;
+                console.log(`Gained ${XP_GAIN.attack} XP in Attack`);
+                this.levelUpStat('atk', this.player.Experience.atkXP);
+                break;
+            case 'defend':
+                this.player.Experience.defXP += XP_GAIN.defend;
+                console.log(`Gained ${XP_GAIN.defend} XP in Defense`);
+                this.levelUpStat('def', this.player.Experience.defXP);
+                break;
+            case 'magic':
+                this.player.Experience.magAtkXP += XP_GAIN.magic;
+                console.log(`Gained ${XP_GAIN.magic} XP in Magic Attack`);
+                this.levelUpStat('magAtk', this.player.Experience.magAtkXP);
+                break;
+            case 'speed':
+                this.player.Experience.spdXP += XP_GAIN.speed;
+                console.log(`Gained ${XP_GAIN.speed} XP in Speed`);
+                this.levelUpStat('spd', this.player.Experience.spdXP);
+                break;
+            default:
+                console.log("No XP gained");
+        }
+
+        // After gaining XP, check for level up
+        this.checkForLevelUp();
+
+        // Optionally save the game state after each turn
+        this.saveGameState();
+    }
+
+
+    levelUpStat(stat, xp) {
+        const XP_THRESHOLD = 100;  // Example threshold for leveling up
+        if (xp >= XP_THRESHOLD) {
+            this.player.Stats[stat] += Math.floor(xp / XP_THRESHOLD);  // Level up stat
+            this.player.Experience[`${stat}XP`] = xp % XP_THRESHOLD;  // Carry over leftover XP
+            console.log(`${stat.toUpperCase()} leveled up! New ${stat} stat: ${this.player.Stats[stat]}`);
+        }
+    }
+
+    calculateHealing(magAtk) {
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+        let baseHealing = Math.floor((4 * magAtk + 200) * variance);
+        return Math.max(1, baseHealing); // Ensure minimum healing is 1
+    }
+
+    showSkillSelection() {
+        this.hideSubOptions(); // Hide any existing sub-options
+
+        const skills = ['Poison', 'Stun', 'Burn', 'Freeze']; // Example status effects
+        this.skillButtons = this.add.group();
+
+        // Create a new action box for skills above the original action box
+        const skillBoxY = this.scale.height - 200 - 50; // Adjust as necessary
+        const skillBoxWidth = this.scale.width - 40; // Adjust as necessary
+        this.skillBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(20, skillBoxY, skillBoxWidth, 50);
+
+        // Add skill buttons to the new action box
+        skills.forEach((skill, index) => {
+            const elementWidth = (this.scale.width - 100) / skills.length;
+            const x = 100 + index * elementWidth; // Adjust spacing as necessary
+            const skillText = this.add.text(x, skillBoxY + 25, skill, {
+                fontSize: '30px',
+                fill: '#fff',
+                backgroundColor: '#000',
+                padding: { left: 10, right: 10, top: 5, bottom: 5 }
+            }).setOrigin(0.5);
+            skillText.setInteractive();
+            skillText.on('pointerdown', () => {
+                this.playAttackAnimation(this.player.sprite, this.enemy.sprite);
+                this.applyStatusEffect('Player', 'Enemy', skill);
+                this.skillButtons.clear(true, true);
+                this.startCooldown();
+                this.hidePlayerActions();
+                this.skillBox.destroy();
+            });
+            this.skillButtons.add(skillText);
+
+            // Add animation and colorful effect
+            this.tweens.add({
+                targets: skillText,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Power1'
+            });
+        });
+    }
+
+    showElementSelection() {
+        this.hideSubOptions(); // Hide any existing sub-options
+
+        const elements = ['Fire', 'Ice', 'Water', 'Lightning'];
+        this.elementButtons = this.add.group();
+
+        // Create a new action box for elements above the original action box
+        const elementBoxY = this.scale.height - 200 - 50; // Adjust as necessary
+        const elementBoxWidth = this.scale.width - 40; // Adjust as necessary
+        this.elementBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(20, elementBoxY, elementBoxWidth, 50);
+
+        // Add element buttons to the new action box
+        elements.forEach((element, index) => {
+            const elementWidth = (this.scale.width - 100) / elements.length;
+            const x = 100 + index * elementWidth; // Adjust spacing as necessary
+            const elementText = this.add.text(x, elementBoxY + 25, element, {
+                fontSize: '30px',
+                fill: '#fff',
+                backgroundColor: '#000',
+                padding: { left: 10, right: 10, top: 5, bottom: 5 }
+            }).setOrigin(0.5);
+            elementText.setInteractive();
+            elementText.on('pointerdown', () => {
+                this.handlePlayerAction('Spells', element.toLowerCase());
+                this.elementButtons.clear(true, true);
+                this.elementBox.destroy();
+            });
+            this.elementButtons.add(elementText);
+
+            // Add animation and colorful effect
+            this.tweens.add({
+                targets: elementText,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Power1'
+            });
+        });
+    }
+
+    hideSubOptions() {
+        if (this.skillButtons) {
+            this.skillBox.clear();
+            this.skillButtons.clear(true, true);
+        }
+        if (this.elementButtons) {
+            this.elementBox.clear();
+            this.elementButtons.clear(true, true);
+        }
+    }
+
+    enemyAction() {
+        console.log('enemyAction...');
+        console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
+
+        if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
+            const performEnemyAction = () => {
+                console.log('performEnemyAction...');
+                console.log('performEnemyAction... this.isCooldown: ', this.isCooldown);
+
+                if (!this.isCooldown) {
+                    let damage = 0;
+                    let critical = false;
+                    let actionType;
+                    let action;
+                    let highestDamage = 0;
+                    let bestElement = 'physical';
+
+                    // Periodically reset tried attacks and skills
+                    // Ensure triedElements are initialized properly
+                    if (!this.enemy.triedElements || this.enemy.triedElements.resetCounter >= 5) {
+                        this.enemy.triedElements = {
+                            magic: [],
+                            skills: [],
+                            physical: false, // Track whether the enemy has tried physical attacks
+                            resetCounter: 0
+                        };
+                    } else {
+                        this.enemy.triedElements.magic = this.enemy.triedElements.magic || [];
+                        this.enemy.triedElements.skills = this.enemy.triedElements.skills || [];
+                        this.enemy.triedElements.physical = this.enemy.triedElements.physical || false; // Default to false if undefined
+                    }
+
+                    console.log('Current triedElements:', this.enemy.triedElements);
+
+                    // Get valid actions
+                    const validMagic = this.enemy.actions.magic || [];
+                    const validSkills = this.enemy.actions.skills || [];
+
+                    // Find untried magic, skills, and check if physical has been tried
+                    const untriedMagic = validMagic.find(magic => !this.enemy.triedElements.magic.includes(magic));
+                    const untriedSkill = validSkills.find(skill => !this.enemy.triedElements.skills.includes(skill));
+                    const untriedPhysical = !this.enemy.triedElements.physical;
+
+                    if (untriedMagic) {
+                        // Prioritize untried magic
+                        actionType = 'magic';
+                        action = untriedMagic;
+                        this.enemy.triedElements.magic.push(action); // Mark as tried
+                    } else if (untriedSkill) {
+                        // If no untried magic, try untried skill
+                        actionType = 'skills';
+                        action = untriedSkill;
+                        this.enemy.triedElements.skills.push(action); // Mark as tried
+                    } else if (untriedPhysical) {
+                        // If no untried magic or skills, try physical attack
+                        actionType = 'physical';
+                        action = 'Attack';
+                        this.enemy.triedElements.physical = true; // Mark physical attack as tried
+                    } else {
+                        // All magic, skills, and physical attacks have been tried, fallback to best attack based on known weaknesses
+                        for (const [element, dmg] of Object.entries(this.enemy.learnedElementalWeaknesses)) {
+                            if (dmg > highestDamage) {
+                                highestDamage = dmg;
+                                bestElement = element;
+                            }
+                        }
+
+                        if (bestElement === 'physical') {
+                            actionType = 'physical';
+                            action = 'Attack';
+                        } else {
+                            actionType = 'magic';
+                            action = bestElement;
+                        }
+                    }
+
+                    // Log the selected action
+                    console.log('Enemy action selected:', actionType, action);
+
+                    // Execute the selected action
+                    this.executeEnemyAction(actionType, action, damage, critical, bestElement);
+
+                    // Update mana and reset counter if needed
+                    this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
+                    this.startCooldown();
+
+                } else {
+                    console.log('Delaying Call to performEnemyAction...');
+                    this.time.delayedCall(200, performEnemyAction, [], this);
+                }
+            };
+
+            performEnemyAction();
+        } else {
+            console.error('It is not currently the enemy\'s turn');
+        }
+    }
+
+    // Helper method to handle execution of the action
+    executeEnemyAction(actionType, action, damage, critical, bestElement) {
+        if (actionType === 'physical') {
+            // Physical attack
+            damage = this.calculateDamage(this.enemy.atk, this.player.def, this.enemy.wis, this.player.eva, this.enemy.acc, this.player);
+            this.addHelpText(`Enemy attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+            this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
+            this.enemy.learnedElementalWeaknesses.physical = Math.max(this.enemy.learnedElementalWeaknesses.physical, damage);
+        } else if (actionType === 'magic') {
+            if (this.enemy.mana >= 10) {
+                // Magic attack
+                const elementType = action;
+                damage = this.calculateMagicDamage(this.enemy.magAtk, this.player.magDef, this.enemy.element[elementType], this.player.element[elementType], this.enemy.wis, this.player.wis);
+                this.enemy.mana -= 10;
+                this.addHelpText(`Enemy uses ${elementType} Spell! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
+                this.playMagicAttackAnimation(this.enemy, this.player, elementType, damage, critical, this.player.element[elementType]);
+                this.enemy.learnedElementalWeaknesses[elementType] = Math.max(this.enemy.learnedElementalWeaknesses[elementType], damage);
+            } else {
+                // Fallback to physical if no mana
+                this.executeEnemyAction('physical', 'Attack', damage, critical, 'physical');
+            }
+        } else if (actionType === 'skills') {
+            this.playAttackAnimation(this.enemy.sprite, this.player.sprite);
+            this.addHelpText(`Enemy uses ${action}!`);
+            this.applyStatusEffect('Enemy', 'Player', action);
+        }
+    }
+
+    applyStatusEffect(caster, target, statusEffect) {
+        console.log('applyStatusEffect... caster: ', caster);
+        console.log('applyStatusEffect... target: ', target);
+        console.log('applyStatusEffect... statusEffect: ', statusEffect);
+
+        this.time.delayedCall(150, () => {
+            let targetCharacter = target === 'Player' ? this.player : this.enemy;
+            let casterCharacter = caster === 'Player' ? this.player : this.enemy;
+
+            console.log('applyStatusEffect... targetCharacter.immunities: ', targetCharacter.immunities);
+            if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
+                console.log('applyStatusEffect... IMMUNE');
+                this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
+                this.showPhraseIndicator(targetCharacter.sprite, 'IMMUNE', '#2bf1ff');
+                if (caster === 'Enemy') {
+                    this.enemy.learnedStatusImmunities[statusEffect] = true;
+                }
+            } else {
+                console.log('applyStatusEffect... Not Immune');
+                let existingEffect = targetCharacter.statusEffects.find(effect => effect.type === statusEffect);
+                console.log('applyStatusEffect... existingEffect: ', existingEffect);
+                if (existingEffect) {
+                    if (existingEffect.turns !== -1) { // Only refresh if it is not infinite
+                        if (statusEffect === 'Stun') existingEffect.turns = 1;
+                        else if (statusEffect === 'Freeze') existingEffect.turns = 5;
+                        this.addHelpText(`${targetCharacter.name} is already affected by ${statusEffect}. Duration refreshed.`);
+                    }
+                } else {
+                    let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : 3)); // 3 turns for non-infinite status effects
+                    targetCharacter.statusEffects.push({ type: statusEffect, turns });
+                    this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
+                }
+            }
+
+            this.updateStatusIndicators(targetCharacter);
+        }, [], this);
+    }
+
+    updateStatusIndicators(character) {
+        if (character.statusIndicators) {
+            character.statusIndicators.clear(true, true);
+        }
+
+        character.statusIndicators = this.add.group();
+        const statusEffects = character.statusEffects;
+        for (let i = 0; i < statusEffects.length; i++) {
+            let statusText = this.add.text(character.sprite.x - 100, 300 + i * 30, `${statusEffects[i].type} (${statusEffects[i].turns > 0 ? statusEffects[i].turns : '∞'})`, { fontSize: '20px', fill: '#fff', backgroundColor: '#000', padding: { left: 10, right: 10, top: 5, bottom: 5 } });
+            character.statusIndicators.add(statusText);
+        }
+    }
+
+    showDamageIndicator(target, damage, critical, elementValue, additionalText, hideDamageNumber) {
+        let fontColor = '#f0d735';
+        let delaytime = 0;
+
+        if (elementValue <= 0.0) {
+            delaytime = 500;
+            fontColor = elementValue < 0.0 ? '#0cc43d' : '#2bf1ff';
+            const immunityText = elementValue < 0.0 ? 'BUFF' : 'IMMUNE';
+            const displayText = this.add.text(target.sprite.x, target.sprite.y - 50, immunityText, { fontSize: '50px', fill: fontColor, fontStyle: 'bold' });
+            this.tweens.add({
+                targets: displayText,
+                y: target.sprite.y - 250,
+                alpha: { from: 1, to: 0 },
+                duration: 2500,
+                ease: 'Power1',
+                onComplete: () => {
+                    displayText.destroy();
+                }
+            });
+        }
+
+        if (critical) {
+            delaytime = 500;
+            fontColor = '#f0d735'
+            const displayText = this.add.text(target.sprite.x, target.sprite.y - 50, 'CRITICAL', { fontSize: '50px', fill: fontColor, fontStyle: 'bold' });
+            this.tweens.add({
+                targets: displayText,
+                y: target.sprite.y - 250,
+                alpha: { from: 1, to: 0 },
+                duration: 2500,
+                ease: 'Power1',
+                onComplete: () => {
+                    displayText.destroy();
+                }
+            });
+        }
+
+        if (additionalText) {
+            delaytime = 500;
+            fontColor = '#f0d735'
+            const displayText = this.add.text(target.sprite.x, target.sprite.y - 50, additionalText, { fontSize: '50px', fill: fontColor, fontStyle: 'bold' });
+            this.tweens.add({
+                targets: displayText,
+                y: target.sprite.y - 250,
+                alpha: { from: 1, to: 0 },
+                duration: 2500,
+                ease: 'Power1',
+                onComplete: () => {
+                    displayText.destroy();
+                }
+            });
+        }
+
+        if (damage < 0) {
+            fontColor = '#0cc43d'
+        } else if (critical) {
+            fontColor = '#f0d735'
+        }
+
+        this.time.delayedCall(delaytime, () => {
+            target.health -= damage;
+
+            this.playerHealthText.setText(`Health: ${this.player.health}`);
+            this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
+
+
+            if (!hideDamageNumber) {
+                const damageText = this.add.text(target.sprite.x, target.sprite.y - 50, damage, { fontSize: '60px', fill: fontColor, fontStyle: 'bold' });
+                this.tweens.add({
+                    targets: damageText,
+                    y: target.sprite.y - 250,
+                    alpha: { from: 1, to: 0 },
+                    duration: 2500,
+                    ease: 'Power1',
+                    onComplete: () => {
+                        damageText.destroy();
+                    }
+                });
+            }
+        }, [], this);
+    }
+
+    showPhraseIndicator(target, phrase, color) {
+        let delaytime = 0;
+
+        this.time.delayedCall(delaytime, () => {
+            const damageText = this.add.text(target.x, target.y - 50, phrase, { fontSize: '60px', fill: color, fontStyle: 'bold' });
+            this.tweens.add({
+                targets: damageText,
+                y: target.y - 250,
+                alpha: { from: 1, to: 0 },
+                duration: 2500,
+                ease: 'Power1',
+                onComplete: () => {
+                    damageText.destroy();
+                }
+            });
+        }, [], this);
+    }
+
+    calculateDamage(atk, def, luk, eva, acc, target, elementValue) {
+        let criticalChance = luk / 1000;
+        let critical = Math.random() < criticalChance;
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+
+        let baseDamage;
+        if (critical) {
+            baseDamage = Math.floor((atk * 4) * variance);
+        } else {
+            baseDamage = Math.floor(((4 * atk) - (2 * def)) * variance);
+        }
+
+        baseDamage = Math.max(1, baseDamage); // Ensure minimum damage is 1
+        let evaded = (Math.floor(Math.random() * 100) + 1) <= (acc - eva);
+        this.showDamageIndicator(target, baseDamage, critical, elementValue, evaded ? 'MISS!' : null, evaded ? true : false);
+        return evaded ? 0 : baseDamage;
+    }
+
+    calculatePhysicalDamageX(strength, defense, damageConstant = 16) {
+        const baseDamage = ((Math.pow(strength, 3) / 32) + 32) * damageConstant / 16;
+        const defNum = ((defense - 280.4) ** 2 / 110) + 16;
+        const reducedDamage = (baseDamage * defNum) / 730;
+        return reducedDamage;
+    }
+
+    calculateMagicDamageX(magic, magicDefense, damageConstant = 24) {
+        const baseDamage = (damageConstant * ((Math.pow(magic, 2) / 6) + damageConstant)) / 4;
+        const defNum = ((magicDefense - 280.4) ** 2 / 110) + 16;
+        const reducedDamage = (baseDamage * defNum) / 730;
+        return reducedDamage;
+    }
+
+    calculateHealingX(magic, healingConstant = 80) {
+        return healingConstant * ((magic + healingConstant) / 2);
+    }
+
+    calculateDamageZ(atk, def, luk, eva, acc, damageConstant = 16) {
+        // Original critical logic from calculateDamage
+        let criticalChance = luk / 100;
+        let critical = Math.random() < criticalChance;
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+
+        // Calculate Hit Rate
+        let hitRate = acc - eva;
+        let hitRoll = Math.random() * 100;
+
+        // If hitRoll is greater than hitRate, the attack misses
+        if (hitRate <= 0 || hitRoll > hitRate) {
+            return 0; // Miss
+        }
+
+        // Base damage calculation using logic from calculatePhysicalDamageX
+        let baseDamage;
+        if (critical) {
+            baseDamage = Math.floor(atk * 4 * variance);
+        } else {
+            baseDamage = ((Math.pow(atk, 3) / 32) + 32) * damageConstant / 16;
+            const defNum = ((def - 280.4) ** 2 / 110) + 16;
+            baseDamage = (baseDamage * defNum) / 730;
+            baseDamage = Math.floor(baseDamage * variance);
+        }
+
+        baseDamage = Math.max(1, baseDamage); // Ensure minimum damage is 1
+        return baseDamage; // Return damage since the attack hit
+    }
+
+    calculateMagicDamageZ(magAtk, magDef, defenderElement, wis, damageConstant = 24) {
+        // Critical and variance logic now using Wisdom (wis) instead of Luck (luk)
+        let criticalChance = wis / 100; // Wisdom determines critical chance
+        let critical = Math.random() < criticalChance;
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+
+        // Base magic damage calculation using logic from calculateMagicDamageX
+        let baseDamage;
+        if (critical) {
+            baseDamage = Math.floor(2 * magAtk * variance);
+        } else {
+            baseDamage = (damageConstant * ((Math.pow(magAtk, 2) / 6) + damageConstant)) / 4;
+            const defNum = ((magDef - 280.4) ** 2 / 110) + 16;
+            baseDamage = (baseDamage * defNum) / 730;
+            baseDamage = Math.floor(baseDamage * variance);
+        }
+
+        // Elemental multiplier from the original calculateMagicDamage
+        baseDamage *= defenderElement;
+
+        return Math.floor(baseDamage); // Return the final damage, allowing negative values for potential healing
+    }
+
+    calculateHealingZ(magAtk, healingConstant = 80) {
+        // Combine logic from calculateHealing and calculateHealingX
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+        let baseHealing = healingConstant * ((magAtk + healingConstant) / 2) * variance;
+        return Math.max(1, Math.floor(baseHealing)); // Ensure minimum healing is 1
+    }
+
+    calculateMagicDamage(magAtk, magDef, attackerElement, defenderElement, attackerWis, defenderWis) {
+        console.log('calculateMagicDamage... magAtk: ', magAtk);
+        console.log('calculateMagicDamage... magDef: ', magDef);
+        console.log('calculateMagicDamage... attackerElement: ', attackerElement);
+        console.log('calculateMagicDamage... defenderElement: ', defenderElement);
+        console.log('calculateMagicDamage... attackerWis: ', attackerWis);
+        console.log('calculateMagicDamage... defenderWis: ', defenderWis);
+        let criticalChance = (Math.max(1, Math.floor(attackerWis - defenderWis))) / 100;
+        let critical = Math.random() < criticalChance;
+        let variance = Phaser.Math.FloatBetween(0.9, 1.1);
+
+        let baseDamage;
+
+        // If the target is to be healed, remove magic defense
+        if (defenderElement < 0) {
+            magDef = 0;
+        } else if (defenderElement == 0) {
+            return 0;
+        }
+
+        if (critical) {
+            baseDamage = Math.floor((4 * magAtk) * variance)
+        } else {
+            baseDamage = Math.floor(((4 * magAtk) - (2 * magDef)) * variance);
+        }
+
+        baseDamage *= defenderElement;
+
+        // Calculate Attacker's Elemental Affitiy
+        if (attackerElement > 0) {          // Positive = Weak
+            baseDamage /= attackerElement;  // Weak to this element, reduce damage
+        } else if (attackerElement == 0) {  // 0 = Immune = Strong
+            baseDamage *= 2;                // Resistant in this element, increase damage
+        } else if (attackerElement < 0) {   // Can only be -1 indicating healing strength
+            baseDamage *= 3;                // Strong in this element, Greatly increase damage
+        }
+
+        if (defenderElement < 0) {
+            return Math.floor(baseDamage); // Allow negative values for potential healing
+        } else {
+            return Math.max(1, Math.floor(baseDamage)); // DO NOTAllow negative values for Unless it's a buff
+        }
+    }
+
+    startCooldown() {
+        console.log('startCooldown...');
+        this.isCooldown = true;
+
+        this.time.delayedCall(1000, () => {  // Delay of 1 second for a more natural response
+            this.isCooldown = false;
+            this.nextTurn();
+            this.updateTurnOrderDisplay();  // Ensure UI updates immediately after turn change
+        }, [], this);
+    }
+
+    nextTurn() {
+        console.log('nextTurn...');
+        if (this.turnOrder[this.currentTurnIndex].name === 'Player' && this.player.isDefending) {
+            this.player.def /= 4; // Reset defense boost after turn
+            this.player.isDefending = false;
+        }
+        if (this.turnOrder[this.currentTurnIndex].name === 'Enemy' && this.enemy.isDefending) {
+            this.enemy.def /= 4; // Reset defense boost after turn
+            this.enemy.isDefending = false;
+        }
+
+        // Move to the next character's turn
+        this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
+        const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
+
+        if (this.isCharacterFrozenOrStunned(currentCharacter)) {
+            this.startCooldown();
+        } else {
+            if (this.turnOrder[this.currentTurnIndex].name === 'Player') {
+                this.showPlayerActions();
+            } else if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
+                this.hidePlayerActions();
+                this.enemyAction();
+            } else {
+                console.error('this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
+            }
+            this.updateTurnOrderDisplay();
+        }
+
+        // Decrement status effect turns only here
+        for (let effect of currentCharacter.statusEffects) {
+            if (effect.turns > 0) {
+                effect.turns--;
+            }
+        }
+
+        this.handleStatusEffects();
+    }
+
+    isCharacterFrozenOrStunned(character) {
+        console.log('isCharacterFrozenOrStunned... character: ', character);
+
+        const frozenStatus = character.statusEffects.find(effect => effect.type === 'Freeze');
+        const stunnedStatus = character.statusEffects.find(effect => effect.type === 'Stun');
+
+        if (frozenStatus) {
+            this.addHelpText(`${character.name} is frozen and skips a turn!`);
+            return true;
+        }
+
+        if (stunnedStatus) {
+            this.addHelpText(`${character.name} is stunned and skips a turn!`);
+            return true;
+        }
+
+        return false;
+    }
+
+    handleStatusEffects() {
+        const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
+
+        for (let i = currentCharacter.statusEffects.length - 1; i >= 0; i--) {
+            this.time.delayedCall(500 * i, () => {
+                let effect = currentCharacter.statusEffects[i];
+                let damage = 0;
+
+                if (effect && effect.type) {
+
+                    switch (effect.type) {
+                        case 'Poison':
+                            damage = Math.floor(currentCharacter.health * 0.05);
+                            this.addHelpText(`${currentCharacter.name} takes poison damage!`);
+                            this.showDamageIndicator(currentCharacter, damage);
+                            break;
+                        case 'Burn':
+                            damage = Math.floor(currentCharacter.health * 0.05);
+                            this.addHelpText(`${currentCharacter.name} takes burn damage!`);
+                            this.showDamageIndicator(currentCharacter, damage);
+                            break;
+                        // Stun and Freeze are handled in isCharacterFrozenOrStunned method
+                    }
+
+                    if (currentCharacter.health <= 0) {
+                        this.endBattle(currentCharacter.name === 'Player' ? 'lose' : 'win');
+                    }
+                }
+            }, [], this);
+        }
+
+        // Filter out status effects with 0 turns left
+        currentCharacter.statusEffects = currentCharacter.statusEffects.filter(effect => effect.turns !== 0);
+
+        this.updateStatusIndicators(currentCharacter);
+    }
+
+    showPlayerActions() {
+        this.actions.children.each(action => action.setVisible(true));
+        this.actionBox.setVisible(true);
+    }
+
+    hidePlayerActions() {
+        this.actions.children.each(action => action.setVisible(false));
+        this.hideSubOptions(); // Ensure sub-options are hidden
+        this.actionBox.setVisible(false);
+    }
+
+    playAttackAnimation(attacker, defender) {
+        this.tweens.add({
+            targets: attacker,
+            x: defender.x - 50,
+            duration: 300,
+            yoyo: true,
+            ease: 'Power1'
+        });
+
+        this.time.delayedCall(150, () => {
+            this.tweens.add({
+                targets: defender,
+                angle: { from: -5, to: 5 },
+                duration: 50,
+                yoyo: true,
+                repeat: 5,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                    defender.angle = 0; // Reset defender angle
+                }
+            });
+        }, [], this);
+    }
+
+    playMagicAttackAnimation(attacker, defender, elementType, damage, critical, elementValue) {
+        let color;
+        let statusEffect = null;
+
+        switch (elementType) {
+            case 'fire':
+                color = 0xff4500; // Orange
+                statusEffect = 'Burn';
+                break;
+            case 'ice':
+                color = 0x00ffff; // Cyan
+                statusEffect = 'Freeze';
+                break;
+            case 'water':
+                color = 0x1e90ff; // DodgerBlue
+                break;
+            case 'lightning':
+                color = 0xffff00; // Yellow
+                break;
+            default:
+                color = 0xffffff; // Default to white
+                break;
+        }
+
+        let magicBall = this.add.circle(attacker.sprite.x, attacker.sprite.y, 30, color);
+        this.physics.add.existing(magicBall);
+        this.physics.moveTo(magicBall, defender.sprite.x, defender.sprite.y, 500);
+
+        this.time.delayedCall(800, () => {
+            magicBall.destroy();
+            this.applyEffect(defender.sprite, color);
+            this.showDamageIndicator(defender, damage, critical, elementValue);
+
+            // Inflict status effect if applicable and defender has immunities property
+            if (statusEffect && defender.immunities && !defender.immunities.includes(statusEffect)) {
+                this.applyStatusEffect(attacker.sprite.name, defender.name, statusEffect);
+            }
+        });
+    }
+}
+
 const config = {
-  type: Phaser.AUTO,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  scale: {
-      mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.CENTER_BOTH
-  },
-  scene: [BattleScene],  // You can add more scenes like 'ExplorationScene' later
-  physics: {
-      default: 'arcade',
-      arcade: {
-          gravity: { y: 0 },
-          debug: false
-      }
-  }
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    scene: [BattleScene, ExplorationScene],
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    }
 };
 
-// Initialize the Phaser game
-let game = new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+window.addEventListener('resize', () => {
+    const newWidth = window.innerWidth;
+    const newHeight = window.innerHeight;
+
+    game.scale.resize(newWidth, newHeight);
+    game.scene.scenes.forEach(scene => {
+        scene.scale.resize(newWidth, newHeight);
+        scene.children.list.forEach(child => {
+            if (child.isText) {
+                // Adjust font size or reposition texts if needed
+                child.setFontSize(newHeight / 25); // Example adjustment
+            }
+        });
+    });
+});
+
+async function generateEnemyImage(newsArticle, setting) {
+    const prompt = `Generate an image of an enemy based on the following description:${monsterDescription}`;
+    const encodedPrompt = encodeURIComponent(prompt);
+
+    if (!costSavingMode) {
+        try {
+            const imageResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test/db?prompt=${encodedPrompt}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt: prompt, generateImage: true })
+            });
+
+            if (!imageResponse.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const data = await imageResponse.json();
+            const parsedBody = JSON.parse(data.body);
+            if (parsedBody && parsedBody.base64_image) {
+                return `data:image/png;base64,${parsedBody.base64_image}`;
+            } else {
+                throw new Error('No image generated');
+            }
+        } catch (error) {
+            console.error('Error generating enemy image:', error);
+            return generateEnemyImage(newsArticle, setting); // Retry on failure
+        }
+    } else {
+        // Cost Saving Mode
+        console.warn('Cost Saving Mode Enabled, No image generation.');
+        return `data:image/png;base64,${genericEnemyBase64}`;
+    }
+}
+
+function spawnEnemies(scene) {
+    if (newsData.length > 0) {
+        let enemy = scene.enemies.create(400, 300, 'enemy');
+        enemy.setCollideWorldBounds(true);
+        scene.physics.add.collider(scene.player, scene.enemies, scene.startBattle, null, scene);
+        scene.physics.add.collider(scene.enemies, scene.enemies);
+        enemy.description = `${monsterDescription}`;
+
+    } else {
+        console.error('No news data available to generate enemies');
+    }
+}
+
+async function fetchNews() {
+    if (!costSavingMode) {
+        try {
+            const apiUrl = 'https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com';
+            const newsEndpoint = '/test';
+            const response = await fetch(apiUrl + newsEndpoint);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const jsonData = await response.json();
+
+            if (!jsonData) {
+                throw new Error('No Data gathered!');
+            }
+
+            const bodyData = JSON.parse(jsonData.body);
+
+            if (!bodyData) {
+                throw new Error('No body found in the response!');
+            }
+
+            if (!bodyData.articles) {
+                throw new Error('No articles found in the body!');
+            }
+
+            newsData = structureNewsData(bodyData.articles.sort(() => 0.5 - Math.random()).slice(0, 1));
+            return;
+        } catch (error) {
+            console.error('Error fetching news:', error);
+            return fetchNews(); // Retry on failure
+        }
+    } else {
+        console.warn('Cost Saving Mode Enabled, returning mock news data.');
+        // Mock news data for cost-saving mode
+        newsData = structureNewsData([
+            {
+                title: 'Local Hero Saves Cat from Tree',
+                description: 'A brave individual scaled a tall oak tree to rescue a cat stuck for hours.',
+                url: 'https://mocknews.com/hero-saves-cat'
+            },
+            {
+                title: 'Mysterious Lights Spotted Over City',
+                description: 'Residents reported seeing strange, glowing lights hovering over downtown.',
+                url: 'https://mocknews.com/mysterious-lights'
+            }
+        ]);
+        return;
+    }
+}
+
+function structureNewsData(articles) {
+    return articles.map(article => {
+        return {
+            title: article.title,
+            description: article.description,
+            url: article.url
+        };
+    });
+}
+
+async function generateAIResponses() {
+    const responses = [];
+
+    for (let i = 0; i < newsData.length; i++) {
+        const news = newsData[i];
+        var prompt = `Describe in 10-20 words a fictional version of following news article with no likeness to real people or brand names:\n\nTitle: ${news.title}\nDescription: ${news.description}`;
+
+        if (!costSavingMode) {
+            try {
+
+                const settingResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                if (!settingResponse.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const settingResponseJson = await settingResponse.json();
+
+                if (settingResponseJson && settingResponseJson.choices && settingResponseJson.choices[0] && settingResponseJson.choices[0].message && settingResponseJson.choices[0].message.content) {
+                    const textContent = settingResponseJson.choices[0].message.content;
+
+                    personas = await generatePersonas(textContent);
+                    let foundPersonas = personas.characters && Array.isArray(personas.characters) ? personas.characters : personas;
+                    persona = foundPersonas[i % foundPersonas.length]; // Cycle through personas
+                    prompt = `As ${persona.name}, ${persona.description}, in the setting chosen: ${setting}. Describe in 10-20 words a Monster that we'll be faced to fight due to a made up reason that makes sense.`;
+
+                    try {
+                        const monsterDescriptionResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodeURIComponent(prompt)}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ prompt: prompt })
+                        });
+
+                        if (!monsterDescriptionResponse.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+
+                        const monsterDescriptionResponseJson = await monsterDescriptionResponse.json();
+
+                        if (monsterDescriptionResponseJson && monsterDescriptionResponseJson.choices && monsterDescriptionResponseJson.choices[0] && monsterDescriptionResponseJson.choices[0].message && monsterDescriptionResponseJson.choices[0].message.content) {
+                            monsterDescription = monsterDescriptionResponseJson.choices[0].message.content;
+                            const imgPrompt = `Generate an image of ${persona.name}, ${persona.description} in the setting chosen: ${setting}.`;
+
+                            if (!costSavingMode) {
+                                try {
+                                    const imageResponse = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test/db?prompt=${encodeURIComponent(imgPrompt)}`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ prompt: imgPrompt, generateImage: true })
+                                    });
+
+                                    if (!imageResponse.ok) {
+                                        throw new Error('Network response was not ok');
+                                    }
+
+                                    const data = await imageResponse.json();
+                                    const parsedBody = JSON.parse(data.body);
+                                    if (parsedBody && parsedBody.base64_image) {
+                                        const base64string = `data:image/png;base64,${parsedBody.base64_image}`;
+                                        responses.push({ response: monsterDescription, persona: persona, imageBase64: base64string });
+                                        npcBase64image = base64string; // Cache player image correctly
+                                    } else {
+                                        throw new Error('No image generated');
+                                    }
+                                } catch (error) {
+                                    console.error('Error generating AI response:', error);
+                                    return generateAIResponses(); // Retry on failure
+                                }
+                            } else {
+                                // Cost Saving Mode
+                                console.warn('Cost Saving Mode Enabled, No image generation.');
+                                npcBase64image = `data:image/png;base64,${genericPlayerBase64}`;
+                                responses.push({ response: monsterDescription, persona: persona, imageBase64: npcBase64image });
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error generating AI response:', error);
+                        return generateAIResponses(); // Retry on failure
+                    }
+                }
+            } catch (error) {
+                console.error('Error generating AI response:', error);
+                return generateAIResponses(); // Retry on failure
+            }
+        } else {
+            // Simulated AI response for the setting and persona
+            personas = [
+                { name: "Luna", description: "A mysterious warrior with ice powers" },
+                { name: "Darius", description: "A fire mage from the mountains" }
+            ];
+            persona = personas[0]; // Select the first persona
+
+            // Simulated monster description generation
+            monsterDescription = "A towering ice golem with the ability to freeze its surroundings.";
+
+            // Assign a generic NPC image
+            npcBase64image = `data:image/png;base64,${genericPlayerBase64}`;
+        }
+    }
+
+    return responses;
+}
+
+async function generatePersonas(setting) {
+    const prompt = `Generate 5 short (5-10 word) and detailed fictional character (Ensure no likeness to real people/places/brands) for a ${setting} setting in JSON format. Each persona should have a name and a description.`;
+    const encodedPrompt = encodeURIComponent(prompt);
+    let parsedPersonas = [];
+
+    try {
+        const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodedPrompt}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: prompt })
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const aiResponse = await response.json();
+
+        if (aiResponse && aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message && aiResponse.choices[0].message.content) {
+            parsedPersonas = JSON.parse(aiResponse.choices[0].message.content);
+        }
+    } catch (error) {
+        loacation.reload();
+        console.error('Error generating AI response:', error);
+    }
+
+    return parsedPersonas;
+}
+
+async function fetchEnemyStats() {
+    const prompt = `Generate stats for an enemy based on this description: ${monsterDescription}. ${statRequirements}`;
+    const encodedPrompt = encodeURIComponent(prompt);
+
+    if (!costSavingMode) {
+
+        try {
+            const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodedPrompt}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt: prompt })
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const data = await response.json();
+            if (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+                return JSON.parse(data.choices[0].message.content);
+            } else {
+                throw new Error('No stats generated');
+            }
+        } catch (error) {
+            console.error('Error fetching enemy stats:', error);
+            return fetchEnemyStats(); // Retry on failure
+        }
+    } else {
+        // Simulated enemy stats
+        return {
+            health: 5000,
+            mana: 200,
+            atk: 80,
+            def: 70,
+            spd: 50,
+            eva: 30,
+            magAtk: 90,
+            magDef: 60,
+            luk: 40,
+            wis: 75,
+            element: { fire: 2, ice: -1, water: 0, lightning: 3 },
+            immunities: ["Freeze", "Poison"]
+        };
+    }
+}
+
+async function fetchPlayerStats() {
+    const prompt = `Generate stats for the player based on this description: ${persona.name}, ${persona.description}. ${statRequirements}`;
+    const encodedPrompt = encodeURIComponent(prompt);
+
+    if (!costSavingMode) {
+
+        try {
+            const response = await fetch(`https://bjvbrhjov8.execute-api.us-east-2.amazonaws.com/test?prompt=${encodedPrompt}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt: prompt })
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const data = await response.json();
+            if (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+                return JSON.parse(data.choices[0].message.content);
+            } else {
+                throw new Error('No stats generated');
+            }
+        } catch (error) {
+            console.error('Error fetching player stats:', error);
+            return fetchPlayerStats(); // Retry on failure
+        }
+    } else {
+        // Simulated player stats
+        return {
+            health: 6000,
+            mana: 300,
+            atk: 85,
+            def: 65,
+            spd: 55,
+            eva: 35,
+            magAtk: 100,
+            magDef: 70,
+            luk: 50,
+            wis: 80,
+            element: { fire: -1, ice: 2, water: 1, lightning: 0 },
+            immunities: ["Burn", "Stun"]
+        };
+    }
+}
+
+// Function to display the level-up screen where the player can choose a new skill/spell
+function displayLevelUpScreen() {
+    console.log("Congratulations! You've leveled up!");
+
+    // Filter the skill tree to show only skills/spells that are available based on the current level
+    let availableSkills = skillTree.attackSkills.concat(skillTree.magicSkills).filter(skill => skill.requiredLevel <= hero.Level && !hero.KnownSkills.includes(skill));
+
+    if (availableSkills.length > 0) {
+        console.log("You can now unlock a new skill or spell. Choose one from the list:");
+
+        availableSkills.forEach((skill, index) => {
+            console.log(`${index + 1}. ${skill.name} - ${skill.description} (Requires Level: ${skill.requiredLevel})`);
+        });
+
+        console.log("Enter the number of the skill/spell you'd like to unlock.");
+    } else {
+        console.log("No new skills or spells are available to unlock.");
+    }
+}
+
+// Function to handle the player's choice of which skill/spell to unlock
+function unlockSkill(skillIndex) {
+    let availableSkills = skillTree.attackSkills.concat(skillTree.magicSkills).filter(skill => skill.requiredLevel <= hero.Level && !hero.KnownSkills.includes(skill));
+
+    if (skillIndex > 0 && skillIndex <= availableSkills.length) {
+        let chosenSkill = availableSkills[skillIndex - 1];
+        hero.KnownSkills.push(chosenSkill);
+        console.log(`${chosenSkill.name} has been unlocked!`);
+    } else {
+        console.log("Invalid selection. Please try again.");
+        displayLevelUpScreen();  // Let the player choose again
+    }
+}
+
+// Example of leveling up and choosing a new skill/spell
+function levelUp() {
+    hero.Level++;
+    console.log(`You've reached level ${hero.Level}!`);
+    displayLevelUpScreen();
+}
+
+// Save game state
+function saveGame(saveID, gameData) {
+    // const transaction = db.transaction([STORE_NAME], 'readwrite');
+    // const store = transaction.objectStore(STORE_NAME);
+
+    // const saveData = {
+    //     saveID: saveID,
+    //     data: gameData, // Store structured game data here
+    //     timestamp: new Date().toISOString()
+    // };
+
+    // const request = store.put(saveData);
+
+    // request.onsuccess = () => {
+    //     console.log(`Game saved successfully under ID: ${saveID}`);
+    // };
+
+    // request.onerror = (event) => {
+    //     console.error('Error saving game:', event.target.errorCode);
+    // };
+}
+
+// Load game state
+function loadGame(saveID, callback) {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+
+    const request = store.get(saveID);
+
+    request.onsuccess = (event) => {
+        const saveData = event.target.result;
+        if (saveData) {
+            console.log(`Game loaded successfully:`, saveData.data);
+            callback(saveData.data);
+        } else {
+            console.log('No save found for this ID.');
+        }
+    };
+
+    request.onerror = (event) => {
+        console.error('Error loading game:', event.target.errorCode);
+    };
+}
+
+function initDB() {
+    const request = indexedDB.open('GameDatabase', 1); // Open a database with name 'GameDatabase'
+
+    request.onerror = function (event) {
+        console.error('Database error: ', event.target.errorCode);
+    };
+
+    request.onsuccess = function (event) {
+        console.log('Database initialized successfully');
+        const db = event.target.result;
+
+        // Optional: Perform any operations if you need to handle the DB right after init
+    };
+
+    request.onupgradeneeded = function (event) {
+        const db = event.target.result;
+        // Create an object store (like a table) for your game save data
+        const objectStore = db.createObjectStore('gameSaves', { keyPath: 'saveID' });
+
+        objectStore.createIndex('saveID', 'saveID', { unique: true });
+        console.log('Database upgrade successful: ObjectStore and indexes created');
+    };
+}
+
+
+// Initialize database and set up auto-save
+//initDB();
+//startAutoSave('save1', getGameState);
+
+// // Example of manual save when the player clicks a button
+// document.querySelector('#saveButton').addEventListener('click', () => {
+//     const gameData = getGameState();
+//     saveGame('save1', gameData);
+// });
+
+function startAutoSave(saveID, gameData) {
+    setInterval(() => {
+        saveGame(saveID, gameData);
+    }, 60000); // Save every 60 seconds
+}
+
+// Example of loading the game when the page is loaded
+// window.onload = () => {
+//     loadGame('save1', (gameData) => {
+//         if (gameData) {
+//             // Restore game state from saved data
+//             hero = gameData.hero;
+//             currentProgress = gameData.progress;
+//             inventory = gameData.inventory;
+//         }
+//     });
+// };
+
+let locationHeroes = [];
+let selectedHero;
+
+// Function to randomly select a location
+function selectRandomLocation() {
+    selectedLocation = gameData.Locations[Math.floor(Math.random() * gameData.Locations.length)];
+    console.log(`Location chosen: ${selectedLocation.Name}`);
+    locationHeroes = selectedLocation.Heros;
+    displayHeroChoices();
+}
+
+// Function to display hero options from the selected location
+function displayHeroChoices() {
+    console.log(`Choose a hero from the following list in ${this.selectedLocation.Name}:`);
+
+    // List heroes by index
+    locationHeroes.forEach((hero, index) => {
+        console.log(`${index + 1}. ${hero.Name} - ${hero.Description}`);
+    });
+
+    console.log("Enter the number of the hero you'd like to choose:");
+}
+
+function checkForNewSkills() {
+    let availableSkills = skillTree.attackSkills.concat(skillTree.magicSkills).filter(skill => skill.requiredLevel <= hero.Level && !hero.KnownSkills.includes(skill));
+
+    availableSkills.forEach(skill => {
+        hero.KnownSkills.push(skill); // Add the new skill to KnownSkills
+        console.log(`New skill unlocked: ${skill.name} - ${skill.description}`);
+    });
+}
+
+function displayHeroStats(hero) {
+    console.log(`Hero: ${hero.Name}`);
+    console.log(`Health: ${hero.Stats.health}`);
+    console.log(`Attack: ${hero.Stats.atk}`);
+    console.log(`Defense: ${hero.Stats.def}`);
+    console.log(`Speed: ${hero.Stats.spd}`);
+    console.log(`Magic Attack: ${hero.Stats.magAtk}`);
+    console.log(`Magic Defense: ${hero.Stats.magDef}`);
+    console.log(`XP for Attack: ${hero.Experience.atkXP}`);
+    console.log(`XP for Defense: ${hero.Experience.defXP}`);
+    console.log(`XP for Speed: ${hero.Experience.spdXP}`);
+    console.log(`XP for Magic Attack: ${hero.Experience.magAtkXP}`);
+    console.log(`Known Skills:`);
+    hero.KnownSkills.forEach(skill => {
+        console.log(`${skill.name} - ${skill.description}`);
+    });
+}
+
+function getGameState() {
+    return {
+        hero: this.player,  // Returning hero's stats, XP, level, etc.
+        location: this.selectedLocation,  // Current location data
+        progress: { /* Add any game progress variables here */ },
+        inventory: { /* If your game has an inventory system, add it here */ }
+    };
+}
+
+function displaySkills() {
+    let skillButtons = [];
+    hero.KnownSkills.forEach(skill => {
+        let button = this.add.text(100, 200, skill.name, {
+            fontSize: '32px',
+            fill: '#fff',
+        });
+        button.setInteractive();
+        button.on('pointerdown', () => {
+            console.log(`Used ${skill.name}`);
+            // Add skill usage logic here
+        });
+        skillButtons.push(button);
+    });
+}
+
+// Function to handle the user's hero choice based on input
+function chooseHero(heroIndex) {
+    if (heroIndex > 0 && heroIndex <= locationHeroes.length) {
+        selectedHero = locationHeroes[heroIndex - 1];
+        displayHeroStats(selectedHero);
+
+        // After selecting a hero, start the game or transition to another scene
+        console.log(`Hero chosen: ${selectedHero.Name}`);
+
+        // Start the exploration or battle
+        this.scene.start('ExplorationScene', { player: selectedHero });
+    } else {
+        console.log("Invalid selection. Please choose a valid number from the list.");
+        displayHeroChoices();
+    }
+}
+
+// Example of handling hero selection by index input
+function handleHeroSelectionInput(input) {
+    let heroIndex = parseInt(input);
+    if (!isNaN(heroIndex)) {
+        chooseHero(heroIndex); // Step 2: Choose a hero from the location by index
+    } else {
+        console.log("Invalid input. Please enter a number.");
+    }
+}
+
+// Start the hero selection process
+function startHeroSelection() {
+    selectRandomLocation();  // Step 1: Choose a random location
+}
+
