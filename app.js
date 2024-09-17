@@ -31,6 +31,23 @@ class BattleScene extends Phaser.Scene {
   }
 
   async create(data) {
+    this.letterGrid = this.add.group();
+    let letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    this.letterGridArray = [];
+    this.selectedLetters = [];
+
+    // Create the 4x4 grid
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        let randomLetter = letters[Math.floor(Math.random() * letters.length)];
+        let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
+        letterText.setInteractive();
+        letterText.on('pointerdown', () => this.selectLetter(letterText));
+        this.letterGrid.add(letterText);
+        this.letterGridArray.push(letterText);
+      }
+    }
+
     await loadGameData();
 
     newsData = structureNewsData([
@@ -212,12 +229,58 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
+  selectLetter(letterText) {
+    if (!this.selectedLetters.includes(letterText)) {
+      this.selectedLetters.push(letterText);
+      letterText.setStyle({ fill: '#00ff00' }); // Change color to show selection
+    }
+  }
+
+  completeWord() {
+    let word = this.selectedLetters.map(letter => letter.text).join('');
+    // Validate and perform actions based on the word
+    this.processWord(word);
+    this.resetGrid();
+  }
+
+  resetGrid() {
+    this.selectedLetters.forEach(letter => letter.setStyle({ fill: '#fff' }));
+    this.selectedLetters = [];
+  }
+
   spawnEnemies() {
     // Start the battle with the first enemy and progress through the list
     console.log('spawnEnemies: ');
     this.currentEnemyIndex = 0;
 
     this.battleSequence();
+  }
+
+  processWord(word) {
+    // Map specific words to actions
+    if (word.toLowerCase() === 'fire') {
+      this.inflictDamage('fire', 100); // Apply fire damage
+    } else if (word.toLowerCase() === 'heal') {
+      this.healPlayer(50); // Heal player
+    } else if (word.toLowerCase() === 'freeze') {
+      this.applyStatusEffect('freeze'); // Freeze enemy
+    } else {
+      this.inflictDamage('physical', word.length * 10); // Default damage based on word length
+    }
+  }
+
+  inflictDamage(type, amount) {
+    this.enemy.health -= amount;
+    this.updateEnemyHealthDisplay();
+  }
+
+  healPlayer(amount) {
+    this.player.health += amount;
+    this.updatePlayerHealthDisplay();
+  }
+
+  applyStatusEffect(effect) {
+    // Apply status effect to enemy (e.g., freeze or burn)
   }
 
   battleSequence() {
@@ -261,13 +324,6 @@ class BattleScene extends Phaser.Scene {
 
       // Display UI elements
       this.createUI(this.selectedLocation);
-
-      // Check whose turn it is and start the action immediately if it's the enemy's turn
-      if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
-        this.enemyAction();
-      } else {
-        this.showPlayerActions();
-      }
     }
 
   }
@@ -375,6 +431,17 @@ class BattleScene extends Phaser.Scene {
   }
 
   update() {
+    // Call to check player and enemy actions frequently.
+    if (!this.isCooldown) {
+      // If the player has inputted a word, process the action.
+      if (this.selectedLetters.length > 0) {
+        this.completeWord(); // Process the player's word input.
+      }
+
+      // Enemy takes action based on a timer or random interval.
+      this.enemyAction();
+    }
+
     if (!battleEnded) {
       if (this.player && this.player.health <= 0) {
         this.endBattle('lose');
@@ -385,13 +452,6 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
-  saveGameState() {
-    const gameData = getGameState();  // Fetch current game state
-    saveGame('save1', gameData);      // Save to IndexedDB
-    console.log('Game saved after battle.');
-  }
-
-
   endBattle(result) {
     battleEnded = true;
     this.time.delayedCall(1000, () => {
@@ -399,9 +459,6 @@ class BattleScene extends Phaser.Scene {
         // Handle victory logic
         this.addHelpText('You Won! Gaining XP...');
         this.enemy.sprite.visible = false; // Remove enemy sprite
-
-        // Save the game state
-        this.saveGameState();
 
         // Trigger the next battle in the sequence
         this.time.delayedCall(3000, () => {
@@ -419,21 +476,6 @@ class BattleScene extends Phaser.Scene {
         }, [], this);
       }
     }, [], this);
-  }
-
-  checkForLevelUp() {
-    // Check if the player has enough XP to level up
-    const XP_THRESHOLD = 100; // Example XP threshold for leveling up
-
-    if (this.player.Experience.atkXP >= XP_THRESHOLD) {
-      this.player.Level++;
-      this.player.Experience.atkXP -= XP_THRESHOLD;  // Carry over excess XP
-
-      console.log(`You've leveled up! Now level: ${this.player.Level}`);
-
-      // Trigger skill selection
-      this.displayLevelUpScreen();  // Allow player to choose new skills/spells
-    }
   }
 
   createUI(location) {
@@ -516,97 +558,6 @@ class BattleScene extends Phaser.Scene {
 
     this.uiContainer.add(this.playerDescription);
     this.uiContainer.add(this.enemyDescription);
-
-    // Turn order list
-    this.turnOrderText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Turns:', { fontSize: '36px', fill: '#fff' }).setOrigin(0.5);
-    this.updateTurnOrderDisplay();
-
-    // Add elements to the UI container
-    this.uiContainer.add([this.playerHealthText, this.playerManaText, this.enemyHealthText, this.enemyManaText, this.turnOrderText]);
-
-    // Action buttons at the bottom
-    this.actions = this.add.group();
-    const actionNames = ['Attack', 'Defend', 'Spells', 'Skills', 'Heal'];
-    const actionButtonWidth = (this.scale.width - padding * 2) / 5;
-
-    actionNames.forEach((actionName, index) => {
-      const x = (padding + halfWidth) - (actionNames.length * actionButtonWidth) / 2 + index * actionButtonWidth;
-      const actionText = this.add.text(x, this.scale.height - actionButtonHeight - padding, actionName, {
-        fontSize: '30px',
-        fill: '#fff',
-        backgroundColor: '#000',
-        padding: { left: 20, right: 20, top: 10, bottom: 10 }
-      }).setOrigin(0.5);
-      actionText.setInteractive();
-      actionText.on('pointerdown', () => this.handlePlayerAction(actionName));
-      this.actions.add(actionText);
-      this.uiContainer.add(actionText);
-    });
-
-    // Add animation and colorful effect to action buttons
-    this.actions.children.iterate(actionText => {
-      this.tweens.add({
-        targets: actionText,
-        scaleX: 1.1,
-        scaleY: 1.1,
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Power1'
-      });
-    });
-
-    // Add action box around action buttons
-    this.actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(padding, this.scale.height - actionButtonHeight - padding * 2, this.scale.width - padding * 2, actionButtonHeight + padding);
-    this.uiContainer.add(this.actionBox);
-  }
-
-  chooseElement() {
-    const elements = ['fire', 'ice', 'water', 'lightning'];
-    return elements[Math.floor(Math.random() * elements.length)];
-  }
-
-  calculateTurnOrder() {
-    let participants = [
-      { name: 'Player', speed: this.player.spd, sprite: this.player.sprite },
-      { name: 'Enemy', speed: this.enemy.spd, sprite: this.enemy.sprite }
-    ];
-
-    let turnOrder = [];
-    let currentTime = [0, 0]; // Initialize current times for both participants
-    let totalTurns = 0;
-
-    // Calculate the total number of turns based on the highest speed
-    let totalParticipantTurns = 100; // Arbitrary large number to ensure enough turns are calculated
-    for (let i = 0; i < totalParticipantTurns; i++) {
-      let nextTurnIndex = currentTime[0] / participants[0].speed <= currentTime[1] / participants[1].speed ? 0 : 1;
-      turnOrder.push(participants[nextTurnIndex]);
-      currentTime[nextTurnIndex] += 1; // Increment the chosen participant's elapsed time
-      totalTurns++;
-    }
-
-    return turnOrder;
-  }
-
-  updateTurnOrderDisplay() {
-    if (this.turnOrderList) {
-      this.turnOrderList.destroy();
-    }
-
-    let orderText = '';
-    for (let i = 0; i < 10; i++) {
-      orderText += `${this.turnOrder[(this.currentTurnIndex + i) % this.turnOrder.length].name}\n`;
-    }
-
-    this.turnOrderList = this.add.text(this.scale.width / 2, this.scale.height / 2 + 200, orderText, { fontSize: '30px', fill: '#fff' }).setOrigin(0.5);
-
-    this.turnOrderList.alpha = 0;
-    this.tweens.add({
-      targets: this.turnOrderList,
-      alpha: 1,
-      duration: 500,
-      ease: 'Power1'
-    });
   }
 
   applyHealingEffect(target) {
@@ -639,65 +590,30 @@ class BattleScene extends Phaser.Scene {
     });
   }
 
-  handlePlayerAction(action, elementType = null) {
-    this.hideSubOptions(); // Ensure sub-options are hidden when a main action is chosen
+  handlePlayerAction(word) {
+    let damage = 0;
+    let healing = 0;
+    let critical = false;
 
-    if (!this.isCooldown && this.turnOrder[this.currentTurnIndex].name === 'Player') {
-      let damage = 0;
-      let healing = 0;
-      let critical = false;
-
-      if (action === 'Spells' && !elementType) {
-        this.showElementSelection();
-        return;
-      }
-
-      if (action === 'Attack') {
-        damage = this.calculateDamage(this.player.atk, this.enemy.def, this.player.luk, this.enemy.eva, this.player.acc, this.enemy);
-        this.addHelpText(`Player attacks! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-
-        this.playAttackAnimation(this.player.sprite, this.enemy.sprite);
-      } else if (action === 'Spells') {
-        if (this.player.mana >= 10) {
-          // Use calculateMagicDamageZ with wisdom (wis) and acc
-          damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element[elementType], this.enemy.element[elementType], this.player.wis, this.enemy.wis);
-          this.player.mana -= 10;
-          this.addHelpText(`Player uses ${elementType} Spells! ${critical ? 'Critical hit! ' : ''}Deals ${damage} damage.`);
-
-          this.playMagicAttackAnimation(this.player, this.enemy, elementType, damage, critical, this.enemy.element[elementType]);
-        } else {
-          this.addHelpText("Not enough mana!");
-          return;
-        }
-      } else if (action === 'Defend') {
-        this.player.def *= 4; // Temporary defense boost
-        this.player.isDefending = true;
-        this.addHelpText('Player defends, boosting defense for this turn.');
-      } else if (action === 'Skills') {
-        this.showSkillSelection();
-        return;
-      } else if (action === 'Heal') {
-        if (this.player.mana >= 15) {
-          // Use calculateHealingZ for the healing calculation
-          healing = this.calculateHealing(this.player.magAtk);
-          this.player.mana -= 15;
-          this.player.health += healing;
-          this.addHelpText(`Player uses Heal! Restores ${healing} health.`);
-          this.showDamageIndicator(this.player, -healing, critical);
-          this.applyHealingEffect(this.player);
-        } else {
-          this.addHelpText("Not enough mana!");
-          return;
-        }
-      }
-
-      // Update health and mana displays
-      this.playerHealthText.setText(`Health: ${this.player.health}`);
-      this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
-      this.playerManaText.setText(`Mana: ${this.player.mana}`);
-      this.startCooldown();
-      this.hidePlayerActions();
+    if (word.toLowerCase() === 'fire') {
+      // Handle fire-based attack
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
+      this.addHelpText(`Player casts Fire! Deals ${damage} damage.`);
+      this.inflictDamage('fire', damage); // Apply the damage logic
+    } else if (word.toLowerCase() === 'heal') {
+      // Handle healing logic
+      healing = this.calculateHealing(this.player.magAtk);
+      this.healPlayer(healing);
+      this.addHelpText(`Player heals! Restores ${healing} health.`);
+    } else {
+      // Handle physical attack if no special word is matched
+      damage = word.length * 10; // Damage based on word length
+      this.inflictDamage('physical', damage);
+      this.addHelpText(`Player uses a basic attack! Deals ${damage} damage.`);
     }
+
+    // After performing the action, clear selected letters.
+    this.resetGrid();
   }
 
   calculateHealing(magAtk) {
@@ -706,202 +622,26 @@ class BattleScene extends Phaser.Scene {
     return Math.max(1, baseHealing); // Ensure minimum healing is 1
   }
 
-  showSkillSelection() {
-    this.hideSubOptions(); // Hide any existing sub-options
-
-    const skills = ['Poison', 'Stun', 'Burn', 'Freeze']; // Example status effects
-    this.skillButtons = this.add.group();
-
-    // Create a new action box for skills above the original action box
-    const skillBoxY = this.scale.height - 200 - 50; // Adjust as necessary
-    const skillBoxWidth = this.scale.width - 40; // Adjust as necessary
-    this.skillBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(20, skillBoxY, skillBoxWidth, 50);
-
-    // Add skill buttons to the new action box
-    skills.forEach((skill, index) => {
-      const elementWidth = (this.scale.width - 100) / skills.length;
-      const x = 100 + index * elementWidth; // Adjust spacing as necessary
-      const skillText = this.add.text(x, skillBoxY + 25, skill, {
-        fontSize: '30px',
-        fill: '#fff',
-        backgroundColor: '#000',
-        padding: { left: 10, right: 10, top: 5, bottom: 5 }
-      }).setOrigin(0.5);
-      skillText.setInteractive();
-      skillText.on('pointerdown', () => {
-        this.playAttackAnimation(this.player.sprite, this.enemy.sprite);
-        this.applyStatusEffect('Player', 'Enemy', skill);
-        this.skillButtons.clear(true, true);
-        this.startCooldown();
-        this.hidePlayerActions();
-        this.skillBox.destroy();
-      });
-      this.skillButtons.add(skillText);
-
-      // Add animation and colorful effect
-      this.tweens.add({
-        targets: skillText,
-        scaleX: 1.1,
-        scaleY: 1.1,
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Power1'
-      });
-    });
-  }
-
-  showElementSelection() {
-    this.hideSubOptions(); // Hide any existing sub-options
-
-    const elements = ['Fire', 'Ice', 'Water', 'Lightning'];
-    this.elementButtons = this.add.group();
-
-    // Create a new action box for elements above the original action box
-    const elementBoxY = this.scale.height - 200 - 50; // Adjust as necessary
-    const elementBoxWidth = this.scale.width - 40; // Adjust as necessary
-    this.elementBox = this.add.graphics().lineStyle(2, 0x00ff00).strokeRect(20, elementBoxY, elementBoxWidth, 50);
-
-    // Add element buttons to the new action box
-    elements.forEach((element, index) => {
-      const elementWidth = (this.scale.width - 100) / elements.length;
-      const x = 100 + index * elementWidth; // Adjust spacing as necessary
-      const elementText = this.add.text(x, elementBoxY + 25, element, {
-        fontSize: '30px',
-        fill: '#fff',
-        backgroundColor: '#000',
-        padding: { left: 10, right: 10, top: 5, bottom: 5 }
-      }).setOrigin(0.5);
-      elementText.setInteractive();
-      elementText.on('pointerdown', () => {
-        this.handlePlayerAction('Spells', element.toLowerCase());
-        this.elementButtons.clear(true, true);
-        this.elementBox.destroy();
-      });
-      this.elementButtons.add(elementText);
-
-      // Add animation and colorful effect
-      this.tweens.add({
-        targets: elementText,
-        scaleX: 1.1,
-        scaleY: 1.1,
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Power1'
-      });
-    });
-  }
-
-  hideSubOptions() {
-    if (this.skillButtons) {
-      this.skillBox.clear();
-      this.skillButtons.clear(true, true);
-    }
-    if (this.elementButtons) {
-      this.elementBox.clear();
-      this.elementButtons.clear(true, true);
-    }
-  }
-
   enemyAction() {
-    console.log('enemyAction...');
-    console.log('performEnemyAction... this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
+    const possibleWords = ['fire', 'heal', 'freeze', 'slash']; // Add more relevant words.
+    const chosenWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
 
-    if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
-      const performEnemyAction = () => {
-        console.log('performEnemyAction...');
-        console.log('performEnemyAction... this.isCooldown: ', this.isCooldown);
-
-        if (!this.isCooldown) {
-          let damage = 0;
-          let critical = false;
-          let actionType;
-          let action;
-          let highestDamage = 0;
-          let bestElement = 'physical';
-
-          // Periodically reset tried attacks and skills
-          // Ensure triedElements are initialized properly
-          if (!this.enemy.triedElements || this.enemy.triedElements.resetCounter >= 5) {
-            this.enemy.triedElements = {
-              magic: [],
-              skills: [],
-              physical: false, // Track whether the enemy has tried physical attacks
-              resetCounter: 0
-            };
-          } else {
-            this.enemy.triedElements.magic = this.enemy.triedElements.magic || [];
-            this.enemy.triedElements.skills = this.enemy.triedElements.skills || [];
-            this.enemy.triedElements.physical = this.enemy.triedElements.physical || false; // Default to false if undefined
-          }
-
-          console.log('Current triedElements:', this.enemy.triedElements);
-
-          // Get valid actions
-          const validMagic = this.enemy.actions.magic || [];
-          const validSkills = this.enemy.actions.skills || [];
-
-          // Find untried magic, skills, and check if physical has been tried
-          const untriedMagic = validMagic.find(magic => !this.enemy.triedElements.magic.includes(magic));
-          const untriedSkill = validSkills.find(skill => !this.enemy.triedElements.skills.includes(skill));
-          const untriedPhysical = !this.enemy.triedElements.physical;
-
-          if (untriedMagic) {
-            // Prioritize untried magic
-            actionType = 'magic';
-            action = untriedMagic;
-            this.enemy.triedElements.magic.push(action); // Mark as tried
-          } else if (untriedSkill) {
-            // If no untried magic, try untried skill
-            actionType = 'skills';
-            action = untriedSkill;
-            this.enemy.triedElements.skills.push(action); // Mark as tried
-          } else if (untriedPhysical) {
-            // If no untried magic or skills, try physical attack
-            actionType = 'physical';
-            action = 'Attack';
-            this.enemy.triedElements.physical = true; // Mark physical attack as tried
-          } else {
-            // All magic, skills, and physical attacks have been tried, fallback to best attack based on known weaknesses
-            for (const [element, dmg] of Object.entries(this.enemy.learnedElementalWeaknesses)) {
-              if (dmg > highestDamage) {
-                highestDamage = dmg;
-                bestElement = element;
-              }
-            }
-
-            if (bestElement === 'physical') {
-              actionType = 'physical';
-              action = 'Attack';
-            } else {
-              actionType = 'magic';
-              action = bestElement;
-            }
-          }
-
-          // Log the selected action
-          console.log('Enemy action selected:', actionType, action);
-
-          // Execute the selected action
-          this.executeEnemyAction(actionType, action, damage, critical, bestElement);
-
-          // Update mana and reset counter if needed
-          this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
-          this.startCooldown();
-
-        } else {
-          console.log('Delaying Call to performEnemyAction...');
-          this.time.delayedCall(200, performEnemyAction, [], this);
-        }
-      };
-
-      performEnemyAction();
+    if (chosenWord === 'fire') {
+      // Example: Fire attack logic for the enemy
+      this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
+    } else if (chosenWord === 'heal') {
+      // Example: Heal logic for the enemy
+      this.healPlayer(50); // Heal for 50 health
+      this.addHelpText(`Enemy heals! Restores 50 health.`);
     } else {
-      console.error('It is not currently the enemy\'s turn');
+      // Default physical attack
+      this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
+      this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
     }
   }
 
+  // TODO
   // Helper method to handle execution of the action
   executeEnemyAction(actionType, action, damage, critical, bestElement) {
     if (actionType === 'physical') {
@@ -931,43 +671,23 @@ class BattleScene extends Phaser.Scene {
   }
 
   applyStatusEffect(caster, target, statusEffect) {
-    console.log('applyStatusEffect... caster: ', caster);
-    console.log('applyStatusEffect... target: ', target);
-    console.log('applyStatusEffect... statusEffect: ', statusEffect);
+    let targetCharacter = target === 'Player' ? this.player : this.enemy;
 
-    this.time.delayedCall(150, () => {
-      let targetCharacter = target === 'Player' ? this.player : this.enemy;
-      let casterCharacter = caster === 'Player' ? this.player : this.enemy;
+    if (statusEffect === 'freeze') {
+      // Apply freeze effect: the target skips its next turn.
+      targetCharacter.statusEffects.push({ type: 'Freeze', turns: 1 });
+      this.addHelpText(`${targetCharacter.name} is frozen and will miss their next turn!`);
+    } else if (statusEffect === 'burn') {
+      // Apply burn effect: the target takes damage over time.
+      targetCharacter.statusEffects.push({ type: 'Burn', turns: 3 });
+      this.addHelpText(`${targetCharacter.name} is burning! They will take damage for the next 3 turns.`);
+    }
 
-      console.log('applyStatusEffect... targetCharacter.immunities: ', targetCharacter.immunities);
-      if (targetCharacter.immunities && targetCharacter.immunities.includes(statusEffect)) {
-        console.log('applyStatusEffect... IMMUNE');
-        this.addHelpText(`${targetCharacter.name} is immune to ${statusEffect}!`);
-        this.showPhraseIndicator(targetCharacter.sprite, 'IMMUNE', '#2bf1ff');
-        if (caster === 'Enemy') {
-          this.enemy.learnedStatusImmunities[statusEffect] = true;
-        }
-      } else {
-        console.log('applyStatusEffect... Not Immune');
-        let existingEffect = targetCharacter.statusEffects.find(effect => effect.type === statusEffect);
-        console.log('applyStatusEffect... existingEffect: ', existingEffect);
-        if (existingEffect) {
-          if (existingEffect.turns !== -1) { // Only refresh if it is not infinite
-            if (statusEffect === 'Stun') existingEffect.turns = 1;
-            else if (statusEffect === 'Freeze') existingEffect.turns = 5;
-            this.addHelpText(`${targetCharacter.name} is already affected by ${statusEffect}. Duration refreshed.`);
-          }
-        } else {
-          let turns = (statusEffect === 'Stun' ? 1 : (statusEffect === 'Freeze' ? 5 : 3)); // 3 turns for non-infinite status effects
-          targetCharacter.statusEffects.push({ type: statusEffect, turns });
-          this.addHelpText(`${targetCharacter.name} is now affected by ${statusEffect}!`);
-        }
-      }
-
-      this.updateStatusIndicators(targetCharacter);
-    }, [], this);
+    // Call to update visual indicators of the status effect.
+    this.updateStatusIndicators(targetCharacter);
   }
 
+  // TODO
   updateStatusIndicators(character) {
     if (character.statusIndicators) {
       character.statusIndicators.clear(true, true);
@@ -1143,56 +863,7 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
-  startCooldown() {
-    console.log('startCooldown...');
-    this.isCooldown = true;
-
-    this.time.delayedCall(1000, () => {  // Delay of 1 second for a more natural response
-      this.isCooldown = false;
-      this.nextTurn();
-      this.updateTurnOrderDisplay();  // Ensure UI updates immediately after turn change
-    }, [], this);
-  }
-
-  nextTurn() {
-    console.log('nextTurn...');
-    if (this.turnOrder[this.currentTurnIndex].name === 'Player' && this.player.isDefending) {
-      this.player.def /= 4; // Reset defense boost after turn
-      this.player.isDefending = false;
-    }
-    if (this.turnOrder[this.currentTurnIndex].name === 'Enemy' && this.enemy.isDefending) {
-      this.enemy.def /= 4; // Reset defense boost after turn
-      this.enemy.isDefending = false;
-    }
-
-    // Move to the next character's turn
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
-    const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
-
-    if (this.isCharacterFrozenOrStunned(currentCharacter)) {
-      this.startCooldown();
-    } else {
-      if (this.turnOrder[this.currentTurnIndex].name === 'Player') {
-        this.showPlayerActions();
-      } else if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
-        this.hidePlayerActions();
-        this.enemyAction();
-      } else {
-        console.error('this.turnOrder[this.currentTurnIndex].name: ', this.turnOrder[this.currentTurnIndex].name);
-      }
-      this.updateTurnOrderDisplay();
-    }
-
-    // Decrement status effect turns only here
-    for (let effect of currentCharacter.statusEffects) {
-      if (effect.turns > 0) {
-        effect.turns--;
-      }
-    }
-
-    this.handleStatusEffects();
-  }
-
+  // TODO
   isCharacterFrozenOrStunned(character) {
     console.log('isCharacterFrozenOrStunned... character: ', character);
 
@@ -1212,6 +883,7 @@ class BattleScene extends Phaser.Scene {
     return false;
   }
 
+  // TODO
   handleStatusEffects() {
     const currentCharacter = this.turnOrder[this.currentTurnIndex].name === 'Player' ? this.player : this.enemy;
 
@@ -1247,17 +919,6 @@ class BattleScene extends Phaser.Scene {
     currentCharacter.statusEffects = currentCharacter.statusEffects.filter(effect => effect.turns !== 0);
 
     this.updateStatusIndicators(currentCharacter);
-  }
-
-  showPlayerActions() {
-    this.actions.children.each(action => action.setVisible(true));
-    this.actionBox.setVisible(true);
-  }
-
-  hidePlayerActions() {
-    this.actions.children.each(action => action.setVisible(false));
-    this.hideSubOptions(); // Ensure sub-options are hidden
-    this.actionBox.setVisible(false);
   }
 
   playAttackAnimation(attacker, defender) {
