@@ -636,15 +636,19 @@ class BattleScene extends Phaser.Scene {
 
     if (chosenWord === 'fire') {
       // Example: Fire attack logic for the enemy
-      this.inflictDamage('fire', 100); // Fire deals 100 damage
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical,  this.player.element['fire'], null, false);
       this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
     } else if (chosenWord === 'heal') {
       // Example: Heal logic for the enemy
-      this.healPlayer(50); // Heal for 50 health
+      //this.healPlayer(50); // Heal for 50 health
+      healing = this.calculateHealing(this.enemy.magAtk);
+      this.showDamageIndicator(this.enemy, healing, critical, 1, null, false);
       this.addHelpText(`Enemy heals! Restores 50 health.`);
     } else {
       // Default physical attack
-      this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
+      //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
+      this.showDamageIndicator(this.player, damage, critical,  1, null, false);
       this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
     }
   }
