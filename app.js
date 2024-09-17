@@ -112,29 +112,91 @@ function startEncounter() {
 }
 
 function displayActionMenu() {
-    // Create menu UI
-    let menuBg = this.add.rectangle(400, 300, 400, 200, 0x000000);
-    menuBg.setAlpha(0.7);  // Slight transparency
+  // Clear existing UI elements if any
+  if (this.uiContainer) {
+      this.uiContainer.destroy(true);
+  }
 
-    // Add action buttons
-    let passButton = this.add.text(350, 250, 'Pass', { fontSize: '20px', fill: '#fff' })
-        .setInteractive()
-        .on('pointerdown', () => performPass());
+  // Create a container for all UI elements
+  this.uiContainer = this.add.container(0, 0);
 
-    let shootButton = this.add.text(350, 280, 'Shoot', { fontSize: '20px', fill: '#fff' })
-        .setInteractive()
-        .on('pointerdown', () => performShoot());
+  // Set padding and element dimensions
+  const padding = this.scale.width / 15;
+  const buttonWidth = 150;
+  const buttonHeight = 50;
+  const halfWidth = this.scale.width / 2;
 
-    let holdButton = this.add.text(350, 310, 'Hold', { fontSize: '20px', fill: '#fff' })
-        .setInteractive()
-        .on('pointerdown', () => holdBall());
+  // Help text at the very top
+  let menuTitle = this.add.text(halfWidth, padding, 'Choose an Action:', {
+      fontSize: '32px',
+      fill: '#fff'
+  }).setOrigin(0.5);
 
-    let techniqueButton = this.add.text(350, 340, 'Use Technique', { fontSize: '20px', fill: '#fff' })
-        .setInteractive()
-        .on('pointerdown', () => useTechnique());
+  // Add the title to the container
+  this.uiContainer.add(menuTitle);
 
-    // Store menu items in a group for easy cleanup later
-    actionMenu = this.add.group([passButton, shootButton, holdButton, techniqueButton, menuBg]);
+  // Define the actions (Pass, Shoot, Hold, Use Technique)
+  const actions = ['Pass', 'Shoot', 'Hold', 'Use Technique'];
+  const buttonSpacing = 60;
+
+  // Create buttons dynamically based on the actions
+  actions.forEach((actionName, index) => {
+      let x = halfWidth;  // Center the buttons horizontally
+      let y = padding + buttonSpacing * (index + 1) + 50;
+
+      // Create the action button
+      let actionButton = this.add.text(x, y, actionName, {
+          fontSize: '28px',
+          fill: '#fff',
+          backgroundColor: '#000',
+          padding: { left: 20, right: 20, top: 10, bottom: 10 }
+      }).setOrigin(0.5);
+
+      // Set the button as interactive
+      actionButton.setInteractive();
+
+      // Define action on click
+      actionButton.on('pointerdown', () => {
+          this.handleActionSelection(actionName);
+      });
+
+      // Add the button to the UI container
+      this.uiContainer.add(actionButton);
+  });
+
+  // Add a background for the action buttons
+  let actionBox = this.add.graphics().lineStyle(2, 0xffff00).strokeRect(
+      padding, padding * 3, this.scale.width - padding * 2, actions.length * buttonSpacing + padding
+  );
+  this.uiContainer.add(actionBox);
+}
+
+// Handle player action selection
+function handleActionSelection(actionName) {
+  console.log(`${actionName} selected`);
+
+  // Remove the UI container after selection
+  if (this.uiContainer) {
+      this.uiContainer.destroy(true);
+  }
+
+  // Logic to handle the selected action (e.g., pass, shoot, etc.)
+  switch (actionName) {
+      case 'Pass':
+          performPass();
+          break;
+      case 'Shoot':
+          performShoot();
+          break;
+      case 'Hold':
+          holdBall();
+          break;
+      case 'Use Technique':
+          useTechnique();
+          break;
+      default:
+          break;
+  }
 }
 
 function performPass() {
