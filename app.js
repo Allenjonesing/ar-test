@@ -602,16 +602,21 @@ class BattleScene extends Phaser.Scene {
       // Handle fire-based attack
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       this.addHelpText(`Player casts Fire! Deals ${damage} damage.`);
-      this.inflictDamage('fire', damage); // Apply the damage logic
+      this.showDamageIndicator(this.enemy, damage, critical,  this.enemy.element['fire'], null, false);
+
+      //this.inflictDamage('fire', damage); // Apply the damage logic
     } else if (word.toLowerCase() === 'heal') {
       // Handle healing logic
       healing = this.calculateHealing(this.player.magAtk);
-      this.healPlayer(healing);
+      //this.healPlayer(healing);
+      this.showDamageIndicator(this.player, healing, critical, 1, null, false);
       this.addHelpText(`Player heals! Restores ${healing} health.`);
     } else {
       // Handle physical attack if no special word is matched
       damage = word.length * 10; // Damage based on word length
-      this.inflictDamage('physical', damage);
+      this.showDamageIndicator(this.enemy, damage, critical, 1, null, false);
+
+      //this.inflictDamage('physical', damage);
       this.addHelpText(`Player uses a basic attack! Deals ${damage} damage.`);
     }
 
@@ -859,6 +864,7 @@ class BattleScene extends Phaser.Scene {
       baseDamage *= 3;                // Strong in this element, Greatly increase damage
     }
 
+    
     if (defenderElement < 0) {
       return Math.floor(baseDamage); // Allow negative values for potential healing
     } else {
