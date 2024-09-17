@@ -28,6 +28,9 @@ class BattleScene extends Phaser.Scene {
     super({ key: 'BattleScene' });
     this.helpMessages = [];
     this.loadingIndicator = null;
+    this.isCooldown = false; // Tracks if player or enemy is in cooldown
+    this.enemyActionCooldown = 0; // Timer for the next enemy action
+    this.playerInputCooldown = 0; // Timer for the player action delay
   }
 
   async create(data) {
@@ -408,18 +411,8 @@ class BattleScene extends Phaser.Scene {
     return actions;
   }
 
-  update() {
-    // Call to check player and enemy actions frequently.
-    if (!this.isCooldown) {
-      // If the player has inputted a word, process the action.
-      if (this.selectedLetters.length > 0) {
-        this.completeWord(); // Process the player's word input.
-      }
-
-      // Enemy takes action based on a timer or random interval.
-      this.enemyAction();
-    }
-
+  update(time, delta) {
+    // Check if the game has ended
     if (!battleEnded) {
       if (this.player && this.player.health <= 0) {
         this.endBattle('lose');
@@ -428,8 +421,39 @@ class BattleScene extends Phaser.Scene {
         this.endBattle('win');
       }
     }
+
+    // If the player has selected letters, process the word after a delay
+    if (this.selectedLetters.length > 0 && !this.isCooldown) {
+      // Add a delay before processing the player's input (1 second delay)
+      if (this.playerInputCooldown <= 0) {
+        this.playerInputCooldown = 1000; // Set cooldown to 1 second
+      } else {
+        this.playerInputCooldown -= delta; // Reduce cooldown by delta time
+        if (this.playerInputCooldown <= 0) {
+          this.completeWord(); // Process the player's word input
+          this.isCooldown = true; // Trigger cooldown to prevent immediate next action
+          this.startCooldown(2000); // 2-second cooldown before next player action
+        }
+      }
+    }
+
+    // Enemy action logic with random interval (2 to 5 seconds)
+    if (!this.isCooldown && this.enemyActionCooldown <= 0) {
+      this.enemyAction(); // Enemy takes an action
+      this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
+      this.isCooldown = true; // Trigger cooldown after the enemy action
+      this.startCooldown(2000); // 2-second cooldown before next action
+    } else {
+      this.enemyActionCooldown -= delta; // Reduce the enemy cooldown by delta time
+    }
   }
 
+  startCooldown(duration) {
+    this.time.delayedCall(duration, () => {
+      this.isCooldown = false; // Reset cooldown after specified delay
+    });
+  }
+  
   endBattle(result) {
     battleEnded = true;
     this.time.delayedCall(1000, () => {
