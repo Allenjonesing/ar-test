@@ -636,6 +636,7 @@ class BattleScene extends Phaser.Scene {
 
     if (chosenWord === 'fire') {
       // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
       this.showDamageIndicator(this.player, damage, critical,  this.player.element['fire'], null, false);
       this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
@@ -648,6 +649,7 @@ class BattleScene extends Phaser.Scene {
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
+      damage = word.length * 10; // Damage based on word length
       this.showDamageIndicator(this.player, damage, critical,  1, null, false);
       this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
     }
