@@ -207,26 +207,8 @@ class BattleScene extends Phaser.Scene {
 
     this.enemy.actions = this.generateEnemyActions(this.enemy);
 
-    // Generate enemy image based on news article and setting
-    if (newsData.length > 0) {
-      enemyImageBase64 = enemyImageBase64 || genericEnemyBase64 || 'asdf';
-      // Initialize turn order and current turn index
-      this.turnOrder = this.calculateTurnOrder();
-      this.currentTurnIndex = 0;
-
-      // Cooldown flag
-      this.isCooldown = false;
-
-      // Display UI elements
-      this.createUI(this.selectedLocation);
-
-      // Check whose turn it is and start the action immediately if it's the enemy's turn
-      if (this.turnOrder[this.currentTurnIndex].name === 'Enemy') {
-        this.enemyAction();
-      } else {
-        this.showPlayerActions();
-      }
-    }
+    // Display UI elements
+    this.createUI(this.selectedLocation);
   }
 
   selectLetter(letterText) {
@@ -277,10 +259,6 @@ class BattleScene extends Phaser.Scene {
   healPlayer(amount) {
     this.player.health += amount;
     this.updatePlayerHealthDisplay();
-  }
-
-  applyStatusEffect(effect) {
-    // Apply status effect to enemy (e.g., freeze or burn)
   }
 
   battleSequence() {
