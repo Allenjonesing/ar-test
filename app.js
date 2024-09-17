@@ -7,6 +7,9 @@ let enemyImageBase64 = '';
 let npcBase64image = '';
 let monsterDescription = '';
 let battleEnded = false;
+let newsData = []; // Global variable to store news articles
+let personas;
+let persona;
 
 async function loadGameData() {
   try {
