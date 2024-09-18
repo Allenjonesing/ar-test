@@ -74,7 +74,7 @@ class BattleScene extends Phaser.Scene {
 
     this.subsets = findAllSubsets(this.randomLetters);
     console.log("Subsets Found:", this.subsets);
-    this.validWords = findValidWordsFromWordData(this.subsets);
+    this.validWords = findValidWordsFromWordDataAsArray(this.subsets);
 
     // Output valid words to the console
     console.log("Valid Words Found:", this.validWords);
@@ -1157,8 +1157,13 @@ function findValidWordsFromDictionary(subsets) {
   return subsets.filter(subset => wordData.includes(subset));
 }
 
+// Example of checking valid words
+function findValidWordsFromWordDataAsArray(subsets) {
+  return subsets.filter(subset => wordData.includes(subset));
+}
+
 // Example of checking valid words from dictionary
-function findValidWordsFromWordData(subsets) {
+function findValidWordsFromWordDataAsObject(subsets) {
   return subsets.filter(subset => subset in wordData);
 }
 
