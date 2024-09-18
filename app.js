@@ -542,20 +542,20 @@ class BattleScene extends Phaser.Scene {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
-      this.showDamageIndicator(this.player, damage, critical, this.player.element['fire'], null, false);
+      this.showDamageIndicator(this.enemy, damage, critical, this.enemy.element['fire'], null, false);
       this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
     } else if (word === 'heal') {
       // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
       healing = this.calculateHealing(this.enemy.magAtk);
-      this.showDamageIndicator(this.enemy, healing, critical, 1, null, false);
+      this.showDamageIndicator(this.player, healing, critical, 1, null, false);
       this.addHelpText(`Enemy heals! Restores 50 health.`);
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
-      damage = 100;//word.length * 10; // Damage based on word length
-      this.showDamageIndicator(this.player, damage, critical, 1, null, false);
-      this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
+      damage = word.length * 10;//word.length * 10; // Damage based on word length
+      this.showDamageIndicator(this.enemy, damage, critical, 1, null, false);
+      this.addHelpText(`Enemy attacks! Deals ${word.length * 10} damage.`);
     }
     this.resetGrid();
 
