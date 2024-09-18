@@ -93,6 +93,7 @@ class BattleScene extends Phaser.Scene {
       }
     });
 
+    this.selectedWord = '';
     await loadWordData();
 
 
@@ -519,7 +520,7 @@ class BattleScene extends Phaser.Scene {
 
   processWord() {
     if (this.selectedLetters.length > 0) {
-      const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
+      this.selectedWord = this.selectedLetters.map(letter => letter.text).join('');
       console.log("Processing word:", selectedWord);
       // Check if the selected letters form a valid word and enable submit button if valid
       const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
@@ -533,18 +534,18 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
-  submitWord(word) {
+  submitWord() {
     let damage = 0;
     let critical = false;
     const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
     console.log("Processing word:", selectedWord);
-    if (word === 'fire') {
+    if (this.selectedWord === 'fire') {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
       this.showDamageIndicator(this.enemy, damage, critical, this.enemy.element['fire'], null, false);
       this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
-    } else if (word === 'heal') {
+    } else if (this.selectedWord === 'heal') {
       // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
       healing = this.calculateHealing(this.enemy.magAtk);
@@ -553,7 +554,7 @@ class BattleScene extends Phaser.Scene {
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
-      damage = word.length * 10;//word.length * 10; // Damage based on word length
+      damage = this.selectedWord.length * 10;//word.length * 10; // Damage based on word length
       this.showDamageIndicator(this.enemy, damage, critical, 1, null, false);
       this.addHelpText(`Enemy attacks! Deals ${word.length * 10} damage.`);
     }
