@@ -60,7 +60,7 @@ class BattleScene extends Phaser.Scene {
       for (let j = 0; j < 4; j++) {
         let randomLetter = this.randomLetters[letterIndex];
         letterIndex++;
-        let letterText = this.add.text(this.scale.width / 2 + i * 50, this.scale.height / 2 + j * 50, randomLetter, { fontSize: '100px', fill: '#fff' });
+        let letterText = this.add.text(this.scale.width / 2 + i * 100, this.scale.height / 2 + j * 100, randomLetter, { fontSize: '100px', fill: '#fff' });
         letterText.setInteractive();
         letterText.on('pointerdown', () => this.selectLetter(letterText));
         this.letterGrid.add(letterText);
@@ -735,6 +735,31 @@ class BattleScene extends Phaser.Scene {
       } else {
         this.enemyActionCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
       }
+
+      // Create the 4x4 grid
+      if (this.tileResetCooldown <= 0) {
+        this.letterGridArray = [];
+        this.selectedLetters = [];
+    
+        this.disableSubmitButton();
+        
+        let letterIndex = 0;
+        for (let i = 0; i < 4; i++) {
+          for (let j = 0; j < 4; j++) {
+            let randomLetter = this.randomLetters[letterIndex];
+            letterIndex++;
+            let letterText = this.add.text(this.scale.width / 2 + i * 100, this.scale.height / 2 + j * 100, randomLetter, { fontSize: '100px', fill: '#fff' });
+            letterText.setInteractive();
+            letterText.on('pointerdown', () => this.selectLetter(letterText));
+            this.letterGrid.add(letterText);
+            this.letterGridArray.push(letterText);
+          }
+        }
+        this.tileResetCooldown = Phaser.Math.Between(10000, 50000); // Set random delay for next enemy action (2 to 5 seconds)
+      } else {
+        this.tileResetCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
+      }
+
     }
   }
 
@@ -1541,7 +1566,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "fire", "blaze", "flame", "inferno", "ember", "bonfire", "conflagration", "torch", "ignition", "combustion", "spark", 
+        "fire", "blaze", "flame", "inferno", "ember", "bonfire", "conflagration", "torch", "ignition", "combustion", "spark",
         "scorch", "heat", "searing", "burn", "pyre", "incineration", "flare", "glow", "flicker", "ash"
       ]
     },
@@ -1549,7 +1574,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "ice", "frost", "glacier", "icicle", "snow", "hail", "freeze", "frozen", "chill", "cold", "iceberg", "crystal", 
+        "ice", "frost", "glacier", "icicle", "snow", "hail", "freeze", "frozen", "chill", "cold", "iceberg", "crystal",
         "floe", "permafrost", "rime", "slush", "icecap", "frostbite", "glacial", "cool", "subzero"
       ]
     },
@@ -1557,7 +1582,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "water", "aqua", "liquid", "stream", "river", "ocean", "sea", "lake", "pond", "pool", "wave", "rain", "flood", 
+        "water", "aqua", "liquid", "stream", "river", "ocean", "sea", "lake", "pond", "pool", "wave", "rain", "flood",
         "torrent", "brook", "creek", "spring", "reservoir", "wet", "moisture", "dew"
       ]
     },
@@ -1565,7 +1590,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "lightning", "thunder", "bolt", "electricity", "storm", "flash", "strike", "spark", "charge", "electric", "shock", 
+        "lightning", "thunder", "bolt", "electricity", "storm", "flash", "strike", "spark", "charge", "electric", "shock",
         "jolt", "current", "energy", "surge", "electrical", "zigzag", "power", "blast", "discharge"
       ]
     },
@@ -1573,7 +1598,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "poison", "toxin", "venom", "contaminant", "pollutant", "toxicant", "lethal", "deadly", "hazard", "noxious", 
+        "poison", "toxin", "venom", "contaminant", "pollutant", "toxicant", "lethal", "deadly", "hazard", "noxious",
         "harmful", "toxic", "intoxicate", "contaminate", "infect", "corrupt", "bane", "potion", "antidote", "hazardous"
       ]
     },
@@ -1581,7 +1606,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "stun", "daze", "shock", "immobilize", "paralyze", "knockout", "astonish", "amaze", "startle", "bewilder", 
+        "stun", "daze", "shock", "immobilize", "paralyze", "knockout", "astonish", "amaze", "startle", "bewilder",
         "stupefy", "freeze", "debilitate", "numb", "dumbfound", "overwhelm", "baffle", "astound", "disorient", "jar"
       ]
     },
@@ -1589,7 +1614,7 @@ function getBestWord(validWords) {
       minLength: null,
       maxLength: null,
       preferredStarts: [
-        "heal", "cure", "restore", "recover", "mend", "repair", "revive", "rejuvenate", "regenerate", "remedy", "rehabilitate", 
+        "heal", "cure", "restore", "recover", "mend", "repair", "revive", "rejuvenate", "regenerate", "remedy", "rehabilitate",
         "alleviate", "soothe", "relieve", "improve", "strengthen", "nurture", "remediate", "renew", "fix"
       ]
     },
