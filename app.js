@@ -60,7 +60,7 @@ class BattleScene extends Phaser.Scene {
       for (let j = 0; j < 4; j++) {
         let randomLetter = this.randomLetters[letterIndex];
         letterIndex++;
-        let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
+        let letterText = this.add.text(1000 + i * 50, 2000 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
         letterText.setInteractive();
         letterText.on('pointerdown', () => this.selectLetter(letterText));
         this.letterGrid.add(letterText);
@@ -69,6 +69,21 @@ class BattleScene extends Phaser.Scene {
     }
 
     console.log(`Random Letters: ${this.randomLetters}`);
+
+    // Create the submit button
+    this.submitButton = this.add.text(1000, 2200, 'Submit', { fontSize: '32px', fill: '#fff', backgroundColor: '#000' });
+    this.submitButton.setInteractive();
+    this.submitButton.setPadding({ x: 10, y: 5 });
+
+    // Initially, the button is disabled (hidden or dimmed)
+    this.disableSubmitButton();
+
+    // Handle submit button click
+    this.submitButton.on('pointerdown', () => {
+      if (!this.submitButton.disabled) {
+        this.processWord(); // Handle word submission
+      }
+    });
 
     await loadWordData();
 
@@ -460,7 +475,14 @@ class BattleScene extends Phaser.Scene {
   }
 
   selectLetter(letterText) {
-    if (!this.selectedLetters.includes(letterText)) {
+    const index = this.selectedLetters.indexOf(letterText);
+
+    // If the letter is already selected, remove it and reset the style
+    if (index !== -1) {
+      this.selectedLetters.splice(index, 1); // Remove the letter from selectedLetters
+      letterText.setStyle({ fill: '#ffffff' }); // Reset color to default (or whatever deselected color)
+    } else {
+      // If the letter is not selected, add it and change the style
       this.selectedLetters.push(letterText);
       letterText.setStyle({ fill: '#00ff00' }); // Change color to show selection
     }
@@ -487,6 +509,8 @@ class BattleScene extends Phaser.Scene {
   }
 
   processWord(word) {
+    const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
+    console.log("Processing word:", selectedWord);
     // Map specific words to actions
     if (word.toLowerCase() === 'fire') {
       this.inflictDamage('fire', 100); // Apply fire damage
@@ -542,8 +566,6 @@ class BattleScene extends Phaser.Scene {
       this.enemyHealthText.setText(`Health: ${this.enemy.health}`);
       this.enemyManaText.setText(`Mana: ${this.enemy.mana}`);
       this.enemyDescription.setText(`${this.enemy.name}: ${this.enemy.description}`);
-      this.turnOrder = this.calculateTurnOrder();
-      this.currentTurnIndex = 0;
 
       // Cooldown flag
       this.isCooldown = false;
@@ -669,6 +691,18 @@ class BattleScene extends Phaser.Scene {
         }
       }
 
+      // Check if the selected letters form a valid word and enable submit button if valid
+      if (this.selectedLetters.length > 0) {
+        const selectedWord = this.selectedLetters.join(''); // Combine the letters into a word
+        const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
+
+        if (isValidWord) {
+          this.enableSubmitButton();  // Enable the submit button if valid
+        } else {
+          this.disableSubmitButton(); // Disable the submit button if invalid
+        }
+      }
+
       // If the player has selected letters, process the word after a delay
       if (this.selectedLetters.length > 0 && !this.isCooldown) {
         // Add a delay before processing the player's input (1 second delay)
@@ -683,19 +717,26 @@ class BattleScene extends Phaser.Scene {
           }
         }
       }
-
-      // Enemy action logic with random interval (2 to 5 seconds)
-      if (!this.isCooldown && this.enemyActionCooldown <= 0) {
-        this.enemyAction(); // Enemy takes an action
-        this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
-        this.isCooldown = true; // Trigger cooldown after the enemy action
-        this.startCooldown(2000); // 2-second cooldown before next action
-      } else {
-        this.enemyActionCooldown -= delta; // Reduce the enemy cooldown by delta time
-      }
     }
   }
 
+  // Function to check if the selected letters form a valid word
+  isWordValid(word) {
+    // Use your word validation logic here, for example:
+    return wordData.includes(word); // Assuming wordData is an array of valid words
+  }
+
+  // Enable the submit button
+  enableSubmitButton() {
+    this.submitButton.setStyle({ fill: '#00ff00' });
+    this.submitButton.disabled = false; // Enable the button
+  }
+
+  // Disable the submit button
+  disableSubmitButton() {
+    this.submitButton.setStyle({ fill: '#888888' }); // Dim the button to indicate it's disabled
+    this.submitButton.disabled = true; // Disable the button
+  }
   startCooldown(duration) {
     this.time.delayedCall(duration, () => {
       this.isCooldown = false; // Reset cooldown after specified delay
