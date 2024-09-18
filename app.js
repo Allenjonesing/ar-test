@@ -534,6 +534,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   submitWord(word) {
+    let damage = 0;
     const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
     console.log("Processing word:", selectedWord);
     if (word === 'fire') {
