@@ -1336,9 +1336,12 @@ function findValidWordsFromDictionary(subsets) {
   return subsets.filter(subset => wordData.includes(subset));
 }
 
-// Example of checking valid words
 function findValidWordsFromWordDataAsArray(subsets) {
-  return subsets.filter(subset => wordData.includes(subset));
+  // Use Set to remove duplicates automatically
+  const validWordsSet = new Set(subsets.filter(subset => wordData.includes(subset)));
+
+  // Convert the Set back to an array and return it
+  return Array.from(validWordsSet);
 }
 
 // Example of checking valid words from dictionary
@@ -1374,9 +1377,9 @@ async function findValidWordsFromoWordnik(subsets) {
   return validWords;
 }
 
-// Function to generate all subsets (combinations) of the given letters
+// Function to generate all unique subsets (combinations) of the given letters
 function findAllSubsets(chars) {
-  const results = [];
+  const results = new Set();  // Use Set to automatically handle duplicates
   const n = chars.length;
 
   // Generate all combinations using bitwise approach
@@ -1386,10 +1389,12 @@ function findAllSubsets(chars) {
       if (i & (1 << j)) subset += chars[j];
     }
     if (subset.length > 1) {  // Ignore single characters
-      results.push(subset);
+      results.add(subset);  // Add subset to Set (will ignore duplicates automatically)
     }
   }
-  return results;
+
+  // Convert Set back to an array and return
+  return Array.from(results);
 }
 
 // Function to retrieve a word based on criteria, now accepting multiple prefixes
