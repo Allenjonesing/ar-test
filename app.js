@@ -547,7 +547,7 @@ class BattleScene extends Phaser.Scene {
     } else if (this.selectedWord === 'heal') {
       // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
-      healing = -this.calculateHealing(this.enemy.magAtk);
+      healing = this.calculateHealing(this.enemy.magAtk);
       this.showDamageIndicator(this.player, healing, critical, 1, null, false);
       this.addHelpText(`Player heals! Restores 50 health.`);
     } else {
@@ -733,7 +733,6 @@ class BattleScene extends Phaser.Scene {
         this.enemyAction(); // Enemy takes an action
         this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
       } else {
-        console.log('update... enemyActionCooldown: ', this.enemyActionCooldown);
         this.enemyActionCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
       }
     }
@@ -932,17 +931,16 @@ class BattleScene extends Phaser.Scene {
 
   calculateHealing(magAtk) {
     let variance = Phaser.Math.FloatBetween(0.9, 1.1);
-    let baseHealing = Math.floor((4 * magAtk + 200) * variance);
+    let baseHealing = Math.floor((4 * magAtk + 200) * variance) * -1;
     return Math.max(1, baseHealing); // Ensure minimum healing is 1
   }
 
   enemyAction() {
-    const possibleWords = ['fire', 'heal', 'freeze', 'slash']; // Add more relevant words.
-    const chosenWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
     let damage = 0;
     let healing = 0;
     let critical = false;
 
+    let chosenWord = getBestWord(this.validWords);
     if (chosenWord === 'fire') {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
@@ -1535,4 +1533,92 @@ function getCombinations(chars, minLength, maxLength) {
   // Start combination generation with an empty prefix
   combine('', chars);
   return results;
+}
+
+function getBestWord(validWords) {
+  const criteria = [
+    { // Fire Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "fire", "blaze", "flame", "inferno", "ember", "bonfire", "conflagration", "torch", "ignition", "combustion", "spark", 
+        "scorch", "heat", "searing", "burn", "pyre", "incineration", "flare", "glow", "flicker", "ash"
+      ]
+    },
+    { // Ice Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "ice", "frost", "glacier", "icicle", "snow", "hail", "freeze", "frozen", "chill", "cold", "iceberg", "crystal", 
+        "floe", "permafrost", "rime", "slush", "icecap", "frostbite", "glacial", "cool", "subzero"
+      ]
+    },
+    { // Water Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "water", "aqua", "liquid", "stream", "river", "ocean", "sea", "lake", "pond", "pool", "wave", "rain", "flood", 
+        "torrent", "brook", "creek", "spring", "reservoir", "wet", "moisture", "dew"
+      ]
+    },
+    { // Lightning Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "lightning", "thunder", "bolt", "electricity", "storm", "flash", "strike", "spark", "charge", "electric", "shock", 
+        "jolt", "current", "energy", "surge", "electrical", "zigzag", "power", "blast", "discharge"
+      ]
+    },
+    { // Poison Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "poison", "toxin", "venom", "contaminant", "pollutant", "toxicant", "lethal", "deadly", "hazard", "noxious", 
+        "harmful", "toxic", "intoxicate", "contaminate", "infect", "corrupt", "bane", "potion", "antidote", "hazardous"
+      ]
+    },
+    { // Stun Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "stun", "daze", "shock", "immobilize", "paralyze", "knockout", "astonish", "amaze", "startle", "bewilder", 
+        "stupefy", "freeze", "debilitate", "numb", "dumbfound", "overwhelm", "baffle", "astound", "disorient", "jar"
+      ]
+    },
+    { // Heal Word
+      minLength: null,
+      maxLength: null,
+      preferredStarts: [
+        "heal", "cure", "restore", "recover", "mend", "repair", "revive", "rejuvenate", "regenerate", "remedy", "rehabilitate", 
+        "alleviate", "soothe", "relieve", "improve", "strengthen", "nurture", "remediate", "renew", "fix"
+      ]
+    },
+    { // Large Word
+      minLength: 8,
+      maxLength: 16,
+      preferredStarts: []
+    },
+    { // Medium Word
+      minLength: 4,
+      maxLength: 8,
+      preferredStarts: []
+    },
+    { // Small Word
+      minLength: 0,
+      maxLength: 4,
+      preferredStarts: []
+    }
+  ];
+
+  let bestWord = null;
+
+  // Iterate over each criterion and find the best word that matches
+  for (let criterion of criteria) {
+    const word = getWordByCriteria(validWords, criterion);
+    if (word) {
+      bestWord = word; // Prioritize later words
+    }
+  }
+
+  return bestWord;
 }
