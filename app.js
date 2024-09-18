@@ -60,7 +60,7 @@ class BattleScene extends Phaser.Scene {
       for (let j = 0; j < 4; j++) {
         let randomLetter = this.randomLetters[letterIndex];
         letterIndex++;
-        let letterText = this.add.text(500 + i * 50, 500 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
+        let letterText = this.add.text(this.scale.width / 2 + i * 50, this.scale.height / 2 + j * 50, randomLetter, { fontSize: '100px', fill: '#fff' });
         letterText.setInteractive();
         letterText.on('pointerdown', () => this.selectLetter(letterText));
         this.letterGrid.add(letterText);
