@@ -81,7 +81,7 @@ class BattleScene extends Phaser.Scene {
     // Handle submit button click
     this.submitButton.on('pointerdown', () => {
       if (!this.submitButton.disabled) {
-        this.processWord(); // Handle word submission
+        this.submitWord(); // Handle word submission
       }
     });
 
@@ -489,9 +489,8 @@ class BattleScene extends Phaser.Scene {
   }
 
   completeWord() {
-    let word = this.selectedLetters.map(letter => letter.text).join('');
     // Validate and perform actions based on the word
-    this.processWord(word);
+    this.processWord();
     this.resetGrid();
   }
 
@@ -508,29 +507,54 @@ class BattleScene extends Phaser.Scene {
     this.battleSequence();
   }
 
-  processWord(word) {
+  processWord() {
     const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
     console.log("Processing word:", selectedWord);
-    // Map specific words to actions
-    if (word.toLowerCase() === 'fire') {
-      this.inflictDamage('fire', 100); // Apply fire damage
-    } else if (word.toLowerCase() === 'heal') {
-      this.healPlayer(50); // Heal player
-    } else if (word.toLowerCase() === 'freeze') {
-      this.applyStatusEffect('freeze'); // Freeze enemy
-    } else {
-      this.inflictDamage('physical', word.length * 10); // Default damage based on word length
+    // Check if the selected letters form a valid word and enable submit button if valid
+    if (this.selectedLetters.length > 0) {
+      const selectedWord = this.selectedLetters.join(''); // Combine the letters into a word
+      const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
+
+      if (isValidWord) {
+        this.enableSubmitButton();  // Enable the submit button if valid
+      } else {
+        this.disableSubmitButton(); // Disable the submit button if invalid
+      }
     }
+  }
+
+  submitWord(word) {
+    const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
+    console.log("Processing word:", selectedWord);
+    if (word === 'fire') {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['fire'], null, false);
+      this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
+    } else if (word === 'heal') {
+      // Example: Heal logic for the enemy
+      //this.healPlayer(50); // Heal for 50 health
+      healing = this.calculateHealing(this.enemy.magAtk);
+      this.showDamageIndicator(this.enemy, healing, critical, 1, null, false);
+      this.addHelpText(`Enemy heals! Restores 50 health.`);
+    } else {
+      // Default physical attack
+      //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
+      damage = 100;//word.length * 10; // Damage based on word length
+      this.showDamageIndicator(this.player, damage, critical, 1, null, false);
+      this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
+    }
+    this.resetGrid();
+
   }
 
   inflictDamage(type, amount) {
     this.enemy.health -= amount;
-    this.updateEnemyHealthDisplay();
   }
 
   healPlayer(amount) {
     this.player.health += amount;
-    this.updatePlayerHealthDisplay();
   }
 
   battleSequence() {
@@ -688,33 +712,6 @@ class BattleScene extends Phaser.Scene {
         } else if (this.enemy.health <= 0) {
           battleEnded = true;
           this.endBattle('win');
-        }
-      }
-
-      // Check if the selected letters form a valid word and enable submit button if valid
-      if (this.selectedLetters.length > 0) {
-        const selectedWord = this.selectedLetters.join(''); // Combine the letters into a word
-        const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
-
-        if (isValidWord) {
-          this.enableSubmitButton();  // Enable the submit button if valid
-        } else {
-          this.disableSubmitButton(); // Disable the submit button if invalid
-        }
-      }
-
-      // If the player has selected letters, process the word after a delay
-      if (this.selectedLetters.length > 0 && !this.isCooldown) {
-        // Add a delay before processing the player's input (1 second delay)
-        if (this.playerInputCooldown <= 0) {
-          this.playerInputCooldown = 1000; // Set cooldown to 1 second
-        } else {
-          this.playerInputCooldown -= delta; // Reduce cooldown by delta time
-          if (this.playerInputCooldown <= 0) {
-            this.completeWord(); // Process the player's word input
-            this.isCooldown = true; // Trigger cooldown to prevent immediate next action
-            this.startCooldown(2000); // 2-second cooldown before next player action
-          }
         }
       }
     }
