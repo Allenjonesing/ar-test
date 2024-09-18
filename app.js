@@ -547,7 +547,7 @@ class BattleScene extends Phaser.Scene {
     } else if (this.selectedWord === 'heal') {
       // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
-      healing = this.calculateHealing(this.enemy.magAtk);
+      healing = -this.calculateHealing(this.enemy.magAtk);
       this.showDamageIndicator(this.player, healing, critical, 1, null, false);
       this.addHelpText(`Player heals! Restores 50 health.`);
     } else {
@@ -731,7 +731,7 @@ class BattleScene extends Phaser.Scene {
       // Enemy action logic with random interval (2 to 5 seconds)
       if (this.enemyActionCooldown <= 0) {
         this.enemyAction(); // Enemy takes an action
-        this.enemyActionCooldown = Phaser.Math.Between(1, 100); // Set random delay for next enemy action (2 to 5 seconds)
+        this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
       } else {
         console.log('update... enemyActionCooldown: ', this.enemyActionCooldown);
         this.enemyActionCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
