@@ -1236,13 +1236,27 @@ function getWordByCriteria(validWords, options = {}) {
 
 // Function to generate 16 random letters
 function generateRandomLetters() {
-    let randomLetters = '';
-    for (let i = 0; i < 16; i++) {
-        randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
-    }
-    return randomLetters;
-}
+  const vowels = ['A', 'E', 'I', 'O', 'U'];
+  const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+  let result = [];
 
+  // Add each vowel at least once
+  vowels.forEach(vowel => result.push(vowel));
+
+  // Fill the rest of the result array with random consonants
+  while (result.length < 16) {
+    let randomConsonant = consonants[Math.floor(Math.random() * consonants.length)];
+    result.push(randomConsonant);
+  }
+
+  // Shuffle the array to mix vowels and consonants
+  for (let i = result.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];  // Swap elements
+  }
+
+  return result.join('');
+}
 // Helper function to generate combinations of specific lengths
 function getCombinations(chars, minLength, maxLength) {
   const results = [];
