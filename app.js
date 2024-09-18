@@ -1236,8 +1236,7 @@ function getWordByCriteria(validWords, options = {}) {
 
 // Function to generate 16 random letters
 function generateRandomLetters() {
-  const vowels = ['A', 'E', 'I', 'O', 'U'];
-  const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+  const vowels = ['a', 'e', 'i', 'o', 'u'];
   let result = [];
 
   // Add each vowel at least once
@@ -1245,8 +1244,8 @@ function generateRandomLetters() {
 
   // Fill the rest of the result array with random consonants
   while (result.length < 16) {
-    let randomConsonant = consonants[Math.floor(Math.random() * consonants.length)];
-    result.push(randomConsonant);
+    let randomLetter = letters[Math.floor(Math.random() * letters.length)];
+    result.push(randomLetter);
   }
 
   // Shuffle the array to mix vowels and consonants
