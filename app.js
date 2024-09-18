@@ -84,19 +84,19 @@ class BattleScene extends Phaser.Scene {
     console.log("Retrieved small Word:", getWordByCriteria(this.validWords, {
       minLength: 0,     // Minimum length of 3
       maxLength: 4,     // Maximum length of 4
-      preferredStarts: null, // Preferred start with 'g'
+      preferredStarts: [], // Preferred start with 'g'
     }));
     console.log("Searching for medium Word...");
     console.log("Retrieved medium Word:", getWordByCriteria(this.validWords, {
       minLength: 4,     // Minimum length of 3
       maxLength: 8,     // Maximum length of 4
-      preferredStarts: null, // Preferred start with 'g'
+      preferredStarts: [], // Preferred start with 'g'
     }));
     console.log("Searching for large Word...");
     console.log("Retrieved large Word:", getWordByCriteria(this.validWords, {
       minLength: 8,     // Minimum length of 3
       maxLength: 16,     // Maximum length of 4
-      preferredStarts: null, // Preferred start with 'g'
+      preferredStarts: [], // Preferred start with 'g'
     }));
     console.log("Searching for fire Word...");
     console.log("Retrieved 'fire' Word:", getWordByCriteria(this.validWords, {
