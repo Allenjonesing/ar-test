@@ -555,7 +555,7 @@ class BattleScene extends Phaser.Scene {
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
       damage = this.selectedWord.length * 10;//word.length * 10; // Damage based on word length
       this.showDamageIndicator(this.enemy, damage, critical, 1, null, false);
-      this.addHelpText(`Enemy attacks! Deals ${word.length * 10} damage.`);
+      this.addHelpText(`Enemy attacks! Deals ${damage} damage.`);
     }
     this.resetGrid();
 
