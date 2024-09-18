@@ -633,6 +633,9 @@ class BattleScene extends Phaser.Scene {
   enemyAction() {
     const possibleWords = ['fire', 'heal', 'freeze', 'slash']; // Add more relevant words.
     const chosenWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
+    let damage = 0;
+    let healing = 0;
+    let critical = false;
 
     if (chosenWord === 'fire') {
       // Example: Fire attack logic for the enemy
