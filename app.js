@@ -56,15 +56,52 @@ class BattleScene extends Phaser.Scene {
     }
 
     console.log(`Random Letters: ${this.randomLetters}`);
-  
+
     this.subsets = findAllSubsets(this.randomLetters);
     console.log("Subsets Found:", this.subsets);
     this.validWords = findValidWords(this.subsets);
-  
+
     // Output valid words to the console
     console.log("Valid Words Found:", this.validWords);
     console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
-  
+
+    // Retrieve a word with optional parameters
+    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+      minLength: 0,     // Minimum length of 3
+      maxLength: 4,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+      minLength: 4,     // Minimum length of 3
+      maxLength: 8,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+      minLength: 8,     // Minimum length of 3
+      maxLength: 16,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'fire', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'ice', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'water', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'lightning', // Preferred start with 'g'
+    }));
+
     await loadGameData();
 
     newsData = structureNewsData([
@@ -437,7 +474,7 @@ class BattleScene extends Phaser.Scene {
           this.endBattle('win');
         }
       }
-      
+
       // If the player has selected letters, process the word after a delay
       if (this.selectedLetters.length > 0 && !this.isCooldown) {
         // Add a delay before processing the player's input (1 second delay)
@@ -452,7 +489,7 @@ class BattleScene extends Phaser.Scene {
           }
         }
       }
-      
+
       // Enemy action logic with random interval (2 to 5 seconds)
       if (!this.isCooldown && this.enemyActionCooldown <= 0) {
         this.enemyAction(); // Enemy takes an action
@@ -616,7 +653,7 @@ class BattleScene extends Phaser.Scene {
       // Handle fire-based attack
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       this.addHelpText(`Player casts Fire! Deals ${damage} damage.`);
-      this.showDamageIndicator(this.enemy, damage, critical,  this.enemy.element['fire'], null, false);
+      this.showDamageIndicator(this.enemy, damage, critical, this.enemy.element['fire'], null, false);
 
       //this.inflictDamage('fire', damage); // Apply the damage logic
     } else if (word.toLowerCase() === 'heal') {
@@ -655,7 +692,7 @@ class BattleScene extends Phaser.Scene {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
-      this.showDamageIndicator(this.player, damage, critical,  this.player.element['fire'], null, false);
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['fire'], null, false);
       this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
     } else if (chosenWord === 'heal') {
       // Example: Heal logic for the enemy
@@ -667,7 +704,7 @@ class BattleScene extends Phaser.Scene {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
       damage = 100;//word.length * 10; // Damage based on word length
-      this.showDamageIndicator(this.player, damage, critical,  1, null, false);
+      this.showDamageIndicator(this.player, damage, critical, 1, null, false);
       this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
     }
   }
@@ -887,7 +924,7 @@ class BattleScene extends Phaser.Scene {
       baseDamage *= 3;                // Strong in this element, Greatly increase damage
     }
 
-    
+
     if (defenderElement < 0) {
       return Math.floor(baseDamage); // Allow negative values for potential healing
     } else {
@@ -1070,20 +1107,20 @@ async function isWordValidAccordingToWordsapiv1(word) {
   const url = `https://wordsapiv1.p.mashape.com/words/${word}`;
 
   try {
-      const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-              'X-Mashape-Key': apiKey,
-              'X-Mashape-Host': 'wordsapiv1.p.mashape.com'
-          }
-      });
-
-      if (response.ok) {
-          const data = await response.json();
-          return data.word === word;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Mashape-Key': apiKey,
+        'X-Mashape-Host': 'wordsapiv1.p.mashape.com'
       }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.word === word;
+    }
   } catch (error) {
-      console.error('Error fetching word:', error);
+    console.error('Error fetching word:', error);
   }
   return false;
 }
@@ -1092,9 +1129,9 @@ async function isWordValidAccordingToWordsapiv1(word) {
 async function findValidWordsFromWordsapiv1(subsets) {
   const validWords = [];
   for (const subset of subsets) {
-      if (await isWordValidAccordingToWordsapiv1(subset)) {
-          validWords.push(subset);
-      }
+    if (await isWordValidAccordingToWordsapiv1(subset)) {
+      validWords.push(subset);
+    }
   }
   return validWords;
 }
@@ -1102,7 +1139,7 @@ async function findValidWordsFromWordsapiv1(subsets) {
 
 // Example of checking valid words
 function findValidWordsFromDictionary(subsets) {
-    return subsets.filter(subset => dictionary.includes(subset));
+  return subsets.filter(subset => dictionary.includes(subset));
 }
 
 // Example of using Wordnik API
@@ -1111,13 +1148,13 @@ async function isWordValidAccordingToWordnik(word) {
   const url = `https://api.wordnik.com/v4/word.json/${word}/definitions?api_key=${apiKey}`;
 
   try {
-      const response = await fetch(url);
-      if (response.ok) {
-          const data = await response.json();
-          return data.length > 0; // Word is valid if definitions exist
-      }
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      return data.length > 0; // Word is valid if definitions exist
+    }
   } catch (error) {
-      console.error('Error fetching word from Wordnik:', error);
+    console.error('Error fetching word from Wordnik:', error);
   }
   return false;
 }
@@ -1126,9 +1163,9 @@ async function isWordValidAccordingToWordnik(word) {
 async function findValidWordsFromoWordnik(subsets) {
   const validWords = [];
   for (const subset of subsets) {
-      if (await isWordValidAccordingToWordnik(subset)) {
-          validWords.push(subset);
-      }
+    if (await isWordValidAccordingToWordnik(subset)) {
+      validWords.push(subset);
+    }
   }
   return validWords;
 }
@@ -1140,14 +1177,36 @@ function findAllSubsets(chars) {
 
   // Generate all combinations using bitwise approach
   for (let i = 0; i < (1 << n); i++) {
-      let subset = '';
-      for (let j = 0; j < n; j++) {
-          if (i & (1 << j)) subset += chars[j];
-      }
-      if (subset.length > 1) {  // Ignore single characters
-          results.push(subset);
-      }
+    let subset = '';
+    for (let j = 0; j < n; j++) {
+      if (i & (1 << j)) subset += chars[j];
+    }
+    if (subset.length > 1) {  // Ignore single characters
+      results.push(subset);
+    }
   }
   return results;
+}
+
+// Function to retrieve a word based on criteria
+function getWordByCriteria(validWords, options = {}) {
+  const { minLength = 0, maxLength = Infinity, preferredStart, preferredEnd } = options;
+
+  // Filter based on criteria
+  const filteredWords = validWords.filter(word => {
+    return word.length >= minLength &&
+      word.length <= maxLength &&
+      (!preferredStart || word.startsWith(preferredStart)) &&
+      (!preferredEnd || word.endsWith(preferredEnd));
+  });
+
+  // If no filtered words match the criteria, return a random word
+  if (filteredWords.length === 0) {
+    console.log("No words matching criteria found. Returning a random word.");
+    return validWords[Math.floor(Math.random() * validWords.length)];
+  }
+
+  // Return a random word from the filtered list
+  return filteredWords[Math.floor(Math.random() * filteredWords.length)];
 }
 
