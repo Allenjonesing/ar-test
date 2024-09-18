@@ -486,6 +486,8 @@ class BattleScene extends Phaser.Scene {
       this.selectedLetters.push(letterText);
       letterText.setStyle({ fill: '#00ff00' }); // Change color to show selection
     }
+
+    this.processWord();
   }
 
   completeWord() {
