@@ -510,12 +510,12 @@ class BattleScene extends Phaser.Scene {
   }
 
   processWord() {
-    const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
-    console.log("Processing word:", selectedWord);
-    // Check if the selected letters form a valid word and enable submit button if valid
     if (this.selectedLetters.length > 0) {
-      const selectedWord = this.selectedLetters.join(''); // Combine the letters into a word
+      const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
+      console.log("Processing word:", selectedWord);
+      // Check if the selected letters form a valid word and enable submit button if valid
       const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
+      console.log("isValidWord:", isValidWord);
 
       if (isValidWord) {
         this.enableSubmitButton();  // Enable the submit button if valid
