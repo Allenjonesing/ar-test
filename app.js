@@ -44,6 +44,7 @@ class BattleScene extends Phaser.Scene {
     this.isCooldown = false; // Tracks if player or enemy is in cooldown
     this.enemyActionCooldown = 0; // Timer for the next enemy action
     this.playerInputCooldown = 0; // Timer for the player action delay
+    this.tileResetCooldown = 10000;
   }
 
   async create(data) {
@@ -742,7 +743,7 @@ class BattleScene extends Phaser.Scene {
         this.selectedLetters = [];
     
         this.disableSubmitButton();
-        
+
         let letterIndex = 0;
         for (let i = 0; i < 4; i++) {
           for (let j = 0; j < 4; j++) {
