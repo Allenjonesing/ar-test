@@ -729,10 +729,9 @@ class BattleScene extends Phaser.Scene {
       }
 
       // Enemy action logic with random interval (2 to 5 seconds)
-      if (!this.isCooldown && this.enemyActionCooldown <= 0) {
+      if (this.enemyActionCooldown <= 0) {
         this.enemyAction(); // Enemy takes an action
         this.enemyActionCooldown = Phaser.Math.Between(1, 100); // Set random delay for next enemy action (2 to 5 seconds)
-        this.isCooldown = true; // Trigger cooldown after the enemy action
       } else {
         console.log('update... enemyActionCooldown: ', this.enemyActionCooldown);
         this.enemyActionCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
