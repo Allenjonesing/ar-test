@@ -80,40 +80,218 @@ class BattleScene extends Phaser.Scene {
     console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
 
     // Retrieve a word with optional parameters
+    console.log("Searching for small Word...");
     console.log("Retrieved small Word:", getWordByCriteria(this.validWords, {
       minLength: 0,     // Minimum length of 3
       maxLength: 4,     // Maximum length of 4
-      preferredStart: null, // Preferred start with 'g'
+      preferredStarts: null, // Preferred start with 'g'
     }));
+    console.log("Searching for medium Word...");
     console.log("Retrieved medium Word:", getWordByCriteria(this.validWords, {
       minLength: 4,     // Minimum length of 3
       maxLength: 8,     // Maximum length of 4
-      preferredStart: null, // Preferred start with 'g'
+      preferredStarts: null, // Preferred start with 'g'
     }));
+    console.log("Searching for large Word...");
     console.log("Retrieved large Word:", getWordByCriteria(this.validWords, {
       minLength: 8,     // Minimum length of 3
       maxLength: 16,     // Maximum length of 4
-      preferredStart: null, // Preferred start with 'g'
+      preferredStarts: null, // Preferred start with 'g'
     }));
+    console.log("Searching for fire Word...");
     console.log("Retrieved 'fire' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
-      preferredStart: 'fire', // Preferred start with 'g'
+      preferredStarts:  [
+        "fire",
+        "blaze",
+        "flame",
+        "inferno",
+        "ember",
+        "bonfire",
+        "conflagration",
+        "torch",
+        "ignition",
+        "combustion",
+        "spark",
+        "scorch",
+        "heat",
+        "searing",
+        "burn",
+        "pyre",
+        "incineration",
+        "flare",
+        "glow",
+        "flicker",
+        "ash"
+      ], // Preferred start with 'g'
     }));
+    console.log("Searching for ice Word...");
     console.log("Retrieved 'ice' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
-      preferredStart: 'ice', // Preferred start with 'g'
+      preferredStarts: [
+        "ice",
+        "frost",
+        "glacier",
+        "icicle",
+        "snow",
+        "hail",
+        "freeze",
+        "frozen",
+        "chill",
+        "cold",
+        "iceberg",
+        "crystal",
+        "floe",
+        "permafrost",
+        "rime",
+        "slush",
+        "icecap",
+        "frostbite",
+        "glacial",
+        "cool",
+        "subzero"
+      ], // Preferred start with 'g'
     }));
+    console.log("Searching for water Word...");
     console.log("Retrieved 'water' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
-      preferredStart: 'water', // Preferred start with 'g'
+      preferredStarts: [
+        "water",
+        "aqua",
+        "liquid",
+        "stream",
+        "river",
+        "ocean",
+        "sea",
+        "lake",
+        "pond",
+        "pool",
+        "wave",
+        "rain",
+        "flood",
+        "torrent",
+        "brook",
+        "creek",
+        "spring",
+        "reservoir",
+        "wet",
+        "moisture",
+        "dew"
+      ], // Preferred start with 'g'
     }));
+    console.log("Searching for lightning Word...");
     console.log("Retrieved 'lightning' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
-      preferredStart: 'lightning', // Preferred start with 'g'
+      preferredStarts: [
+        "lightning",
+        "thunder",
+        "bolt",
+        "electricity",
+        "storm",
+        "flash",
+        "strike",
+        "spark",
+        "charge",
+        "electric",
+        "shock",
+        "jolt",
+        "current",
+        "energy",
+        "surge",
+        "electrical",
+        "zigzag",
+        "power",
+        "blast",
+        "discharge"
+      ], // Preferred start with 'g'
+    }));
+
+    console.log("Searching for poison Word...");
+    console.log("Retrieved 'poison' Word:", getWordByCriteria(this.validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStarts: [
+        "poison",
+        "toxin",
+        "venom",
+        "contaminant",
+        "pollutant",
+        "toxicant",
+        "lethal",
+        "deadly",
+        "hazard",
+        "noxious",
+        "harmful",
+        "toxic",
+        "intoxicate",
+        "contaminate",
+        "infect",
+        "corrupt",
+        "bane",
+        "potion",
+        "antidote",
+        "hazardous"
+      ], // Preferred start with 'g'
+    }));
+
+    console.log("Searching for stun Word...");
+    console.log("Retrieved 'stun' Word:", getWordByCriteria(this.validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStarts: [
+        "stun",
+        "daze",
+        "shock",
+        "immobilize",
+        "paralyze",
+        "knockout",
+        "astonish",
+        "amaze",
+        "startle",
+        "bewilder",
+        "stupefy",
+        "freeze",
+        "debilitate",
+        "numb",
+        "dumbfound",
+        "overwhelm",
+        "baffle",
+        "astound",
+        "disorient",
+        "jar"
+      ], // Preferred start with 'g'
+    }));
+
+    console.log("Searching for heal Word...");
+    console.log("Retrieved 'heal' Word:", getWordByCriteria(this.validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStarts: [
+        "heal",
+        "cure",
+        "restore",
+        "recover",
+        "mend",
+        "repair",
+        "revive",
+        "rejuvenate",
+        "regenerate",
+        "remedy",
+        "rehabilitate",
+        "alleviate",
+        "soothe",
+        "relieve",
+        "improve",
+        "strengthen",
+        "nurture",
+        "remediate",
+        "renew",
+        "fix"
+      ], // Preferred start with 'g'
     }));
 
     await loadGameData();
@@ -1212,22 +1390,23 @@ function findAllSubsets(chars) {
   return results;
 }
 
-// Function to retrieve a word based on criteria
+// Function to retrieve a word based on criteria, now accepting multiple prefixes
 function getWordByCriteria(validWords, options = {}) {
-  const { minLength = 0, maxLength = Infinity, preferredStart, preferredEnd } = options;
+  const { minLength = 0, maxLength = Infinity, preferredStarts = [], preferredEnd } = options;
 
   // Filter based on criteria
   const filteredWords = validWords.filter(word => {
-    return word.length >= minLength &&
-      word.length <= maxLength &&
-      (!preferredStart || word.startsWith(preferredStart)) &&
-      (!preferredEnd || word.endsWith(preferredEnd));
+      const startsWithPreferred = preferredStarts.length === 0 || preferredStarts.some(prefix => word.startsWith(prefix));
+      return word.length >= minLength &&
+             word.length <= maxLength &&
+             startsWithPreferred &&
+             (!preferredEnd || word.endsWith(preferredEnd));
   });
 
   // If no filtered words match the criteria, return a random word
   if (filteredWords.length === 0) {
-    console.log("No words matching criteria found. Returning a random word.");
-    return validWords[Math.floor(Math.random() * validWords.length)];
+      console.log("No words matching criteria found. Returning a random word.");
+      return validWords[Math.floor(Math.random() * validWords.length)];
   }
 
   // Return a random word from the filtered list
