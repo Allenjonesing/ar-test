@@ -55,21 +55,23 @@ class BattleScene extends Phaser.Scene {
     this.selectedLetters = [];
 
     // Create the 4x4 grid
+    let letterIndex = 0;
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 4; j++) {
-        let randomLetter = this.randomLetters[((i+1)*(j+1))-1];
-          let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
-          letterText.setInteractive();
-          letterText.on('pointerdown', () => this.selectLetter(letterText));
-          this.letterGrid.add(letterText);
-          this.letterGridArray.push(letterText);
+        let randomLetter = this.randomLetters[letterIndex];
+        letterIndex++;
+        let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
+        letterText.setInteractive();
+        letterText.on('pointerdown', () => this.selectLetter(letterText));
+        this.letterGrid.add(letterText);
+        this.letterGridArray.push(letterText);
       }
     }
 
     console.log(`Random Letters: ${this.randomLetters}`);
 
     await loadWordData();
-    
+
 
     this.subsets = findAllSubsets(this.randomLetters);
     console.log("Subsets Found:", this.subsets);
@@ -102,7 +104,7 @@ class BattleScene extends Phaser.Scene {
     console.log("Retrieved 'fire' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
-      preferredStarts:  [
+      preferredStarts: [
         "fire",
         "blaze",
         "flame",
@@ -1396,17 +1398,17 @@ function getWordByCriteria(validWords, options = {}) {
 
   // Filter based on criteria
   const filteredWords = validWords.filter(word => {
-      const startsWithPreferred = preferredStarts.length === 0 || preferredStarts.some(prefix => word.startsWith(prefix));
-      return word.length >= minLength &&
-             word.length <= maxLength &&
-             startsWithPreferred &&
-             (!preferredEnd || word.endsWith(preferredEnd));
+    const startsWithPreferred = preferredStarts.length === 0 || preferredStarts.some(prefix => word.startsWith(prefix));
+    return word.length >= minLength &&
+      word.length <= maxLength &&
+      startsWithPreferred &&
+      (!preferredEnd || word.endsWith(preferredEnd));
   });
 
   // If no filtered words match the criteria, return a random word
   if (filteredWords.length === 0) {
-      console.log("No words matching criteria found. Returning a random word.");
-      return validWords[Math.floor(Math.random() * validWords.length)];
+    console.log("No words matching criteria found. Returning a random word.");
+    return validWords[Math.floor(Math.random() * validWords.length)];
   }
 
   // Return a random word from the filtered list
@@ -1441,14 +1443,14 @@ function getCombinations(chars, minLength, maxLength) {
 
   // Recursive function to generate combinations
   function combine(prefix, charsLeft) {
-      if (prefix.length >= minLength && prefix.length <= maxLength) {
-          results.push(prefix);
+    if (prefix.length >= minLength && prefix.length <= maxLength) {
+      results.push(prefix);
+    }
+    if (prefix.length < maxLength) {
+      for (let i = 0; i < charsLeft.length; i++) {
+        combine(prefix + charsLeft[i], charsLeft.slice(i + 1));
       }
-      if (prefix.length < maxLength) {
-          for (let i = 0; i < charsLeft.length; i++) {
-              combine(prefix + charsLeft[i], charsLeft.slice(i + 1));
-          }
-      }
+    }
   }
 
   // Start combination generation with an empty prefix
