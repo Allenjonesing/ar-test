@@ -521,9 +521,9 @@ class BattleScene extends Phaser.Scene {
   processWord() {
     if (this.selectedLetters.length > 0) {
       this.selectedWord = this.selectedLetters.map(letter => letter.text).join('');
-      console.log("Processing word:", selectedWord);
+      console.log("Processing word:", this.selectedWord);
       // Check if the selected letters form a valid word and enable submit button if valid
-      const isValidWord = this.isWordValid(selectedWord); // Check if it's a valid word
+      const isValidWord = this.isWordValid(this.selectedWord); // Check if it's a valid word
       console.log("isValidWord:", isValidWord);
 
       if (isValidWord) {
@@ -537,8 +537,7 @@ class BattleScene extends Phaser.Scene {
   submitWord() {
     let damage = 0;
     let critical = false;
-    const selectedWord = this.selectedLetters.map(letter => letter.text).join('');
-    console.log("Processing word:", selectedWord);
+    console.log("Processing word:", this.selectedWord);
     if (this.selectedWord === 'fire') {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
