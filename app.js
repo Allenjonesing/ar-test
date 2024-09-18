@@ -1399,15 +1399,28 @@ function findAllSubsets(chars) {
 
 // Function to retrieve a word based on criteria, now accepting multiple prefixes
 function getWordByCriteria(validWords, options = {}) {
-  const { minLength = 0, maxLength = Infinity, preferredStarts = [], preferredEnd } = options;
+  const {
+    minLength = 0,
+    maxLength = Infinity,
+    preferredStarts = [],
+    preferredEnd,
+  } = options;
+
+  // Handle null values for minLength and maxLength
+  const actualMinLength = minLength !== null ? minLength : 0;
+  const actualMaxLength = maxLength !== null ? maxLength : Infinity;
 
   // Filter based on criteria
-  const filteredWords = validWords.filter(word => {
-    const startsWithPreferred = preferredStarts.length === 0 || preferredStarts.some(prefix => word.startsWith(prefix));
-    return word.length >= minLength &&
-      word.length <= maxLength &&
+  const filteredWords = validWords.filter((word) => {
+    const startsWithPreferred =
+      preferredStarts.length === 0 ||
+      preferredStarts.some((prefix) => word.startsWith(prefix));
+    return (
+      word.length >= actualMinLength &&
+      word.length <= actualMaxLength &&
       startsWithPreferred &&
-      (!preferredEnd || word.endsWith(preferredEnd));
+      (!preferredEnd || word.endsWith(preferredEnd))
+    );
   });
 
   // If no filtered words match the criteria, return a random word
