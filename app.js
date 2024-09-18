@@ -25,6 +25,18 @@ async function loadGameData() {
   }
 }
 
+async function loadWordData() {
+  try {
+    const response = await fetch('./words.json'); // Fetch the JSON file from the same directory
+    if (!response.ok) throw new Error('Failed to load word data.');
+    wordData = await response.json();
+    console.log("Word data loaded: ", wordData);
+    return wordData;
+  } catch (error) {
+    console.error('Error loading word data:', error);
+  }
+}
+
 class BattleScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BattleScene' });
@@ -57,9 +69,12 @@ class BattleScene extends Phaser.Scene {
 
     console.log(`Random Letters: ${this.randomLetters}`);
 
+    await loadWordData();
+    
+
     this.subsets = findAllSubsets(this.randomLetters);
     console.log("Subsets Found:", this.subsets);
-    this.validWords = findValidWordsFromDictionary(this.subsets);
+    this.validWords = findValidWordsFromWordData(this.subsets);
 
     // Output valid words to the console
     console.log("Valid Words Found:", this.validWords);
@@ -1225,7 +1240,12 @@ async function findValidWordsFromWordsapiv1(subsets) {
 
 // Example of checking valid words
 function findValidWordsFromDictionary(subsets) {
-  return subsets.filter(subset => dictionary.includes(subset));
+  return subsets.filter(subset => wordData.includes(subset));
+}
+
+// Example of checking valid words from dictionary
+function findValidWordsFromWordData(subsets) {
+  return subsets.filter(subset => subset in wordData);
 }
 
 // Example of using Wordnik API
