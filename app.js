@@ -66,37 +66,37 @@ class BattleScene extends Phaser.Scene {
     console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
 
     // Retrieve a word with optional parameters
-    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved small Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: 0,     // Minimum length of 3
       maxLength: 4,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved medium Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: 4,     // Minimum length of 3
       maxLength: 8,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved large Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: 8,     // Minimum length of 3
       maxLength: 16,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'fire', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'ice', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'water' Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'water', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(this.this.this.this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'lightning', // Preferred start with 'g'
@@ -109,37 +109,37 @@ class BattleScene extends Phaser.Scene {
     console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
 
     // Retrieve a word with optional parameters
-    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved small Word:", getWordByCriteria(this.validWords, {
       minLength: 0,     // Minimum length of 3
       maxLength: 4,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved medium Word:", getWordByCriteria(this.validWords, {
       minLength: 4,     // Minimum length of 3
       maxLength: 8,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved large Word:", getWordByCriteria(this.validWords, {
       minLength: 8,     // Minimum length of 3
       maxLength: 16,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'fire', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'ice', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'water' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'water', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'lightning', // Preferred start with 'g'
@@ -152,37 +152,37 @@ class BattleScene extends Phaser.Scene {
     console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
 
     // Retrieve a word with optional parameters
-    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved small Word:", getWordByCriteria(this.validWords, {
       minLength: 0,     // Minimum length of 3
       maxLength: 4,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved medium Word:", getWordByCriteria(this.validWords, {
       minLength: 4,     // Minimum length of 3
       maxLength: 8,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved large Word:", getWordByCriteria(this.validWords, {
       minLength: 8,     // Minimum length of 3
       maxLength: 16,     // Maximum length of 4
       preferredStart: null, // Preferred start with 'g'
     }));
-    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'fire', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'ice', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'water' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'water', // Preferred start with 'g'
     }));
-    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(this.validWords, {
       minLength: null,     // Minimum length of 3
       maxLength: null,     // Maximum length of 4
       preferredStart: 'lightning', // Preferred start with 'g'
@@ -1304,4 +1304,25 @@ function generateRandomLetters() {
         randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
     }
     return randomLetters;
+}
+
+// Helper function to generate combinations of specific lengths
+function getCombinations(chars, minLength, maxLength) {
+  const results = [];
+
+  // Recursive function to generate combinations
+  function combine(prefix, charsLeft) {
+      if (prefix.length >= minLength && prefix.length <= maxLength) {
+          results.push(prefix);
+      }
+      if (prefix.length < maxLength) {
+          for (let i = 0; i < charsLeft.length; i++) {
+              combine(prefix + charsLeft[i], charsLeft.slice(i + 1));
+          }
+      }
+  }
+
+  // Start combination generation with an empty prefix
+  combine('', chars);
+  return results;
 }
