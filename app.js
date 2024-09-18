@@ -2,6 +2,8 @@ const costSavingMode = true;
 const genericEnemyBase64 = 'na';
 const genericPlayerBase64 = 'na';
 const version = 'Alpha v0.1';
+// Load the word list (this could be a separate .js file or JSON)
+const dictionary = ["cat", "dog", "act", "dot", "goal", /* ... load full word list ... */];
 
 let enemyImageBase64 = '';
 let npcBase64image = '';
@@ -35,14 +37,16 @@ class BattleScene extends Phaser.Scene {
 
   async create(data) {
     this.letterGrid = this.add.group();
-    let letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    this.rrandomLetters = '';
     this.letterGridArray = [];
     this.selectedLetters = [];
 
     // Create the 4x4 grid
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 4; j++) {
-        let randomLetter = letters[Math.floor(Math.random() * letters.length)];
+        let randomLetter = allLetters[Math.floor(Math.random() * allLetters.length)];;
+        this.randomLetters += randomLetter;
         let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
         letterText.setInteractive();
         letterText.on('pointerdown', () => this.selectLetter(letterText));
@@ -51,6 +55,16 @@ class BattleScene extends Phaser.Scene {
       }
     }
 
+    console.log(`Random Letters: ${this.randomLetters}`);
+  
+    this.subsets = findAllSubsets(this.randomLetters);
+    console.log("Subsets Found:", this.subsets);
+    this.validWords = findValidWords(this.subsets);
+  
+    // Output valid words to the console
+    console.log("Valid Words Found:", this.validWords);
+    console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
+  
     await loadGameData();
 
     newsData = structureNewsData([
@@ -652,7 +666,7 @@ class BattleScene extends Phaser.Scene {
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
-      damage = word.length * 10; // Damage based on word length
+      damage = 100;//word.length * 10; // Damage based on word length
       this.showDamageIndicator(this.player, damage, critical,  1, null, false);
       this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
     }
@@ -1049,3 +1063,91 @@ function structureNewsData(articles) {
     };
   });
 }
+
+// Example of using WordsAPI in your script
+async function isWordValidAccordingToWordsapiv1(word) {
+  const apiKey = 'your_api_key_here'; // Replace with your actual API key
+  const url = `https://wordsapiv1.p.mashape.com/words/${word}`;
+
+  try {
+      const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+              'X-Mashape-Key': apiKey,
+              'X-Mashape-Host': 'wordsapiv1.p.mashape.com'
+          }
+      });
+
+      if (response.ok) {
+          const data = await response.json();
+          return data.word === word;
+      }
+  } catch (error) {
+      console.error('Error fetching word:', error);
+  }
+  return false;
+}
+
+// Example usage in finding valid words
+async function findValidWordsFromWordsapiv1(subsets) {
+  const validWords = [];
+  for (const subset of subsets) {
+      if (await isWordValidAccordingToWordsapiv1(subset)) {
+          validWords.push(subset);
+      }
+  }
+  return validWords;
+}
+
+
+// Example of checking valid words
+function findValidWordsFromDictionary(subsets) {
+    return subsets.filter(subset => dictionary.includes(subset));
+}
+
+// Example of using Wordnik API
+async function isWordValidAccordingToWordnik(word) {
+  const apiKey = 'your_wordnik_api_key_here'; // Replace with your Wordnik API key
+  const url = `https://api.wordnik.com/v4/word.json/${word}/definitions?api_key=${apiKey}`;
+
+  try {
+      const response = await fetch(url);
+      if (response.ok) {
+          const data = await response.json();
+          return data.length > 0; // Word is valid if definitions exist
+      }
+  } catch (error) {
+      console.error('Error fetching word from Wordnik:', error);
+  }
+  return false;
+}
+
+// Example usage
+async function findValidWordsFromoWordnik(subsets) {
+  const validWords = [];
+  for (const subset of subsets) {
+      if (await isWordValidAccordingToWordnik(subset)) {
+          validWords.push(subset);
+      }
+  }
+  return validWords;
+}
+
+// Function to generate all subsets (combinations) of the given letters
+function findAllSubsets(chars) {
+  const results = [];
+  const n = chars.length;
+
+  // Generate all combinations using bitwise approach
+  for (let i = 0; i < (1 << n); i++) {
+      let subset = '';
+      for (let j = 0; j < n; j++) {
+          if (i & (1 << j)) subset += chars[j];
+      }
+      if (subset.length > 1) {  // Ignore single characters
+          results.push(subset);
+      }
+  }
+  return results;
+}
+
