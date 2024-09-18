@@ -2,8 +2,7 @@ const costSavingMode = true;
 const genericEnemyBase64 = 'na';
 const genericPlayerBase64 = 'na';
 const version = 'Alpha v0.1';
-// Load the word list (this could be a separate .js file or JSON)
-const dictionary = ["cat", "dog", "act", "dot", "goal", /* ... load full word list ... */];
+const letters = 'eeeeeeeeeeeetttttttttaaaaaaaaoooooooiiiiiinnnnnnsssssshhhhhhrrrrrddddllllccuummwwffggypbvkjxqz';
 
 let enemyImageBase64 = '';
 let npcBase64image = '';
@@ -1237,7 +1236,6 @@ function getWordByCriteria(validWords, options = {}) {
 
 // Function to generate 16 random letters
 function generateRandomLetters() {
-    const letters = 'abcdefghijklmnopqrstuvwxyz';
     let randomLetters = '';
     for (let i = 0; i < 16; i++) {
         randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
