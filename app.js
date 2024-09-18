@@ -558,6 +558,7 @@ class BattleScene extends Phaser.Scene {
       this.addHelpText(`Enemy attacks! Deals ${damage} damage.`);
     }
     this.resetGrid();
+    this.disableSubmitButton();
 
   }
 
@@ -725,6 +726,16 @@ class BattleScene extends Phaser.Scene {
           battleEnded = true;
           this.endBattle('win');
         }
+      }
+
+      // Enemy action logic with random interval (2 to 5 seconds)
+      if (!this.isCooldown && this.enemyActionCooldown <= 0) {
+        this.enemyAction(); // Enemy takes an action
+        this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
+        this.isCooldown = true; // Trigger cooldown after the enemy action
+        this.startCooldown(2000); // 2-second cooldown before next action
+      } else {
+        this.enemyActionCooldown -= delta; // Reduce the enemy cooldown by delta time
       }
     }
   }
