@@ -70,14 +70,22 @@ class BattleScene extends Phaser.Scene {
 
     console.log(`Random Letters: ${this.randomLetters}`);
 
-    // Create the submit button
-    this.submitButton = this.add.text(1000, 2200, 'Submit', { fontSize: '32px', fill: '#fff', backgroundColor: '#000' });
+    // Add the submit button in a similar manner
+    this.submitButton = this.add.text(this.scale.width / 2, this.scale.height - 120, 'Submit', {
+      fontSize: '30px',
+      fill: '#fff',
+      backgroundColor: '#000',
+      padding: { left: 20, right: 20, top: 10, bottom: 10 }
+    }).setOrigin(0.5);
     this.submitButton.setInteractive();
-    this.submitButton.setPadding({ x: 10, y: 5 });
+    this.submitButton.on('pointerdown', () => {
+      if (!this.submitButton.disabled) {
+        this.processWord(); // Process word submission
+      }
+    });
 
-    // Initially, the button is disabled (hidden or dimmed)
+    // Initially disable the submit button until a valid word is selected
     this.disableSubmitButton();
-
     // Handle submit button click
     this.submitButton.on('pointerdown', () => {
       if (!this.submitButton.disabled) {
@@ -731,15 +739,16 @@ class BattleScene extends Phaser.Scene {
     this.submitButton.disabled = false; // Enable the button
   }
 
-  // Disable the submit button
-  disableSubmitButton() {
-    this.submitButton.setStyle({ fill: '#888888' }); // Dim the button to indicate it's disabled
-    this.submitButton.disabled = true; // Disable the button
+  // Function to enable the submit button
+  enableSubmitButton() {
+    this.submitButton.setStyle({ fill: '#00ff00' }); // Green to indicate it's enabled
+    this.submitButton.disabled = false; // Enable button
   }
-  startCooldown(duration) {
-    this.time.delayedCall(duration, () => {
-      this.isCooldown = false; // Reset cooldown after specified delay
-    });
+
+  // Function to disable the submit button
+  disableSubmitButton() {
+    this.submitButton.setStyle({ fill: '#888888' }); // Gray to indicate it's disabled
+    this.submitButton.disabled = true; // Disable button
   }
 
   endBattle(result) {
