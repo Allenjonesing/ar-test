@@ -59,7 +59,93 @@ class BattleScene extends Phaser.Scene {
 
     this.subsets = findAllSubsets(this.randomLetters);
     console.log("Subsets Found:", this.subsets);
-    this.validWords = findValidWords(this.subsets);
+    this.validWords = findValidWordsFromDictionary(this.subsets);
+
+    // Output valid words to the console
+    console.log("Valid Words Found:", this.validWords);
+    console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
+
+    // Retrieve a word with optional parameters
+    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+      minLength: 0,     // Minimum length of 3
+      maxLength: 4,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+      minLength: 4,     // Minimum length of 3
+      maxLength: 8,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+      minLength: 8,     // Minimum length of 3
+      maxLength: 16,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'fire', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'ice', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'water', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'lightning', // Preferred start with 'g'
+    }));
+
+    this.validWords = findValidWordsFromoWordnik(this.subsets);
+
+    // Output valid words to the console
+    console.log("Valid Words Found:", this.validWords);
+    console.log("Valid Words Found (Formatted):", this.validWords.length > 0 ? this.validWords.join(', ') : 'No valid words found.');
+
+    // Retrieve a word with optional parameters
+    console.log("Retrieved small Word:", getWordByCriteria(validWords, {
+      minLength: 0,     // Minimum length of 3
+      maxLength: 4,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved medium Word:", getWordByCriteria(validWords, {
+      minLength: 4,     // Minimum length of 3
+      maxLength: 8,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved large Word:", getWordByCriteria(validWords, {
+      minLength: 8,     // Minimum length of 3
+      maxLength: 16,     // Maximum length of 4
+      preferredStart: null, // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'fire' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'fire', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'ice' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'ice', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'water' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'water', // Preferred start with 'g'
+    }));
+    console.log("Retrieved 'lightning' Word:", getWordByCriteria(validWords, {
+      minLength: null,     // Minimum length of 3
+      maxLength: null,     // Maximum length of 4
+      preferredStart: 'lightning', // Preferred start with 'g'
+    }));
+
+    this.validWords = findValidWordsFromWordsapiv1(this.subsets);
 
     // Output valid words to the console
     console.log("Valid Words Found:", this.validWords);
