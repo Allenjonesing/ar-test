@@ -543,19 +543,19 @@ class BattleScene extends Phaser.Scene {
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
       this.showDamageIndicator(this.enemy, damage, critical, this.enemy.element['fire'], null, false);
-      this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
+      this.addHelpText(`Player casts Fire! Deals 100 damage.`);
     } else if (this.selectedWord === 'heal') {
       // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
       healing = this.calculateHealing(this.enemy.magAtk);
       this.showDamageIndicator(this.player, healing, critical, 1, null, false);
-      this.addHelpText(`Enemy heals! Restores 50 health.`);
+      this.addHelpText(`Player heals! Restores 50 health.`);
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
       damage = this.selectedWord.length * 10;//word.length * 10; // Damage based on word length
       this.showDamageIndicator(this.enemy, damage, critical, 1, null, false);
-      this.addHelpText(`Enemy attacks! Deals ${damage} damage.`);
+      this.addHelpText(`Player attacks! Deals ${damage} damage.`);
     }
     this.resetGrid();
     this.disableSubmitButton();
@@ -731,10 +731,11 @@ class BattleScene extends Phaser.Scene {
       // Enemy action logic with random interval (2 to 5 seconds)
       if (!this.isCooldown && this.enemyActionCooldown <= 0) {
         this.enemyAction(); // Enemy takes an action
-        this.enemyActionCooldown = Phaser.Math.Between(2000, 5000); // Set random delay for next enemy action (2 to 5 seconds)
+        this.enemyActionCooldown = Phaser.Math.Between(1, 100); // Set random delay for next enemy action (2 to 5 seconds)
         this.isCooldown = true; // Trigger cooldown after the enemy action
       } else {
-        this.enemyActionCooldown -= delta; // Reduce the enemy cooldown by delta time
+        console.log('update... enemyActionCooldown: ', enemyActionCooldown);
+        this.enemyActionCooldown -= delta || 1; // Reduce the enemy cooldown by delta time
       }
     }
   }
