@@ -37,21 +37,21 @@ class BattleScene extends Phaser.Scene {
 
   async create(data) {
     this.letterGrid = this.add.group();
-    let allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    this.rrandomLetters = '';
+    this.randomLetters = generateRandomLetters();
+    console.log("this.randomLetters: ", this.randomLetters);
+
     this.letterGridArray = [];
     this.selectedLetters = [];
 
     // Create the 4x4 grid
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 4; j++) {
-        let randomLetter = allLetters[Math.floor(Math.random() * allLetters.length)];;
-        this.randomLetters += randomLetter;
-        let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
-        letterText.setInteractive();
-        letterText.on('pointerdown', () => this.selectLetter(letterText));
-        this.letterGrid.add(letterText);
-        this.letterGridArray.push(letterText);
+        let randomLetter = this.randomLetters[((i+1)*(j+1))-1];
+          let letterText = this.add.text(100 + i * 50, 100 + j * 50, randomLetter, { fontSize: '32px', fill: '#fff' });
+          letterText.setInteractive();
+          letterText.on('pointerdown', () => this.selectLetter(letterText));
+          this.letterGrid.add(letterText);
+          this.letterGridArray.push(letterText);
       }
     }
 
@@ -1210,3 +1210,12 @@ function getWordByCriteria(validWords, options = {}) {
   return filteredWords[Math.floor(Math.random() * filteredWords.length)];
 }
 
+// Function to generate 16 random letters
+function generateRandomLetters() {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    let randomLetters = '';
+    for (let i = 0; i < 16; i++) {
+        randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    return randomLetters;
+}
