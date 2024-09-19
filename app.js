@@ -4,6 +4,43 @@ const genericPlayerBase64 = 'na';
 const version = 'Alpha v0.1';
 const letters = 'eeeeeeeeeeeetttttttttaaaaaaaaoooooooiiiiiinnnnnnsssssshhhhhhrrrrrddddllllccuummwwffggypbvkjxqz';
 
+ // Fire Word
+  const fireWords = [
+    "fire", "blaze", "flame", "inferno", "ember", "bonfire", "conflagration", "torch", "ignition", "combustion", "spark",
+    "scorch", "heat", "searing", "burn", "pyre", "incineration", "flare", "glow", "flicker", "ash"
+  ]
+ // Ice Word
+ const iceWords = [
+    "ice", "frost", "glacier", "icicle", "snow", "hail", "freeze", "frozen", "chill", "cold", "iceberg", "crystal",
+    "floe", "permafrost", "rime", "slush", "icecap", "frostbite", "glacial", "cool", "subzero"
+  ]
+// Water Word
+const waterWords = [
+    "water", "aqua", "liquid", "stream", "river", "ocean", "sea", "lake", "pond", "pool", "wave", "rain", "flood",
+    "torrent", "brook", "creek", "spring", "reservoir", "wet", "moisture", "dew"
+  ]
+ // Lightning Word
+ const lightningWords =  [
+    "lightning", "thunder", "bolt", "electricity", "storm", "flash", "strike", "spark", "charge", "electric", "shock",
+    "jolt", "current", "energy", "surge", "electrical", "zigzag", "power", "blast", "discharge"
+  ]
+ // Poison Word
+ const poisonWords =  [
+    "poison", "toxin", "venom", "contaminant", "pollutant", "toxicant", "lethal", "deadly", "hazard", "noxious",
+    "harmful", "toxic", "intoxicate", "contaminate", "infect", "corrupt", "bane", "potion", "antidote", "hazardous"
+  ]
+ // Stun Word
+ const stunWords =  [
+    "stun", "daze", "shock", "immobilize", "paralyze", "knockout", "astonish", "amaze", "startle", "bewilder",
+    "stupefy", "freeze", "debilitate", "numb", "dumbfound", "overwhelm", "baffle", "astound", "disorient", "jar"
+  ]
+ // Heal Word
+ const healWords =  [
+    "heal", "cure", "restore", "recover", "mend", "repair", "revive", "rejuvenate", "regenerate", "remedy", "rehabilitate",
+    "alleviate", "soothe", "relieve", "improve", "strengthen", "nurture", "remediate", "renew", "fix"
+  ]
+
+
 let enemyImageBase64 = '';
 let npcBase64image = '';
 let monsterDescription = '';
@@ -753,14 +790,44 @@ class BattleScene extends Phaser.Scene {
     let critical = false;
 
     let chosenWord = getBestWord(this.validWords);
-    if (chosenWord === 'fire') {
+    if (fireWords.includes(chosenWord)) {
       // Example: Fire attack logic for the enemy
       damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['fire'], this.enemy.element['fire'], this.player.wis, this.enemy.wis);
       //this.inflictDamage('fire', 100); // Fire deals 100 damage
       this.showDamageIndicator(this.player, damage, critical, this.player.element['fire'], null, false);
-      this.addHelpText(`Enemy casts Fire! Deals 100 damage.`);
-    } else if (chosenWord === 'heal') {
-      // Example: Heal logic for the enemy
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (iceWords.includes(chosenWord)) {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['ice'], this.enemy.element['ice'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['ice'], null, false);
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (waterWords.includes(chosenWord)) {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['ice'], this.enemy.element['ice'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['ice'], null, false);
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (lightningWords.includes(chosenWord)) {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['ice'], this.enemy.element['ice'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['ice'], null, false);
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (poisonWords.includes(chosenWord)) {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['ice'], this.enemy.element['ice'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['ice'], null, false);
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (stunWords.includes(chosenWord)) {
+      // Example: Fire attack logic for the enemy
+      damage = this.calculateMagicDamage(this.player.magAtk, this.enemy.magDef, this.player.element['ice'], this.enemy.element['ice'], this.player.wis, this.enemy.wis);
+      //this.inflictDamage('fire', 100); // Fire deals 100 damage
+      this.showDamageIndicator(this.player, damage, critical, this.player.element['ice'], null, false);
+      this.addHelpText(f`Enemy casts ${chosenWord}! Deals ${damage} damage.`);
+    } else if (healWords.includes(chosenWord)) {
+        // Example: Heal logic for the enemy
       //this.healPlayer(50); // Heal for 50 health
       healing = this.calculateHealing(this.enemy.magAtk);
       this.showDamageIndicator(this.enemy, healing, critical, 1, null, false);
@@ -768,9 +835,9 @@ class BattleScene extends Phaser.Scene {
     } else {
       // Default physical attack
       //this.inflictDamage('physical', chosenWord.length * 10); // Physical attack based on word length
-      damage = 100;//word.length * 10; // Damage based on word length
+      damage = chosenWord.length * 10; // Damage based on word length
       this.showDamageIndicator(this.player, damage, critical, 1, null, false);
-      this.addHelpText(`Enemy attacks! Deals ${chosenWord.length * 10} damage.`);
+      this.addHelpText(`Enemy attacks! Deals ${damage} damage.`);
     }
   }
 
@@ -1355,58 +1422,37 @@ function getBestWord(validWords) {
     { // Fire Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "fire", "blaze", "flame", "inferno", "ember", "bonfire", "conflagration", "torch", "ignition", "combustion", "spark",
-        "scorch", "heat", "searing", "burn", "pyre", "incineration", "flare", "glow", "flicker", "ash"
-      ]
+      preferredStarts: fireWords
     },
     { // Ice Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "ice", "frost", "glacier", "icicle", "snow", "hail", "freeze", "frozen", "chill", "cold", "iceberg", "crystal",
-        "floe", "permafrost", "rime", "slush", "icecap", "frostbite", "glacial", "cool", "subzero"
-      ]
+      preferredStarts: iceWords
     },
     { // Water Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "water", "aqua", "liquid", "stream", "river", "ocean", "sea", "lake", "pond", "pool", "wave", "rain", "flood",
-        "torrent", "brook", "creek", "spring", "reservoir", "wet", "moisture", "dew"
-      ]
+      preferredStarts: waterWords
     },
     { // Lightning Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "lightning", "thunder", "bolt", "electricity", "storm", "flash", "strike", "spark", "charge", "electric", "shock",
-        "jolt", "current", "energy", "surge", "electrical", "zigzag", "power", "blast", "discharge"
-      ]
+      preferredStarts: lightningWords
     },
     { // Poison Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "poison", "toxin", "venom", "contaminant", "pollutant", "toxicant", "lethal", "deadly", "hazard", "noxious",
-        "harmful", "toxic", "intoxicate", "contaminate", "infect", "corrupt", "bane", "potion", "antidote", "hazardous"
-      ]
+      preferredStarts: poisonWords
     },
     { // Stun Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "stun", "daze", "shock", "immobilize", "paralyze", "knockout", "astonish", "amaze", "startle", "bewilder",
-        "stupefy", "freeze", "debilitate", "numb", "dumbfound", "overwhelm", "baffle", "astound", "disorient", "jar"
-      ]
+      preferredStarts: stunWords
     },
     { // Heal Word
       minLength: null,
       maxLength: null,
-      preferredStarts: [
-        "heal", "cure", "restore", "recover", "mend", "repair", "revive", "rejuvenate", "regenerate", "remedy", "rehabilitate",
-        "alleviate", "soothe", "relieve", "improve", "strengthen", "nurture", "remediate", "renew", "fix"
-      ]
+      preferredStarts: healWords
     },
     { // Large Word
       minLength: 8,
