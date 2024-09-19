@@ -343,7 +343,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   processWord() {
-    if (this.selectedLetters.length > 0) {
+    if (this.selectedLetters.length > 2) {
       this.selectedWord = this.selectedLetters.map(letter => letter.text).join('');
       console.log("Processing word:", this.selectedWord);
       // Check if the selected letters form a valid word and enable submit button if valid
@@ -1274,12 +1274,12 @@ function findValidWordsFromDictionary(subsets) {
   return subsets.filter(subset => wordData.includes(subset));
 }
 
-function findValidWordsFromWordDataAsArray(subsets) {
-  // Use Set to remove duplicates automatically
-  const validWordsSet = new Set(subsets.filter(subset => wordData.includes(subset)));
+function findValidWordsFromWordData(subsets, wordData) {
+  // Convert wordData to a Set for faster lookups (O(1) average lookup time)
+  const wordDataSet = new Set(wordData);
 
-  // Convert the Set back to an array and return it
-  return Array.from(validWordsSet);
+  // Filter subsets based on presence in wordDataSet and return an array
+  return subsets.filter(subset => wordDataSet.has(subset));
 }
 
 // Example of checking valid words from dictionary
@@ -1315,10 +1315,13 @@ async function findValidWordsFromoWordnik(subsets) {
   return validWords;
 }
 
-// Function to generate all unique subsets (combinations) of the given letters
+// Function to generate all unique subsets (combinations) of exactly 3 letters
 function findAllSubsets(chars) {
   const results = new Set();  // Use Set to automatically handle duplicates
   const n = chars.length;
+
+  // Sort chars to avoid missing anagrams or permutations of valid words
+  chars.sort();
 
   // Generate all combinations using bitwise approach
   for (let i = 0; i < (1 << n); i++) {
@@ -1326,7 +1329,9 @@ function findAllSubsets(chars) {
     for (let j = 0; j < n; j++) {
       if (i & (1 << j)) subset += chars[j];
     }
-    if (subset.length > 1) {  // Ignore single characters
+
+    // Only add subset if it has exactly 3 letters
+    if (subset.length === 3) {
       results.add(subset);  // Add subset to Set (will ignore duplicates automatically)
     }
   }
@@ -1334,6 +1339,13 @@ function findAllSubsets(chars) {
   // Convert Set back to an array and return
   return Array.from(results);
 }
+
+// Example usage
+const chars = ['a', 'b', 'c'];  // Example character array
+const subsets = findAllSubsets(chars);
+const validWords = findValidWordsFromDictionary(subsets, wordData);  // wordData should be your dictionary
+
+console.log(validWords);
 
 // Function to retrieve the longest word based on criteria, now accepting multiple prefixes
 function getWordByCriteria(validWords, options = {}) {
