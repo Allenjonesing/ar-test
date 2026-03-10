@@ -66,7 +66,7 @@
     .cards {
       display: flex; gap: 20px; flex-wrap: wrap;
       justify-content: center;
-      max-width: 760px;
+      max-width: 400px;
     }
 
     .card {
@@ -109,7 +109,6 @@
     }
 
     .tag-ar   { background: rgba(0,255,136,0.15); color: #00ff88; }
-    .tag-game { background: rgba(100,120,255,0.15); color: #8899ff; }
 
     footer {
       position: fixed; bottom: 16px; left: 0; right: 0;
@@ -128,25 +127,18 @@
   <span class="badge">Alpha v0.1</span>
   <h1>AR Test</h1>
   <p class="subtitle">
-    A collection of experiments exploring augmented reality, 3D geometry
-    detection, and interactive gameplay — all running in your browser.
+    An augmented reality experiment using WebXR and Three.js — point your
+    camera at real-world surfaces, detect floors and walls, and place
+    3D objects directly in your space.
   </p>
 
   <div class="cards">
     <a class="card" href="ar.html">
       <div class="card-icon">📷</div>
       <h2>AR Experiment</h2>
-      <p>Point your camera at real-world surfaces. The app detects 3D geometry
-         and lets you place objects directly in your space.</p>
+      <p>Point your camera at real-world surfaces. The app detects floors
+         and walls, and lets you place 3D objects directly in your space.</p>
       <span class="tag tag-ar">WebXR · Three.js</span>
-    </a>
-
-    <a class="card" href="game.html">
-      <div class="card-icon">🎮</div>
-      <h2>Word Battle</h2>
-      <p>A turn-based battle game where you form words from a letter grid to
-         cast spells and defeat enemies.</p>
-      <span class="tag tag-game">Phaser · RPG</span>
     </a>
   </div>
 </div>
