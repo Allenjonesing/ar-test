@@ -1,14 +1,15 @@
 /**
  * ar.js — AR Experiment
  *
- * Uses Three.js + WebXR (immersive-ar + hit-test) to:
+ * Uses Three.js + WebXR (immersive-ar + hit-test + plane-detection) to:
  *   • Stream the real-world camera as the scene background
  *   • Detect surfaces via the hit-test API and show a reticle
+ *   • Detect floors and walls via the plane-detection API
  *   • Place random 3D objects on detected surfaces with a tap/click
  *   • Fall back to a simulation mode on non-XR browsers
  *
  * Debug panel (toggle with the ⚙ Debug button) exposes:
- *   Axes helper, ground grid, plane overlays, surface normals,
+ *   Axes helper, ground grid, plane overlays (floors + walls),
  *   bounding boxes, wireframe, FPS counter, camera-world-matrix,
  *   XR session state, and live hit-test pose readout.
  */
@@ -43,6 +44,10 @@ let simulationMode   = false;
 
 /* ─── Placed objects ──────────────────────────────────────────────────────── */
 let placedObjects = [];   // [{ mesh, bboxHelper, material }]
+
+/* ─── Plane detection state ──────────────────────────────────────────────── */
+// Map from XRPlane → { mesh, lastChanged }
+const planeOverlays = new Map();
 
 /* ─── FPS tracking ────────────────────────────────────────────────────────── */
 let fpsFrames = 0, fpsLast = 0, fpsCurrent = 0;
@@ -269,6 +274,7 @@ async function startAR() {
   document.getElementById('start-ar-btn').textContent = 'Stop AR';
   document.getElementById('start-ar-btn').classList.add('active');
   document.getElementById('reticle-hint').style.display = '';
+  document.getElementById('plane-count').style.display  = '';
 
   updateStatus('AR active — point at a surface and tap to place.');
   updateXRInfoDisplay('Session started\nMode: immersive-ar\nFeatures: hit-test');
@@ -286,9 +292,12 @@ function onXREnd() {
   reticle.visible     = false;
   reticleRing.visible = false;
 
+  clearPlaneOverlays();
+
   document.getElementById('start-ar-btn').textContent = 'Start AR';
   document.getElementById('start-ar-btn').classList.remove('active');
   document.getElementById('reticle-hint').style.display = 'none';
+  document.getElementById('plane-count').style.display  = 'none';
 
   updateStatus('AR session ended.');
   updateXRInfoDisplay('No active session');
@@ -389,6 +398,11 @@ function renderLoop(timestamp, frame) {
         `visibilityState: ${session.visibilityState || '—'}`
       );
     }
+
+    /* Plane detection — floors and walls */
+    if (frame.detectedPlanes) {
+      updatePlaneOverlays(frame, refSpace);
+    }
   }
 
   renderer.render(scene, camera);
@@ -472,6 +486,117 @@ function clearObjects() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * PLANE DETECTION (walls + floors via WebXR Plane Detection API)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Build a BufferGeometry from an XRPlane polygon.
+ * Polygon vertices are in the plane's local coordinate system where y = 0
+ * and the surface spans the XZ plane.  A simple fan triangulation is used
+ * (works correctly for the convex polygons XR returns).
+ */
+function buildPlaneGeometry(polygon) {
+  if (!polygon || polygon.length < 3) {
+    return new THREE.PlaneGeometry(0.1, 0.1);
+  }
+  const n = polygon.length;
+  const verts = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    verts[i * 3]     = polygon[i].x;
+    verts[i * 3 + 1] = 0;
+    verts[i * 3 + 2] = polygon[i].z;
+  }
+  const idx = [];
+  for (let i = 1; i < n - 1; i++) idx.push(0, i, i + 1);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Called every AR frame.  Syncs Three.js overlay meshes with the set of
+ * XRPlane objects tracked by the device.
+ *
+ *   • Vertical planes  (walls)  → orange overlay
+ *   • Horizontal planes (floors/ceilings) → blue overlay
+ *
+ * Meshes are only visible when the "Detected-plane overlays" debug toggle
+ * is enabled, but the poses are always updated so the overlay is ready
+ * the moment the toggle is switched on.
+ */
+function updatePlaneOverlays(frame, refSpace) {
+  const currentPlanes = frame.detectedPlanes;
+
+  /* Remove overlays for planes no longer tracked */
+  for (const [plane, data] of planeOverlays) {
+    if (!currentPlanes.has(plane)) {
+      scene.remove(data.mesh);
+      data.mesh.geometry.dispose();
+      data.mesh.material.dispose();
+      planeOverlays.delete(plane);
+    }
+  }
+
+  let wallCount = 0, floorCount = 0;
+
+  for (const plane of currentPlanes) {
+    const isWall = plane.orientation === 'vertical';
+    if (isWall) wallCount++; else floorCount++;
+
+    let data = planeOverlays.get(plane);
+
+    /* (Re-)build geometry when the device updates the polygon */
+    const needsRebuild = !data || data.lastChanged !== plane.lastChangedTime;
+    if (needsRebuild) {
+      const geo   = buildPlaneGeometry(plane.polygon);
+      const color = isWall ? 0xff6600 : 0x0066ff;
+
+      if (!data) {
+        const mat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity:     0.25,
+          side:        THREE.DoubleSide,
+          depthWrite:  false,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.matrixAutoUpdate = false;
+        mesh.visible = DEBUG.showPlanes;
+        scene.add(mesh);
+        data = { mesh, lastChanged: plane.lastChangedTime };
+        planeOverlays.set(plane, data);
+      } else {
+        data.mesh.geometry.dispose();
+        data.mesh.geometry = geo;
+        data.lastChanged   = plane.lastChangedTime;
+      }
+    }
+
+    /* Update world pose every frame */
+    const pose = frame.getPose(plane.planeSpace, refSpace);
+    if (pose) {
+      data.mesh.matrix.fromArray(pose.transform.matrix);
+    }
+  }
+
+  updatePlaneCount(wallCount, floorCount);
+}
+
+/** Remove all plane overlay meshes (called when AR session ends). */
+function clearPlaneOverlays() {
+  for (const [, data] of planeOverlays) {
+    scene.remove(data.mesh);
+    data.mesh.geometry.dispose();
+    data.mesh.material.dispose();
+  }
+  planeOverlays.clear();
+  updatePlaneCount(0, 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * ORBIT CONTROLS (simulation mode only — mouse / touch drag)
  * ═══════════════════════════════════════════════════════════════════════════ */
 function setupOrbitControls() {
@@ -542,7 +667,9 @@ function setupDebugPanel() {
   /* Bind all toggles */
   bindToggle('dbg-axes',      'showAxes',      v => { axesHelper.visible  = v; });
   bindToggle('dbg-grid',      'showGrid',      v => { gridHelper.visible  = v; });
-  bindToggle('dbg-planes',    'showPlanes',    () => { /* plane overlay: future */ });
+  bindToggle('dbg-planes',    'showPlanes',    v => {
+    for (const [, data] of planeOverlays) data.mesh.visible = v;
+  });
   bindToggle('dbg-reticle',   'showReticle',   v => {
     reticle.visible     = isARActive && v;
     reticleRing.visible = isARActive && v;
@@ -605,6 +732,12 @@ function updateStatus(msg) {
 
 function updatePlacedCount() {
   document.getElementById('placed-count').textContent = `Objects: ${placedObjects.length}`;
+}
+
+function updatePlaneCount(walls, floors) {
+  const el = document.getElementById('plane-count');
+  if (!el) return;
+  el.textContent = `Walls: ${walls} · Floors: ${floors}`;
 }
 
 function updateCamMatrixDisplay(matrix) {
