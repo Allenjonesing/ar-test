@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>AR Experiment — AR Test</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="ar.css">
+</head>
+<body>
+
+<!-- Three.js rendering canvas -->
+<canvas id="ar-canvas"></canvas>
+
+<!-- HUD overlay -->
+<div id="ui-overlay">
+
+  <!-- Header -->
+  <div id="header">
+    <h1>AR Experiment</h1>
+    <div id="header-right">
+      <span id="version-badge">Alpha v0.1</span>
+    </div>
+  </div>
+
+  <!-- Status / FPS bar -->
+  <div id="status-bar">
+    <span id="status-text">Initialising…</span>
+    <span id="fps-counter"></span>
+  </div>
+
+  <!-- Reticle hint shown while AR is active -->
+  <div id="reticle-hint" style="display:none;">
+    Point at a surface, then tap to place an object
+  </div>
+
+  <!-- Main controls -->
+  <div id="controls">
+    <button id="start-ar-btn" disabled>Start AR</button>
+    <button id="debug-toggle-btn">⚙ Debug</button>
+  </div>
+
+  <!-- Object counter -->
+  <div id="placed-count">Objects: 0</div>
+
+  <!-- Back link -->
+  <a id="back-link" href="index.html">← Home</a>
+
+</div>
+
+<!-- Debug panel (slides in from right) -->
+<div id="debug-panel" class="hidden">
+
+  <div id="debug-panel-header">
+    <h3>Debug Panel</h3>
+    <button id="close-debug-btn" title="Close">✕</button>
+  </div>
+
+  <!-- Visualisation toggles -->
+  <div class="debug-section">
+    <h4>Visualisation</h4>
+    <label><input type="checkbox" id="dbg-axes">   Axes helper (XYZ)</label>
+    <label><input type="checkbox" id="dbg-grid">   Ground grid</label>
+    <label><input type="checkbox" id="dbg-planes"> Detected-plane overlays</label>
+    <label><input type="checkbox" id="dbg-reticle" checked> Hit-test reticle</label>
+    <label><input type="checkbox" id="dbg-bbox">   Bounding boxes</label>
+    <label><input type="checkbox" id="dbg-wireframe"> Wireframe on placed objects</label>
+  </div>
+
+  <hr class="debug-divider">
+
+  <!-- Metrics toggles -->
+  <div class="debug-section">
+    <h4>Metrics</h4>
+    <label><input type="checkbox" id="dbg-fps" checked>    FPS counter</label>
+    <label><input type="checkbox" id="dbg-cam-matrix">     Camera world matrix</label>
+    <label><input type="checkbox" id="dbg-xr-info">        XR session state</label>
+    <label><input type="checkbox" id="dbg-hit-info">       Hit-test pose</label>
+  </div>
+
+  <hr class="debug-divider">
+
+  <!-- Camera matrix readout -->
+  <div class="debug-section" id="section-cam-matrix" style="display:none;">
+    <h4>Camera World Matrix</h4>
+    <pre class="debug-data" id="cam-matrix-display">—</pre>
+  </div>
+
+  <!-- XR session readout -->
+  <div class="debug-section" id="section-xr-info" style="display:none;">
+    <h4>XR Session State</h4>
+    <pre class="debug-data" id="xr-info-display">—</pre>
+  </div>
+
+  <!-- Hit pose readout -->
+  <div class="debug-section" id="section-hit-info" style="display:none;">
+    <h4>Hit-test Pose</h4>
+    <pre class="debug-data" id="hit-info-display">—</pre>
+  </div>
+
+  <hr class="debug-divider">
+
+  <!-- Actions -->
+  <div class="debug-section">
+    <h4>Actions</h4>
+    <button class="debug-btn-danger" id="clear-btn">Clear all placed objects</button>
+  </div>
+
+</div>
+
+<!-- "Not supported" overlay (shown if AR cannot start at all) -->
+<div id="no-ar-banner">
+  <h2>⚠ WebXR AR not available</h2>
+  <p>
+    This device or browser doesn't support WebXR immersive-AR.<br><br>
+    The scene is running in <strong>simulation mode</strong> — you can still
+    explore the 3D scene and place objects by clicking/tapping.
+  </p>
+</div>
+
+<!-- Three.js (global THREE) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<!-- AR experiment logic -->
+<script src="ar.js"></script>
+</body>
+</html>
