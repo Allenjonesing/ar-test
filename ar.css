@@ -247,3 +247,178 @@ button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 #debug-panel::-webkit-scrollbar { width: 4px; }
 #debug-panel::-webkit-scrollbar-track { background: transparent; }
 #debug-panel::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.25); border-radius: 2px; }
+
+/* ── Game HUD ─────────────────────────────────────────────────────────────────── */
+#game-hud {
+  position: absolute; top: 48px; left: 12px; right: 12px;
+  display: flex; justify-content: space-between; align-items: stretch;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.game-hud-block {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(0,255,136,0.25);
+  border-radius: 10px;
+  padding: 6px 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  min-width: 80px;
+}
+
+.game-hud-label {
+  font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+}
+
+#game-score, #game-timer {
+  font-size: 1.4rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #00ff88;
+  line-height: 1.1;
+  text-shadow: 0 0 10px rgba(0,255,136,0.5);
+}
+
+#game-timer.danger { color: #ff4444; text-shadow: 0 0 10px rgba(255,60,60,0.5); }
+
+/* ── Streak bar ──────────────────────────────────────────────────────────────── */
+#game-streak-bar {
+  position: absolute; top: 112px; left: 50%; transform: translateX(-50%);
+  pointer-events: none;
+  transition: opacity 0.35s;
+}
+
+#game-streak-text {
+  font-size: 0.88rem; font-weight: 700; letter-spacing: 0.05em;
+  background: rgba(0,0,0,0.55);
+  padding: 4px 14px; border-radius: 20px;
+  border: 1px solid currentColor;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── Collection toast ────────────────────────────────────────────────────────── */
+#collect-toast {
+  position: absolute;
+  bottom: 160px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 24px;
+  padding: 8px 20px;
+  font-size: 0.95rem; font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.4s, transform 0.4s;
+  z-index: 15;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#collect-toast strong { color: #fff; }
+.toast-mult { color: #ffaa00; margin-left: 4px; }
+
+/* ── Game overlay ─────────────────────────────────────────────────────────────── */
+#game-overlay {
+  position: fixed; inset: 0;
+  background: rgba(4, 8, 18, 0.90);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 25;
+  padding: 24px;
+  text-align: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow-y: auto;
+}
+
+#game-overlay.hidden { display: none; }
+
+.game-logo {
+  font-size: 3.2rem;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 16px rgba(0,255,136,0.4));
+}
+
+#game-start-screen h2, #game-over-screen h2 {
+  margin: 0 0 6px;
+  font-size: clamp(1.5rem, 5vw, 2.2rem);
+  font-weight: 800;
+  color: #fff;
+}
+
+.game-tagline {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.5);
+  margin: 0 0 20px;
+}
+
+.game-rules {
+  margin: 0 0 20px;
+  text-align: left;
+  max-width: 340px;
+}
+
+.rule {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.75);
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+#game-highscore-display {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 18px;
+}
+
+#game-highscore { color: #ffaa00; font-weight: 700; }
+
+#play-btn, #play-again-btn {
+  margin-top: 16px;
+  padding: 13px 34px;
+  font-size: 1.1rem;
+}
+
+.final-score-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 12px 0 4px;
+}
+
+.final-label {
+  font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+#final-score {
+  font-size: 3rem; font-weight: 900;
+  color: #00ff88;
+  text-shadow: 0 0 20px rgba(0,255,136,0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+#new-record-badge {
+  font-size: 1rem; font-weight: 700;
+  color: #ffaa00;
+  padding: 4px 16px;
+  background: rgba(255,160,0,0.12);
+  border: 1px solid rgba(255,160,0,0.4);
+  border-radius: 20px;
+  margin: 6px 0 12px;
+}
+
+.game-stats {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.65);
+  line-height: 1.9;
+}
+
+.game-stats span { color: #fff; font-weight: 700; }
+
+.stat-best {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+}
+
+.stat-best span { color: #ffaa00; }
