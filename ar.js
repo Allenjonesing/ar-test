@@ -16,6 +16,74 @@
 
 'use strict';
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GAME — AR Adventure Hunt
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Transforms the AR experiment into a real-world treasure-hunt game:
+ *   • Virtual collectibles auto-spawn at detected AR surfaces
+ *   • Tap to collect nearby items; build streaks for score multipliers
+ *   • 3-minute timer with high-score persistence (localStorage)
+ *   • 8 collectible types across 4 rarity tiers (common → legendary)
+ *   • Floating / rotating animations; glow lights on rare+ items
+ *   • Footprint trail markers left behind as you explore in AR
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Game constants ──────────────────────────────────────────────────────── */
+const GAME_DURATION      = 180;    // seconds
+const SPAWN_INTERVAL     = 3.5;    // seconds between auto-spawns
+const COLLECT_RADIUS     = 1.5;    // metres — max distance to collect
+const STREAK_WINDOW      = 4.0;    // seconds after collecting before streak resets
+const MAX_COLLECTIBLES   = 25;     // max items on screen at once
+const FOOTPRINT_INTERVAL = 5.0;    // seconds between footprint drops (AR only)
+const MAX_FOOTPRINTS     = 20;     // max trail markers
+
+/* ─── Collectible catalogue ───────────────────────────────────────────────── */
+const COLLECTIBLE_DEFS = [
+  { type:'coin',    emoji:'🪙', label:'Coin',    points:5,   rarity:'common',    weight:30, color:0xFFD700, emissive:0x553300 },
+  { type:'gem',     emoji:'💎', label:'Gem',     points:15,  rarity:'common',    weight:22, color:null,     emissive:null     },
+  { type:'potion',  emoji:'🧪', label:'Potion',  points:20,  rarity:'common',    weight:15, color:0x00FF88, emissive:0x003322 },
+  { type:'crystal', emoji:'🔷', label:'Crystal', points:35,  rarity:'uncommon',  weight:12, color:0x44CCFF, emissive:0x001133 },
+  { type:'chest',   emoji:'📦', label:'Chest',   points:50,  rarity:'uncommon',  weight:8,  color:0xCC7722, emissive:0x221100 },
+  { type:'star',    emoji:'⭐', label:'Star',    points:75,  rarity:'rare',      weight:5,  color:0xFFEE44, emissive:0x332200 },
+  { type:'relic',   emoji:'🏺', label:'Relic',   points:100, rarity:'rare',      weight:2,  color:0xBB44FF, emissive:0x220033 },
+  { type:'orb',     emoji:'🔮', label:'Orb',     points:250, rarity:'legendary', weight:1,  color:0xFF7700, emissive:0x331100 },
+];
+
+/* Build cumulative weights once */
+(function buildWeights() {
+  let cum = 0;
+  COLLECTIBLE_DEFS.forEach(d => { d._cumWeight = (cum += d.weight); });
+}());
+const TOTAL_WEIGHT = COLLECTIBLE_DEFS[COLLECTIBLE_DEFS.length - 1]._cumWeight;
+
+const RARITY_STYLE = {
+  common:    { textColor: '#cccccc', borderColor: 'rgba(180,180,180,0.35)' },
+  uncommon:  { textColor: '#44ff88', borderColor: 'rgba(0,200,80,0.40)'   },
+  rare:      { textColor: '#cc66ff', borderColor: 'rgba(160,50,240,0.45)' },
+  legendary: { textColor: '#ffaa00', borderColor: 'rgba(255,150,0,0.50)'  },
+};
+
+/* ─── Game state ──────────────────────────────────────────────────────────── */
+const GAME = {
+  mode:           'idle',   // 'idle' | 'playing' | 'gameover'
+  score:          0,
+  highScore:      0,        // loaded from localStorage on init
+  streak:         0,
+  maxStreak:      0,
+  multiplier:     1,
+  maxMultiplier:  1,
+  streakTimer:    0,
+  timeLeft:       GAME_DURATION,
+  spawnAccum:     0,
+  footAccum:      0,
+  totalCollected: 0,
+  collectibles:   [],       // [{mesh, def, baseY, bobOffset, bobSpeed, light}]
+  footprints:     [],       // [{mesh, age}]
+  _clockInterval: null,
+};
+
+let lastReticlePos = null;  // world-space position of reticle, updated each frame
+
 /* ─── Debug state ─────────────────────────────────────────────────────────── */
 const DEBUG = {
   showAxes:       false,
@@ -65,6 +133,7 @@ async function init() {
   setupDebugPanel();
   setupResizeHandler();
   setupOrbitControls();
+  setupGameUI();
 
   /* Check WebXR AR support */
   let arSupported = false;
@@ -192,33 +261,48 @@ function startSimulation() {
   simPreviewMesh.position.set(0, 0.5, 0);
   scene.add(simPreviewMesh);
 
-  /* Click to place objects in simulation mode */
+  /* Click / tap interaction in simulation mode */
   const canvas = document.getElementById('ar-canvas');
   canvas.addEventListener('click',      onSimClick);
   canvas.addEventListener('touchstart', onSimTouch, { passive: true });
 
-  document.getElementById('start-ar-btn').textContent = 'Place Object';
+  document.getElementById('start-ar-btn').textContent = '↺ Restart';
   document.getElementById('start-ar-btn').disabled    = false;
   document.getElementById('reticle-hint').style.display = '';
-  document.getElementById('reticle-hint').textContent   = 'Click / tap anywhere to place objects';
+  document.getElementById('reticle-hint').textContent   = 'Tap near a treasure to collect it, or on open ground to spawn one.';
 
   document.getElementById('no-ar-banner').style.display = 'block';
   setTimeout(() => { document.getElementById('no-ar-banner').style.display = 'none'; }, 4500);
 
-  /* "Start AR" just places an object at centre in sim mode */
+  /* Override start button for simulation: restart game */
   document.getElementById('start-ar-btn').removeEventListener('click', toggleAR);
-  document.getElementById('start-ar-btn').addEventListener('click', () => placeObjectAtPosition(
-    new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)
-  ));
+  document.getElementById('start-ar-btn').addEventListener('click', () => {
+    document.getElementById('game-start-screen').style.display = '';
+    document.getElementById('game-over-screen').style.display  = 'none';
+    document.getElementById('game-overlay').classList.remove('hidden');
+  });
+
+  /* Show game start overlay */
+  document.getElementById('game-start-screen').style.display = '';
+  document.getElementById('game-over-screen').style.display  = 'none';
+  document.getElementById('game-overlay').classList.remove('hidden');
 }
 
 function onSimClick(e) {
-  const rect   = renderer.domElement.getBoundingClientRect();
-  const ndc    = new THREE.Vector2(
+  const rect = renderer.domElement.getBoundingClientRect();
+  const ndc  = new THREE.Vector2(
     ((e.clientX - rect.left) / rect.width)  * 2 - 1,
     -((e.clientY - rect.top)  / rect.height) * 2 + 1
   );
-  rayCastToGround(ndc);
+  const target = groundPositionFromNDC(ndc);
+  if (!target) return;
+
+  if (GAME.mode === 'playing') {
+    /* Try to collect nearby treasure; if none, spawn one here */
+    if (!tryCollectNear(target)) spawnCollectibleAt(target);
+  } else {
+    placeObjectAtPosition(target);
+  }
 }
 
 function onSimTouch(e) {
@@ -229,15 +313,26 @@ function onSimTouch(e) {
     ((touch.clientX - rect.left) / rect.width)  * 2 - 1,
     -((touch.clientY - rect.top)  / rect.height) * 2 + 1
   );
-  rayCastToGround(ndc);
+  const target = groundPositionFromNDC(ndc);
+  if (!target) return;
+
+  if (GAME.mode === 'playing') {
+    if (!tryCollectNear(target)) spawnCollectibleAt(target);
+  } else {
+    placeObjectAtPosition(target);
+  }
 }
 
-function rayCastToGround(ndc) {
+function groundPositionFromNDC(ndc) {
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(ndc, camera);
   const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const target = new THREE.Vector3();
-  raycaster.ray.intersectPlane(ground, target);
+  return raycaster.ray.intersectPlane(ground, target) ? target : null;
+}
+
+function rayCastToGround(ndc) {
+  const target = groundPositionFromNDC(ndc);
   if (target) placeObjectAtPosition(target);
 }
 
@@ -276,8 +371,13 @@ async function startAR() {
   document.getElementById('reticle-hint').style.display = '';
   document.getElementById('plane-count').style.display  = '';
 
-  updateStatus('AR active — point at a surface and tap to place.');
+  updateStatus('AR active — point at a surface and tap to collect treasures.');
   updateXRInfoDisplay('Session started\nMode: immersive-ar\nFeatures: hit-test');
+
+  /* Show game start screen */
+  document.getElementById('game-start-screen').style.display = '';
+  document.getElementById('game-over-screen').style.display  = 'none';
+  document.getElementById('game-overlay').classList.remove('hidden');
 }
 
 async function stopAR() {
@@ -291,8 +391,20 @@ function onXREnd() {
   isARActive  = false;
   reticle.visible     = false;
   reticleRing.visible = false;
+  lastReticlePos = null;
 
   clearPlaneOverlays();
+
+  /* Stop any running game */
+  if (GAME.mode === 'playing') {
+    clearInterval(GAME._clockInterval);
+    GAME._clockInterval = null;
+    GAME.mode = 'idle';
+    clearGameCollectibles();
+    document.getElementById('game-hud').style.display = 'none';
+    document.getElementById('game-streak-bar').style.display = 'none';
+    document.getElementById('status-bar').style.display = '';
+  }
 
   document.getElementById('start-ar-btn').textContent = 'Start AR';
   document.getElementById('start-ar-btn').classList.remove('active');
@@ -304,8 +416,16 @@ function onXREnd() {
 }
 
 function onXRSelect() {
+  /* In game mode: try to collect a nearby treasure */
+  if (GAME.mode === 'playing' && lastReticlePos) {
+    if (!tryCollectNear(lastReticlePos)) {
+      updateStatus('Move closer to a treasure to collect it!');
+    }
+    return;
+  }
+  /* Outside game mode: place a debug object */
   if (reticle.visible) {
-    const pos = new THREE.Vector3();
+    const pos  = new THREE.Vector3();
     const quat = new THREE.Quaternion();
     reticle.matrix.decompose(pos, quat, new THREE.Vector3());
     placeObjectAtPosition(pos, quat);
@@ -373,6 +493,11 @@ function renderLoop(timestamp, frame) {
             const pos = `pos: (${m[12].toFixed(3)}, ${m[13].toFixed(3)}, ${m[14].toFixed(3)})`;
             updateHitInfoDisplay(pos);
           }
+
+          /* Track reticle world position for game collection */
+          const _p = new THREE.Vector3();
+          reticle.matrix.decompose(_p, new THREE.Quaternion(), new THREE.Vector3());
+          lastReticlePos = _p;
         }
       } else {
         reticle.visible     = false;
@@ -403,6 +528,33 @@ function renderLoop(timestamp, frame) {
     if (frame.detectedPlanes) {
       updatePlaneOverlays(frame, refSpace);
     }
+  }
+
+  /* ── Game per-frame update ──────────────────────────────────────────────── */
+  if (GAME.mode === 'playing') {
+    /* Streak decay */
+    if (GAME.streakTimer > 0) {
+      GAME.streakTimer -= delta;
+      if (GAME.streakTimer <= 0) resetStreak();
+    }
+    /* Auto-spawn */
+    GAME.spawnAccum += delta;
+    if (GAME.spawnAccum >= SPAWN_INTERVAL && GAME.collectibles.length < MAX_COLLECTIBLES) {
+      GAME.spawnAccum = 0;
+      autoSpawnCollectible();
+    }
+    /* Footprints (AR only) */
+    if (isARActive) {
+      GAME.footAccum += delta;
+      if (GAME.footAccum >= FOOTPRINT_INTERVAL) {
+        GAME.footAccum = 0;
+        placeFootprint();
+      }
+    }
+  }
+  /* Animate collectibles every frame regardless of mode (for collection anim) */
+  if (GAME.collectibles.length > 0 || GAME.footprints.length > 0) {
+    tickGameAnimations(timestamp, delta);
   }
 
   renderer.render(scene, camera);
@@ -482,6 +634,7 @@ function clearObjects() {
     mesh.material.dispose();
   });
   placedObjects = [];
+  clearGameCollectibles();
   updatePlacedCount();
 }
 
@@ -731,7 +884,11 @@ function updateStatus(msg) {
 }
 
 function updatePlacedCount() {
-  document.getElementById('placed-count').textContent = `Objects: ${placedObjects.length}`;
+  if (GAME.mode === 'playing' || GAME.mode === 'gameover') {
+    document.getElementById('placed-count').textContent = `Treasures: ${GAME.collectibles.length}`;
+  } else {
+    document.getElementById('placed-count').textContent = `Objects: ${placedObjects.length}`;
+  }
 }
 
 function updatePlaneCount(walls, floors) {
@@ -761,3 +918,421 @@ function updateHitInfoDisplay(text) {
  * BOOT
  * ═══════════════════════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', init);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GAME FUNCTIONS — AR Adventure Hunt
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Weighted random collectible definition ─────────────────────────────── */
+function pickCollectibleDef() {
+  const r = Math.random() * TOTAL_WEIGHT;
+  return COLLECTIBLE_DEFS.find(d => r <= d._cumWeight) || COLLECTIBLE_DEFS[0];
+}
+
+/* ─── Wire up game overlay buttons ───────────────────────────────────────── */
+function setupGameUI() {
+  GAME.highScore = parseInt(localStorage.getItem('arHuntHighScore') || '0', 10);
+  if (GAME.highScore > 0) {
+    document.getElementById('game-highscore').textContent = GAME.highScore.toLocaleString();
+    document.getElementById('game-highscore-display').style.display = '';
+  }
+
+  document.getElementById('play-btn').addEventListener('click', () => {
+    document.getElementById('game-overlay').classList.add('hidden');
+    startGame();
+  });
+
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    document.getElementById('game-overlay').classList.add('hidden');
+    startGame();
+  });
+}
+
+/* ─── Start a new game ───────────────────────────────────────────────────── */
+function startGame() {
+  /* Clear any leftovers from previous game */
+  clearGameCollectibles();
+
+  GAME.score          = 0;
+  GAME.streak         = 0;
+  GAME.maxStreak      = 0;
+  GAME.multiplier     = 1;
+  GAME.maxMultiplier  = 1;
+  GAME.streakTimer    = 0;
+  GAME.timeLeft       = GAME_DURATION;
+  GAME.spawnAccum     = 0;
+  GAME.footAccum      = 0;
+  GAME.totalCollected = 0;
+  GAME.collectibles   = [];
+  GAME.footprints     = [];
+  GAME.mode           = 'playing';
+
+  /* Start 1-second clock */
+  if (GAME._clockInterval) clearInterval(GAME._clockInterval);
+  GAME._clockInterval = setInterval(gameTick, 1000);
+
+  /* Show game HUD, hide plain status bar */
+  document.getElementById('status-bar').style.display   = 'none';
+  document.getElementById('game-hud').style.display     = '';
+  document.getElementById('game-streak-bar').style.display = '';
+
+  updateGameHUD();
+  updatePlacedCount();
+  updateStatus('Hunt on! Explore and collect treasures!');
+
+  /* Spawn first wave */
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => { if (GAME.mode === 'playing') autoSpawnCollectible(); }, i * 700);
+  }
+}
+
+/* ─── 1-second clock tick ────────────────────────────────────────────────── */
+function gameTick() {
+  if (GAME.mode !== 'playing') return;
+  GAME.timeLeft--;
+  updateGameHUD();
+  if (GAME.timeLeft <= 0) endGame();
+}
+
+/* ─── End the game ───────────────────────────────────────────────────────── */
+function endGame() {
+  GAME.mode = 'gameover';
+  clearInterval(GAME._clockInterval);
+  GAME._clockInterval = null;
+
+  /* Persist high score */
+  const isNewRecord = GAME.score > GAME.highScore;
+  if (isNewRecord) {
+    GAME.highScore = GAME.score;
+    localStorage.setItem('arHuntHighScore', String(GAME.highScore));
+    document.getElementById('game-highscore').textContent = GAME.highScore.toLocaleString();
+    document.getElementById('game-highscore-display').style.display = '';
+  }
+
+  clearFootprints();
+  updatePlacedCount();
+
+  /* Populate game-over screen */
+  document.getElementById('final-score').textContent    = GAME.score.toLocaleString();
+  document.getElementById('stat-collected').textContent = GAME.totalCollected;
+  document.getElementById('stat-streak').textContent    = GAME.maxStreak;
+  document.getElementById('stat-mult').textContent      = '×' + GAME.maxMultiplier;
+  document.getElementById('game-over-best').textContent = GAME.highScore.toLocaleString();
+  document.getElementById('new-record-badge').style.display = isNewRecord ? '' : 'none';
+
+  /* Show overlay after brief delay */
+  setTimeout(() => {
+    document.getElementById('game-start-screen').style.display = 'none';
+    document.getElementById('game-over-screen').style.display  = '';
+    document.getElementById('game-overlay').classList.remove('hidden');
+    /* Restore status bar */
+    document.getElementById('status-bar').style.display = '';
+    document.getElementById('game-hud').style.display   = 'none';
+    document.getElementById('game-streak-bar').style.display = 'none';
+  }, 1200);
+
+  updateStatus(`Time's up! Check your score!`);
+}
+
+/* ─── Auto-spawn a collectible near the current reticle/camera ───────────── */
+function autoSpawnCollectible() {
+  if (GAME.mode !== 'playing') return;
+  if (GAME.collectibles.length >= MAX_COLLECTIBLES) return;
+
+  let pos;
+  if (lastReticlePos) {
+    pos = lastReticlePos.clone();
+    pos.x += (Math.random() - 0.5) * 1.4;
+    pos.z += (Math.random() - 0.5) * 1.4;
+  } else {
+    const angle = (camera.rotation.y || 0) + (Math.random() - 0.5) * Math.PI;
+    const dist  = 1.5 + Math.random() * 2.5;
+    pos = new THREE.Vector3(
+      camera.position.x + Math.sin(angle) * dist,
+      0,
+      camera.position.z - Math.cos(angle) * dist
+    );
+  }
+  spawnCollectibleAt(pos);
+}
+
+/* ─── Spawn a collectible mesh at a world position ───────────────────────── */
+function spawnCollectibleAt(pos) {
+  if (GAME.collectibles.length >= MAX_COLLECTIBLES) return;
+  const def   = pickCollectibleDef();
+  const mesh  = buildCollectibleMesh(def);
+  const baseY = pos.y + 0.18;
+  mesh.position.set(pos.x, baseY, pos.z);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  /* Glow point light for rare / legendary */
+  let light = null;
+  if (def.rarity === 'legendary') {
+    light = new THREE.PointLight(def.color || 0xFF7700, 1.2, 1.5);
+    light.position.copy(mesh.position);
+    scene.add(light);
+  } else if (def.rarity === 'rare') {
+    light = new THREE.PointLight(def.color || 0xBB44FF, 0.6, 1.0);
+    light.position.copy(mesh.position);
+    scene.add(light);
+  }
+
+  GAME.collectibles.push({
+    mesh,
+    def,
+    baseY,
+    bobOffset: Math.random() * Math.PI * 2,
+    bobSpeed:  0.8 + Math.random() * 0.6,
+    light,
+  });
+
+  popIn(mesh);
+  updatePlacedCount();
+}
+
+/* ─── Build a Three.js mesh for a collectible type ───────────────────────── */
+function buildCollectibleMesh(def) {
+  let geo;
+  switch (def.type) {
+    case 'coin':    geo = new THREE.CylinderGeometry(0.09, 0.09, 0.018, 32); break;
+    case 'gem':     geo = new THREE.OctahedronGeometry(0.10, 0);             break;
+    case 'potion':  geo = new THREE.SphereGeometry(0.075, 20, 20);          break;
+    case 'crystal': geo = new THREE.IcosahedronGeometry(0.095, 1);          break;
+    case 'chest':   geo = new THREE.BoxGeometry(0.16, 0.12, 0.14);         break;
+    case 'star':    geo = new THREE.OctahedronGeometry(0.12, 1);            break;
+    case 'relic':   geo = new THREE.DodecahedronGeometry(0.10, 0);         break;
+    case 'orb':     geo = new THREE.SphereGeometry(0.10, 28, 28);          break;
+    default:        geo = new THREE.SphereGeometry(0.08, 16, 16);
+  }
+
+  /* Gems get a random hue */
+  let color    = def.color;
+  let emissive = def.emissive;
+  if (def.type === 'gem') {
+    const hue = Math.random();
+    color    = new THREE.Color().setHSL(hue, 0.95, 0.55).getHex();
+    emissive = new THREE.Color().setHSL(hue, 0.8, 0.15).getHex();
+  }
+
+  const emissiveIntensity = { common: 0.3, uncommon: 0.55, rare: 0.8, legendary: 1.2 }[def.rarity];
+
+  const mat = new THREE.MeshStandardMaterial({
+    color:             color !== null ? color : 0xffffff,
+    emissive:          emissive !== null ? emissive : 0x000000,
+    emissiveIntensity,
+    roughness: def.rarity === 'legendary' ? 0.08 : 0.3,
+    metalness: def.rarity === 'legendary' ? 0.95 : 0.55,
+  });
+
+  return new THREE.Mesh(geo, mat);
+}
+
+/* ─── Try to collect the nearest collectible within COLLECT_RADIUS ───────── */
+function tryCollectNear(pos) {
+  if (!GAME.collectibles.length) return false;
+
+  let bestIdx  = -1;
+  let bestDist = COLLECT_RADIUS;
+  GAME.collectibles.forEach((entry, i) => {
+    const d = pos.distanceTo(entry.mesh.position);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  });
+
+  if (bestIdx >= 0) {
+    collectItem(bestIdx);
+    return true;
+  }
+  return false;
+}
+
+/* ─── Collect item at index ──────────────────────────────────────────────── */
+function collectItem(idx) {
+  const entry = GAME.collectibles.splice(idx, 1)[0];
+  const { mesh, def, light } = entry;
+
+  /* Streak */
+  GAME.streak++;
+  GAME.streakTimer = STREAK_WINDOW;
+  if (GAME.streak > GAME.maxStreak) GAME.maxStreak = GAME.streak;
+  GAME.multiplier = calcMultiplier(GAME.streak);
+  if (GAME.multiplier > GAME.maxMultiplier) GAME.maxMultiplier = GAME.multiplier;
+
+  /* Score */
+  const pts = def.points * GAME.multiplier;
+  GAME.score += pts;
+  GAME.totalCollected++;
+
+  /* Remove glow light */
+  if (light) scene.remove(light);
+
+  animateCollection(mesh);
+  showCollectToast(def, pts);
+  updateGameHUD();
+  updatePlacedCount();
+}
+
+/* ─── Collection pop-out animation ──────────────────────────────────────── */
+function animateCollection(mesh) {
+  const start      = performance.now();
+  const dur        = 380;
+  const startScale = mesh.scale.x;
+  mesh.material.transparent = true;
+
+  (function tick() {
+    const t    = Math.min((performance.now() - start) / dur, 1);
+    const rise = Math.sin(t * Math.PI);           // arch: 0 → 1 → 0
+    mesh.scale.setScalar(startScale * (1 + rise * 0.6));
+    mesh.material.opacity = 1 - t;
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
+  }());
+}
+
+/* ─── Show a +points toast ───────────────────────────────────────────────── */
+let _toastTimer = null;
+function showCollectToast(def, pts) {
+  const el      = document.getElementById('collect-toast');
+  const rStyle  = RARITY_STYLE[def.rarity];
+  const multStr = GAME.multiplier > 1
+    ? ` <span class="toast-mult">×${GAME.multiplier}</span>` : '';
+  el.innerHTML = `<span style="color:${rStyle.textColor}">${def.emoji} ${def.label}</span>`
+               + `  <strong>+${pts.toLocaleString()}</strong>${multStr}`;
+  el.style.borderColor = rStyle.borderColor;
+  el.style.display     = '';
+  el.style.opacity     = '1';
+  el.style.transform   = 'translateX(-50%) translateY(0)';
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.style.opacity   = '0';
+    el.style.transform = 'translateX(-50%) translateY(-20px)';
+    setTimeout(() => { el.style.display = 'none'; }, 420);
+  }, 1800);
+}
+
+/* ─── Streak multiplier ──────────────────────────────────────────────────── */
+function calcMultiplier(streak) {
+  if (streak >= 10) return 5;
+  if (streak >= 6)  return 3;
+  if (streak >= 3)  return 2;
+  return 1;
+}
+
+function resetStreak() {
+  GAME.streak     = 0;
+  GAME.multiplier = 1;
+  GAME.streakTimer = 0;
+  updateGameHUD();
+}
+
+/* ─── Animate all collectibles (bob + rotate + sync lights) ─────────────── */
+function tickGameAnimations(timestamp, delta) {
+  const t = timestamp * 0.001;
+  for (const entry of GAME.collectibles) {
+    const { mesh, baseY, bobOffset, bobSpeed, light } = entry;
+    mesh.position.y = baseY + 0.07 * Math.sin(t * bobSpeed + bobOffset);
+    mesh.rotation.y += delta * 1.2;
+    if (light) light.position.copy(mesh.position);
+  }
+
+  /* Fade out footprints over their lifetime */
+  for (let i = GAME.footprints.length - 1; i >= 0; i--) {
+    const fp   = GAME.footprints[i];
+    const life = 30;
+    fp.age += delta;
+    fp.mesh.material.opacity = Math.max(0, 0.28 * (1 - fp.age / life));
+    if (fp.age >= life) {
+      scene.remove(fp.mesh);
+      fp.mesh.geometry.dispose();
+      fp.mesh.material.dispose();
+      GAME.footprints.splice(i, 1);
+    }
+  }
+}
+
+/* ─── Drop a footprint trail marker at the camera's ground position ──────── */
+function placeFootprint() {
+  if (GAME.footprints.length >= MAX_FOOTPRINTS) {
+    const old = GAME.footprints.shift();
+    scene.remove(old.mesh);
+    old.mesh.geometry.dispose();
+    old.mesh.material.dispose();
+  }
+  const geo  = new THREE.CircleGeometry(0.07, 12).rotateX(-Math.PI / 2);
+  const mat  = new THREE.MeshBasicMaterial({
+    color: 0x00ff88, transparent: true, opacity: 0.28,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  const cam  = new THREE.Vector3();
+  camera.getWorldPosition(cam);
+  mesh.position.set(cam.x, 0.005, cam.z);
+  scene.add(mesh);
+  GAME.footprints.push({ mesh, age: 0 });
+}
+
+/* ─── Clear all game collectibles and footprints ─────────────────────────── */
+function clearGameCollectibles() {
+  for (const { mesh, light } of GAME.collectibles) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+    if (light) scene.remove(light);
+  }
+  GAME.collectibles = [];
+  clearFootprints();
+}
+
+function clearFootprints() {
+  for (const fp of GAME.footprints) {
+    scene.remove(fp.mesh);
+    fp.mesh.geometry.dispose();
+    fp.mesh.material.dispose();
+  }
+  GAME.footprints = [];
+}
+
+/* ─── Update the game HUD elements ──────────────────────────────────────── */
+function updateGameHUD() {
+  document.getElementById('game-score').textContent = GAME.score.toLocaleString();
+
+  const timerEl = document.getElementById('game-timer');
+  timerEl.textContent = formatTime(GAME.timeLeft);
+  if (GAME.timeLeft <= 30) {
+    timerEl.classList.add('danger');
+  } else {
+    timerEl.classList.remove('danger');
+  }
+
+  /* Streak bar */
+  const streakBar  = document.getElementById('game-streak-bar');
+  const streakText = document.getElementById('game-streak-text');
+  if (GAME.streak >= 3) {
+    let streakRarity;
+    if (GAME.streak >= 10) {
+      streakRarity = 'legendary';
+    } else if (GAME.streak >= 6) {
+      streakRarity = 'rare';
+    } else {
+      streakRarity = 'uncommon';
+    }
+    const rs = RARITY_STYLE[streakRarity];
+    streakText.textContent = `${GAME.streak}× Streak  ×${GAME.multiplier} pts`;
+    streakText.style.color = rs.textColor;
+    streakBar.style.opacity = '1';
+  } else {
+    streakText.textContent = '';
+    streakBar.style.opacity = '0';
+  }
+}
+
+function formatTime(s) {
+  const m   = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
