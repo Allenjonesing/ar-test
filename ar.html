@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>AR Adventure Hunt — AR Test</title>
+  <title>Trail Treasure Hunt — AR Test</title>
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="ar.css">
 </head>
@@ -20,9 +20,9 @@
 
   <!-- Header -->
   <div id="header">
-    <h1>AR Adventure Hunt</h1>
+    <h1>Trail Treasure Hunt</h1>
     <div id="header-right">
-      <span id="version-badge">Alpha v0.1</span>
+      <span id="version-badge">Alpha v0.2</span>
     </div>
   </div>
 
@@ -32,29 +32,40 @@
     <span id="fps-counter"></span>
   </div>
 
-  <!-- Game HUD: score + timer (visible during game) -->
+  <!-- Game HUD: score + explore stats (visible during game) -->
   <div id="game-hud" style="display:none;">
     <div class="game-hud-block">
       <span class="game-hud-label">SCORE</span>
       <span id="game-score">0</span>
     </div>
     <div class="game-hud-block">
-      <span class="game-hud-label">TIME</span>
-      <span id="game-timer">3:00</span>
+      <span class="game-hud-label">WALKED</span>
+      <span id="explore-dist">0m</span>
+    </div>
+    <div class="game-hud-block">
+      <span class="game-hud-label">CLUES</span>
+      <span id="explore-clues">0/3</span>
     </div>
   </div>
 
-  <!-- Streak / multiplier bar -->
-  <div id="game-streak-bar" style="display:none;">
-    <span id="game-streak-text"></span>
+  <!-- Hunt HUD: shown after all clues collected -->
+  <div id="hunt-hud" style="display:none;">
+    <div id="compass-container">
+      <div id="compass-arrow">▲</div>
+      <div id="compass-label">TREASURE</div>
+    </div>
+    <div class="game-hud-block hunt-dist-block">
+      <span class="game-hud-label">AWAY</span>
+      <span id="hunt-dist">—</span>
+    </div>
   </div>
 
-  <!-- Collection toast -->
+  <!-- Collection toast (clue, treasure, etc.) -->
   <div id="collect-toast" style="display:none;"></div>
 
   <!-- Reticle hint shown while AR is active -->
   <div id="reticle-hint" style="display:none;">
-    Point at a surface, then tap to collect nearby treasures
+    Walk to collect clues — find the buried treasure!
   </div>
 
   <!-- Main controls -->
@@ -63,11 +74,14 @@
     <button id="debug-toggle-btn">⚙ Debug</button>
   </div>
 
-  <!-- Object counter -->
-  <div id="placed-count">Treasures: 0</div>
+  <!-- Distance + clue counter -->
+  <div id="placed-count">0m · Clues: 0/3</div>
 
   <!-- Plane counter (shown while AR is active) -->
   <div id="plane-count" style="display:none;">Walls: 0 · Floors: 0</div>
+
+  <!-- Mini-map (bottom-left) -->
+  <canvas id="minimap-canvas" width="160" height="160" style="display:none;"></canvas>
 
   <!-- Back link -->
   <a id="back-link" href="index.html">← Home</a>
@@ -139,24 +153,24 @@
   <h2>⚠ WebXR AR not available</h2>
   <p>
     This device or browser doesn't support WebXR immersive-AR.<br><br>
-    The scene is running in <strong>simulation mode</strong> — you can still
-    explore the 3D scene and collect treasures by clicking/tapping.
+    Running in <strong>simulation mode</strong> — drag the scene to move, and
+    watch your trail grow on the mini-map!
   </p>
 </div>
 
-<!-- Game overlay — shown before game starts and on game over -->
+<!-- Game overlay — shown on game over -->
 <div id="game-overlay" class="hidden">
 
   <!-- Start screen -->
   <div id="game-start-screen">
     <div class="game-logo">🗺️</div>
-    <h2>AR Adventure Hunt</h2>
-    <p class="game-tagline">Explore your world. Find the treasure.</p>
+    <h2>Trail Treasure Hunt</h2>
+    <p class="game-tagline">Walk the world. Follow the clues. Dig up the treasure.</p>
     <div class="game-rules">
-      <div class="rule">📍 Treasures auto-spawn as you explore</div>
-      <div class="rule">👆 Tap to collect items near your reticle</div>
-      <div class="rule">⚡ Build streaks for score multipliers (×2 / ×3 / ×5)</div>
-      <div class="rule">🏆 3-minute hunt — beat your high score!</div>
+      <div class="rule">🛰️ GPS traces your real-world path on the mini-map</div>
+      <div class="rule">🗝️ Collect 3 directional clues as you walk</div>
+      <div class="rule">🧭 An AR compass guides you to the buried treasure</div>
+      <div class="rule">💰 Tap the glowing chest to dig it up!</div>
     </div>
     <div id="game-highscore-display" style="display:none;">
       Best: <span id="game-highscore">0</span>
@@ -167,16 +181,16 @@
   <!-- Game-over screen -->
   <div id="game-over-screen" style="display:none;">
     <div class="game-logo">🏆</div>
-    <h2>Hunt Complete!</h2>
+    <h2>Adventure Complete!</h2>
     <div class="final-score-wrap">
       <span class="final-label">SCORE</span>
       <span id="final-score">0</span>
     </div>
     <div id="new-record-badge" style="display:none;">🎉 New Record!</div>
     <div class="game-stats">
-      <div>Collected <span id="stat-collected">0</span> treasures</div>
-      <div>Best streak <span id="stat-streak">0</span></div>
-      <div>Best multiplier <span id="stat-mult">×1</span></div>
+      <div>Distance: <span id="stat-collected">0m walked</span></div>
+      <div>Clues: <span id="stat-streak">0 clues</span></div>
+      <div>Result: <span id="stat-mult">—</span></div>
       <div class="stat-best">All-time best: <span id="game-over-best">0</span></div>
     </div>
     <button id="play-again-btn">▶ Play Again</button>

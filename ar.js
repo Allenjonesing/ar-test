@@ -17,69 +17,63 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * GAME — AR Adventure Hunt
+ * TRAIL TREASURE HUNT
  * ═══════════════════════════════════════════════════════════════════════════
- * Transforms the AR experiment into a real-world treasure-hunt game:
- *   • Virtual collectibles auto-spawn at detected AR surfaces
- *   • Tap to collect nearby items; build streaks for score multipliers
- *   • 3-minute timer with high-score persistence (localStorage)
- *   • 8 collectible types across 4 rarity tiers (common → legendary)
- *   • Floating / rotating animations; glow lights on rare+ items
- *   • Footprint trail markers left behind as you explore in AR
+ * GPS-powered real-world adventure:
+ *   • Your path is traced as a dotted line on the mini-map + AR footprints
+ *   • A treasure is buried nearby when the game starts
+ *   • Walk to collect 3 directional clues — each narrows the location
+ *   • After all clues: an AR compass arrow guides you to the spot
+ *   • When close enough a glowing chest appears — tap to dig it up!
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Game constants ──────────────────────────────────────────────────────── */
-const GAME_DURATION      = 180;    // seconds
-const SPAWN_INTERVAL     = 3.5;    // seconds between auto-spawns
-const COLLECT_RADIUS     = 1.5;    // metres — max distance to collect
-const STREAK_WINDOW      = 4.0;    // seconds after collecting before streak resets
-const MAX_COLLECTIBLES   = 25;     // max items on screen at once
-const FOOTPRINT_INTERVAL = 5.0;    // seconds between footprint drops (AR only)
-const MAX_FOOTPRINTS     = 20;     // max trail markers
-
-/* ─── Collectible catalogue ───────────────────────────────────────────────── */
-const COLLECTIBLE_DEFS = [
-  { type:'coin',    emoji:'🪙', label:'Coin',    points:5,   rarity:'common',    weight:30, color:0xFFD700, emissive:0x553300 },
-  { type:'gem',     emoji:'💎', label:'Gem',     points:15,  rarity:'common',    weight:22, color:null,     emissive:null     },
-  { type:'potion',  emoji:'🧪', label:'Potion',  points:20,  rarity:'common',    weight:15, color:0x00FF88, emissive:0x003322 },
-  { type:'crystal', emoji:'🔷', label:'Crystal', points:35,  rarity:'uncommon',  weight:12, color:0x44CCFF, emissive:0x001133 },
-  { type:'chest',   emoji:'📦', label:'Chest',   points:50,  rarity:'uncommon',  weight:8,  color:0xCC7722, emissive:0x221100 },
-  { type:'star',    emoji:'⭐', label:'Star',    points:75,  rarity:'rare',      weight:5,  color:0xFFEE44, emissive:0x332200 },
-  { type:'relic',   emoji:'🏺', label:'Relic',   points:100, rarity:'rare',      weight:2,  color:0xBB44FF, emissive:0x220033 },
-  { type:'orb',     emoji:'🔮', label:'Orb',     points:250, rarity:'legendary', weight:1,  color:0xFF7700, emissive:0x331100 },
-];
-
-/* Build cumulative weights once */
-(function buildWeights() {
-  let cum = 0;
-  COLLECTIBLE_DEFS.forEach(d => { d._cumWeight = (cum += d.weight); });
-}());
-const TOTAL_WEIGHT = COLLECTIBLE_DEFS[COLLECTIBLE_DEFS.length - 1]._cumWeight;
-
-const RARITY_STYLE = {
-  common:    { textColor: '#cccccc', borderColor: 'rgba(180,180,180,0.35)' },
-  uncommon:  { textColor: '#44ff88', borderColor: 'rgba(0,200,80,0.40)'   },
-  rare:      { textColor: '#cc66ff', borderColor: 'rgba(160,50,240,0.45)' },
-  legendary: { textColor: '#ffaa00', borderColor: 'rgba(255,150,0,0.50)'  },
-};
+/* ─── Trail Hunt constants ────────────────────────────────────────────────── */
+const CLUE_INTERVAL_M    = 40;    // metres walked per clue
+const CLUES_NEEDED       = 3;     // clues needed before compass fully unlocked
+const TREASURE_SPAWN_M   = 8;     // GPS metres before AR chest appears
+const TREASURE_MIN_M     = 40;    // min metres from start to bury
+const TREASURE_MAX_M     = 120;   // max metres from start to bury
+const FOOTPRINT_DIST_M   = 6;     // metres between footprint drops
+const FOOTPRINT_LIFE_S   = 90;    // seconds before a footprint fades away
+const MAX_FOOTPRINTS     = 40;    // max trail markers
+const MAX_GPS_PTS        = 200;   // max GPS waypoints stored
+const GPS_MIN_MOVE_M     = 2;     // minimum GPS movement (m) to register (filters jitter)
+const SIM_MOVEMENT_SCALE = 15;    // multiply sim-mode camera distance for virtual metres
+const MINIMAP_SIZE       = 160;   // mini-map canvas px
+const MINIMAP_PADDING    = 1.4;   // extra scale padding around the GPS path bounds
+const MINIMAP_UPDATE_PROB = 0.03; // probability per sim-frame of redrawing the mini-map
 
 /* ─── Game state ──────────────────────────────────────────────────────────── */
 const GAME = {
-  mode:           'idle',   // 'idle' | 'playing' | 'gameover'
-  score:          0,
-  highScore:      0,        // loaded from localStorage on init
-  streak:         0,
-  maxStreak:      0,
-  multiplier:     1,
-  maxMultiplier:  1,
-  streakTimer:    0,
-  timeLeft:       GAME_DURATION,
-  spawnAccum:     0,
-  footAccum:      0,
-  totalCollected: 0,
-  collectibles:   [],       // [{mesh, def, baseY, bobOffset, bobSpeed, light}]
-  footprints:     [],       // [{mesh, age}]
-  _clockInterval: null,
+  phase:            'idle',  // 'idle' | 'explore' | 'hunt' | 'found'
+  score:            0,
+  highScore:        0,
+
+  /* exploration */
+  gpsPath:          [],      // [{lat, lng, mx, mz}]  mx/mz = metres from origin
+  totalDistM:       0,       // total metres walked
+  clues:            [],      // collected clue strings
+  clueAccumM:       0,       // metres since last clue
+  footAccumM:       0,       // metres since last footprint
+
+  /* GPS watch */
+  watchId:          null,
+  lastGPS:          null,    // {lat, lng}
+  gpsReady:         false,
+
+  /* treasure */
+  treasureGPS:      null,    // {lat, lng}
+  distToTreasure:   Infinity,
+  bearingToTreasure: 0,
+  arChestSpawned:   false,
+  treasureEntry:    null,    // {mesh, light, baseY}
+
+  /* sim fallback (no GPS) */
+  _noGPS:           false,
+  _simLastCamPos:   null,
+
+  /* AR trail markers */
+  footprints:       [],      // [{mesh, age}]
 };
 
 let lastReticlePos = null;  // world-space position of reticle, updated each frame
@@ -269,7 +263,7 @@ function startSimulation() {
   document.getElementById('start-ar-btn').textContent = '↺ Restart';
   document.getElementById('start-ar-btn').disabled    = false;
   document.getElementById('reticle-hint').style.display = '';
-  document.getElementById('reticle-hint').textContent   = 'Tap near a treasure to collect it, or on open ground to spawn one.';
+  document.getElementById('reticle-hint').textContent   = 'Walk to collect clues — find the buried treasure!';
 
   document.getElementById('no-ar-banner').style.display = 'block';
   setTimeout(() => { document.getElementById('no-ar-banner').style.display = 'none'; }, 4500);
@@ -277,15 +271,17 @@ function startSimulation() {
   /* Override start button for simulation: restart game */
   document.getElementById('start-ar-btn').removeEventListener('click', toggleAR);
   document.getElementById('start-ar-btn').addEventListener('click', () => {
-    document.getElementById('game-start-screen').style.display = '';
-    document.getElementById('game-over-screen').style.display  = 'none';
-    document.getElementById('game-overlay').classList.remove('hidden');
+    if (GAME.phase !== 'idle') {
+      /* Restart */
+      stopGPS();
+      clearGameObjects();
+      GAME.phase = 'idle';
+    }
+    startGame();
   });
 
-  /* Show game start overlay */
-  document.getElementById('game-start-screen').style.display = '';
-  document.getElementById('game-over-screen').style.display  = 'none';
-  document.getElementById('game-overlay').classList.remove('hidden');
+  /* Auto-start game in sim mode */
+  startGame();
 }
 
 function onSimClick(e) {
@@ -297,11 +293,12 @@ function onSimClick(e) {
   const target = groundPositionFromNDC(ndc);
   if (!target) return;
 
-  if (GAME.mode === 'playing') {
-    /* Try to collect nearby treasure; if none, spawn one here */
-    if (!tryCollectNear(target)) spawnCollectibleAt(target);
-  } else {
-    placeObjectAtPosition(target);
+  if (GAME.phase === 'hunt' || GAME.phase === 'explore') {
+    /* Try to tap the AR treasure chest */
+    if (GAME.treasureEntry) {
+      const d = target.distanceTo(GAME.treasureEntry.mesh.position);
+      if (d < 0.8) { collectARTreasure(); return; }
+    }
   }
 }
 
@@ -316,10 +313,11 @@ function onSimTouch(e) {
   const target = groundPositionFromNDC(ndc);
   if (!target) return;
 
-  if (GAME.mode === 'playing') {
-    if (!tryCollectNear(target)) spawnCollectibleAt(target);
-  } else {
-    placeObjectAtPosition(target);
+  if (GAME.phase === 'hunt' || GAME.phase === 'explore') {
+    if (GAME.treasureEntry) {
+      const d = target.distanceTo(GAME.treasureEntry.mesh.position);
+      if (d < 0.8) { collectARTreasure(); return; }
+    }
   }
 }
 
@@ -371,13 +369,11 @@ async function startAR() {
   document.getElementById('reticle-hint').style.display = '';
   document.getElementById('plane-count').style.display  = '';
 
-  updateStatus('AR active — point at a surface and tap to collect treasures.');
+  updateStatus('AR active — walk to collect clues and find the treasure!');
   updateXRInfoDisplay('Session started\nMode: immersive-ar\nFeatures: hit-test');
 
-  /* Show game start screen */
-  document.getElementById('game-start-screen').style.display = '';
-  document.getElementById('game-over-screen').style.display  = 'none';
-  document.getElementById('game-overlay').classList.remove('hidden');
+  /* Auto-start game immediately — no overlay required */
+  startGame();
 }
 
 async function stopAR() {
@@ -396,14 +392,14 @@ function onXREnd() {
   clearPlaneOverlays();
 
   /* Stop any running game */
-  if (GAME.mode === 'playing') {
-    clearInterval(GAME._clockInterval);
-    GAME._clockInterval = null;
-    GAME.mode = 'idle';
-    clearGameCollectibles();
-    document.getElementById('game-hud').style.display = 'none';
-    document.getElementById('game-streak-bar').style.display = 'none';
-    document.getElementById('status-bar').style.display = '';
+  if (GAME.phase === 'explore' || GAME.phase === 'hunt') {
+    stopGPS();
+    clearGameObjects();
+    GAME.phase = 'idle';
+    document.getElementById('game-hud').style.display     = 'none';
+    document.getElementById('hunt-hud').style.display     = 'none';
+    document.getElementById('minimap-canvas').style.display = 'none';
+    document.getElementById('status-bar').style.display   = '';
   }
 
   document.getElementById('start-ar-btn').textContent = 'Start AR';
@@ -416,15 +412,18 @@ function onXREnd() {
 }
 
 function onXRSelect() {
-  /* In game mode: try to collect a nearby treasure */
-  if (GAME.mode === 'playing' && lastReticlePos) {
-    if (!tryCollectNear(lastReticlePos)) {
-      updateStatus('Move closer to a treasure to collect it!');
+  /* Try to collect the AR treasure chest (hunt / explore phase) */
+  if ((GAME.phase === 'hunt' || GAME.phase === 'explore') && GAME.treasureEntry) {
+    if (lastReticlePos) {
+      const d = lastReticlePos.distanceTo(GAME.treasureEntry.mesh.position);
+      if (d < 1.0) { collectARTreasure(); return; }
+    } else {
+      /* No reticle — collect if chest has spawned */
+      collectARTreasure(); return;
     }
-    return;
   }
-  /* Outside game mode: place a debug object */
-  if (reticle.visible) {
+  /* Outside game: place a debug object */
+  if (GAME.phase === 'idle' && reticle.visible) {
     const pos  = new THREE.Vector3();
     const quat = new THREE.Quaternion();
     reticle.matrix.decompose(pos, quat, new THREE.Vector3());
@@ -531,31 +530,7 @@ function renderLoop(timestamp, frame) {
   }
 
   /* ── Game per-frame update ──────────────────────────────────────────────── */
-  if (GAME.mode === 'playing') {
-    /* Streak decay */
-    if (GAME.streakTimer > 0) {
-      GAME.streakTimer -= delta;
-      if (GAME.streakTimer <= 0) resetStreak();
-    }
-    /* Auto-spawn */
-    GAME.spawnAccum += delta;
-    if (GAME.spawnAccum >= SPAWN_INTERVAL && GAME.collectibles.length < MAX_COLLECTIBLES) {
-      GAME.spawnAccum = 0;
-      autoSpawnCollectible();
-    }
-    /* Footprints (AR only) */
-    if (isARActive) {
-      GAME.footAccum += delta;
-      if (GAME.footAccum >= FOOTPRINT_INTERVAL) {
-        GAME.footAccum = 0;
-        placeFootprint();
-      }
-    }
-  }
-  /* Animate collectibles every frame regardless of mode (for collection anim) */
-  if (GAME.collectibles.length > 0 || GAME.footprints.length > 0) {
-    tickGameAnimations(timestamp, delta);
-  }
+  tickGame(delta, timestamp);
 
   renderer.render(scene, camera);
 }
@@ -634,7 +609,7 @@ function clearObjects() {
     mesh.material.dispose();
   });
   placedObjects = [];
-  clearGameCollectibles();
+  clearGameObjects();
   updatePlacedCount();
 }
 
@@ -884,8 +859,10 @@ function updateStatus(msg) {
 }
 
 function updatePlacedCount() {
-  if (GAME.mode === 'playing' || GAME.mode === 'gameover') {
-    document.getElementById('placed-count').textContent = `Treasures: ${GAME.collectibles.length}`;
+  const phase = GAME.phase;
+  if (phase === 'explore' || phase === 'hunt') {
+    document.getElementById('placed-count').textContent =
+      `${Math.round(GAME.totalDistM)}m · Clues: ${GAME.clues.length}/${CLUES_NEEDED}`;
   } else {
     document.getElementById('placed-count').textContent = `Objects: ${placedObjects.length}`;
   }
@@ -920,14 +897,8 @@ function updateHitInfoDisplay(text) {
 window.addEventListener('DOMContentLoaded', init);
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * GAME FUNCTIONS — AR Adventure Hunt
+ * GAME FUNCTIONS — Trail Treasure Hunt
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ─── Weighted random collectible definition ─────────────────────────────── */
-function pickCollectibleDef() {
-  const r = Math.random() * TOTAL_WEIGHT;
-  return COLLECTIBLE_DEFS.find(d => r <= d._cumWeight) || COLLECTIBLE_DEFS[0];
-}
 
 /* ─── Wire up game overlay buttons ───────────────────────────────────────── */
 function setupGameUI() {
@@ -948,59 +919,49 @@ function setupGameUI() {
   });
 }
 
-/* ─── Start a new game ───────────────────────────────────────────────────── */
+/* ─── Start a new game ────────────────────────────────────────────────────── */
 function startGame() {
-  /* Clear any leftovers from previous game */
-  clearGameCollectibles();
+  stopGPS();
+  clearGameObjects();
 
-  GAME.score          = 0;
-  GAME.streak         = 0;
-  GAME.maxStreak      = 0;
-  GAME.multiplier     = 1;
-  GAME.maxMultiplier  = 1;
-  GAME.streakTimer    = 0;
-  GAME.timeLeft       = GAME_DURATION;
-  GAME.spawnAccum     = 0;
-  GAME.footAccum      = 0;
-  GAME.totalCollected = 0;
-  GAME.collectibles   = [];
-  GAME.footprints     = [];
-  GAME.mode           = 'playing';
+  GAME.phase            = 'explore';
+  GAME.score            = 0;
+  GAME.gpsPath          = [];
+  GAME.totalDistM       = 0;
+  GAME.clues            = [];
+  GAME.clueAccumM       = 0;
+  GAME.footAccumM       = 0;
+  GAME.watchId          = null;
+  GAME.lastGPS          = null;
+  GAME.gpsReady         = false;
+  GAME.treasureGPS      = null;
+  GAME.distToTreasure   = Infinity;
+  GAME.bearingToTreasure = 0;
+  GAME.arChestSpawned   = false;
+  GAME.treasureEntry    = null;
+  GAME._noGPS           = false;
+  GAME._simLastCamPos   = null;
+  GAME.footprints       = [];
 
-  /* Start 1-second clock */
-  if (GAME._clockInterval) clearInterval(GAME._clockInterval);
-  GAME._clockInterval = setInterval(gameTick, 1000);
-
-  /* Show game HUD, hide plain status bar */
   document.getElementById('status-bar').style.display   = 'none';
   document.getElementById('game-hud').style.display     = '';
-  document.getElementById('game-streak-bar').style.display = '';
+  document.getElementById('hunt-hud').style.display     = 'none';
+  document.getElementById('game-overlay').classList.add('hidden');
+  document.getElementById('minimap-canvas').style.display = '';
 
-  updateGameHUD();
+  updateExploreHUD();
   updatePlacedCount();
-  updateStatus('Hunt on! Explore and collect treasures!');
+  drawMiniMap();
 
-  /* Spawn first wave */
-  for (let i = 0; i < 3; i++) {
-    setTimeout(() => { if (GAME.mode === 'playing') autoSpawnCollectible(); }, i * 700);
-  }
+  startGPS();
+  updateStatus('Exploring… walk to collect clues and find the buried treasure!');
 }
 
-/* ─── 1-second clock tick ────────────────────────────────────────────────── */
-function gameTick() {
-  if (GAME.mode !== 'playing') return;
-  GAME.timeLeft--;
-  updateGameHUD();
-  if (GAME.timeLeft <= 0) endGame();
-}
+/* ─── End game ────────────────────────────────────────────────────────────── */
+function endGame(won) {
+  GAME.phase = 'found';
+  stopGPS();
 
-/* ─── End the game ───────────────────────────────────────────────────────── */
-function endGame() {
-  GAME.mode = 'gameover';
-  clearInterval(GAME._clockInterval);
-  GAME._clockInterval = null;
-
-  /* Persist high score */
   const isNewRecord = GAME.score > GAME.highScore;
   if (isNewRecord) {
     GAME.highScore = GAME.score;
@@ -1010,243 +971,335 @@ function endGame() {
   }
 
   clearFootprints();
-  updatePlacedCount();
+
+  document.getElementById('game-hud').style.display     = 'none';
+  document.getElementById('hunt-hud').style.display     = 'none';
+  document.getElementById('minimap-canvas').style.display = 'none';
 
   /* Populate game-over screen */
   document.getElementById('final-score').textContent    = GAME.score.toLocaleString();
-  document.getElementById('stat-collected').textContent = GAME.totalCollected;
-  document.getElementById('stat-streak').textContent    = GAME.maxStreak;
-  document.getElementById('stat-mult').textContent      = '×' + GAME.maxMultiplier;
+  document.getElementById('stat-collected').textContent = `${Math.round(GAME.totalDistM)}m walked`;
+  document.getElementById('stat-streak').textContent    = `${GAME.clues.length} clue${GAME.clues.length !== 1 ? 's' : ''}`;
+  document.getElementById('stat-mult').textContent      = won ? '🎉 Found it!' : '💀 Gave up';
   document.getElementById('game-over-best').textContent = GAME.highScore.toLocaleString();
   document.getElementById('new-record-badge').style.display = isNewRecord ? '' : 'none';
 
-  /* Show overlay after brief delay */
   setTimeout(() => {
     document.getElementById('game-start-screen').style.display = 'none';
     document.getElementById('game-over-screen').style.display  = '';
     document.getElementById('game-overlay').classList.remove('hidden');
-    /* Restore status bar */
     document.getElementById('status-bar').style.display = '';
-    document.getElementById('game-hud').style.display   = 'none';
-    document.getElementById('game-streak-bar').style.display = 'none';
-  }, 1200);
+  }, 1400);
 
-  updateStatus(`Time's up! Check your score!`);
+  updateStatus(won ? '🏆 Treasure found! Amazing!' : 'Adventure over — try again!');
 }
 
-/* ─── Auto-spawn a collectible near the current reticle/camera ───────────── */
-function autoSpawnCollectible() {
-  if (GAME.mode !== 'playing') return;
-  if (GAME.collectibles.length >= MAX_COLLECTIBLES) return;
+/* ─── GPS: start watching ─────────────────────────────────────────────────── */
+function startGPS() {
+  if (!navigator.geolocation) { onGPSError({ message: 'not supported' }); return; }
+  GAME.watchId = navigator.geolocation.watchPosition(
+    onGPSUpdate, onGPSError,
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 12000 }
+  );
+}
+
+/* ─── GPS: stop watching ──────────────────────────────────────────────────── */
+function stopGPS() {
+  if (GAME.watchId !== null) {
+    navigator.geolocation.clearWatch(GAME.watchId);
+    GAME.watchId = null;
+  }
+}
+
+/* ─── GPS update ──────────────────────────────────────────────────────────── */
+function onGPSUpdate(pos) {
+  if (GAME.phase === 'idle' || GAME.phase === 'found') return;
+
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+
+  /* First fix — set origin and bury treasure */
+  if (!GAME.gpsReady) {
+    GAME.gpsReady = true;
+    GAME.lastGPS  = { lat, lng };
+    GAME.gpsPath.push({ lat, lng, mx: 0, mz: 0 });
+    buryTreasure(lat, lng);
+    showToast('🛰️ GPS locked! Walk to collect clues.', 3000);
+    drawMiniMap();
+    return;
+  }
+
+  const distFromLast = haversineM(GAME.lastGPS.lat, GAME.lastGPS.lng, lat, lng);
+  if (distFromLast < GPS_MIN_MOVE_M) return;  // filter sub-2m GPS jitter
+
+  GAME.totalDistM += distFromLast;
+  GAME.lastGPS = { lat, lng };
+
+  const origin = GAME.gpsPath[0];
+  const { mx, mz } = gpsToLocal(origin.lat, origin.lng, lat, lng);
+  if (GAME.gpsPath.length < MAX_GPS_PTS) GAME.gpsPath.push({ lat, lng, mx, mz });
+
+  /* Footprints */
+  GAME.footAccumM += distFromLast;
+  if (GAME.footAccumM >= FOOTPRINT_DIST_M) { GAME.footAccumM = 0; placeFootprint(); }
+
+  /* Clues (explore phase) */
+  if (GAME.phase === 'explore') {
+    GAME.clueAccumM += distFromLast;
+    if (GAME.clueAccumM >= CLUE_INTERVAL_M) { GAME.clueAccumM = 0; collectClue({ lat, lng }); }
+  }
+
+  /* Treasure bearing + distance */
+  if (GAME.treasureGPS) {
+    GAME.distToTreasure    = haversineM(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    GAME.bearingToTreasure = bearingDeg(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_SPAWN_M) {
+      spawnARTreasureChest();
+    }
+    updateHuntHUD();
+  }
+
+  updateExploreHUD();
+  updatePlacedCount();
+  drawMiniMap();
+}
+
+/* ─── GPS error / unavailable ─────────────────────────────────────────────── */
+function onGPSError(err) {
+  if (GAME._noGPS) return;
+  GAME._noGPS = true;
+  console.warn('GPS error:', err);
+  showToast('🎮 No GPS — sim mode: move the camera to explore!', 4000);
+  burySimTreasure();
+}
+
+/* ─── Bury treasure at random GPS position from start ────────────────────── */
+function buryTreasure(originLat, originLng) {
+  const dist    = TREASURE_MIN_M + Math.random() * (TREASURE_MAX_M - TREASURE_MIN_M);
+  const bearing = Math.random() * 360;
+  GAME.treasureGPS       = gpsDestination(originLat, originLng, bearing, dist);
+  GAME.distToTreasure    = dist;
+  GAME.bearingToTreasure = bearing;
+  showToast('💰 Treasure buried nearby! Collect clues to find it.', 3500);
+  drawMiniMap();
+}
+
+/* ─── Simulation fallback: no GPS treasure placement ─────────────────────── */
+function burySimTreasure() {
+  GAME.treasureGPS    = null;
+  GAME.distToTreasure = 60;  // virtual metres
+  showToast('💰 Treasure buried 60m away — walk in sim to find it!', 3500);
+}
+
+/* ─── Collect a directional clue ─────────────────────────────────────────── */
+function collectClue(currentGPS) {
+  const num = GAME.clues.length + 1;
+  let text;
+
+  if (GAME.treasureGPS && currentGPS) {
+    const dist = haversineM(currentGPS.lat, currentGPS.lng,
+                            GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    const bear = bearingDeg(currentGPS.lat, currentGPS.lng,
+                            GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    text = makeClueText(num, dist, bear);
+  } else {
+    text = SIM_CLUES[(num - 1) % SIM_CLUES.length];
+  }
+
+  GAME.clues.push(text);
+  GAME.score += 100;
+  showClueToast(num, text);
+  updateExploreHUD();
+  updatePlacedCount();
+
+  if (GAME.clues.length >= CLUES_NEEDED && GAME.phase === 'explore') {
+    GAME.phase = 'hunt';
+    document.getElementById('hunt-hud').style.display = '';
+    showToast('🗺️ All clues collected! Use the compass to find the treasure!', 4000);
+    drawMiniMap();
+  }
+}
+
+/* ─── Generate directional clue text ─────────────────────────────────────── */
+const CARDINALS = ['north','north-east','east','south-east','south','south-west','west','north-west'];
+function makeClueText(num, distM, bear) {
+  const cardinal = CARDINALS[Math.round(bear / 45) % 8];
+  const paces    = Math.round(distM / 0.76);
+  const opts = [
+    `${num}. The treasure is ~${paces} paces to the ${cardinal}.`,
+    `${num}. Head ${cardinal} — about ${Math.round(distM)}m away.`,
+    `${num}. A glimmer to the ${cardinal}… roughly ${paces} paces.`,
+    `${num}. Face ${cardinal} and walk about ${Math.round(distM)} metres.`,
+  ];
+  return opts[(num - 1) % opts.length];
+}
+const SIM_CLUES = [
+  '1. Something shiny lies to the north-east…',
+  '2. You feel warmer heading east.',
+  '3. You\'re very close — the treasure glows ahead!',
+];
+
+/* ─── Spawn AR treasure chest when player is near ─────────────────────────── */
+function spawnARTreasureChest() {
+  if (GAME.arChestSpawned || GAME.treasureEntry) return;
+  GAME.arChestSpawned = true;
 
   let pos;
   if (lastReticlePos) {
     pos = lastReticlePos.clone();
-    pos.x += (Math.random() - 0.5) * 1.4;
-    pos.z += (Math.random() - 0.5) * 1.4;
+    pos.x += (Math.random() - 0.5) * 0.4;
+    pos.z += (Math.random() - 0.5) * 0.4;
   } else {
-    const angle = (camera.rotation.y || 0) + (Math.random() - 0.5) * Math.PI;
-    const dist  = 1.5 + Math.random() * 2.5;
-    pos = new THREE.Vector3(
-      camera.position.x + Math.sin(angle) * dist,
-      0,
-      camera.position.z - Math.cos(angle) * dist
-    );
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.y = 0; dir.normalize();
+    pos = new THREE.Vector3();
+    camera.getWorldPosition(pos);
+    pos.addScaledVector(dir, 1.5);
+    pos.y = 0;
   }
-  spawnCollectibleAt(pos);
-}
 
-/* ─── Spawn a collectible mesh at a world position ───────────────────────── */
-function spawnCollectibleAt(pos) {
-  if (GAME.collectibles.length >= MAX_COLLECTIBLES) return;
-  const def   = pickCollectibleDef();
-  const mesh  = buildCollectibleMesh(def);
-  const baseY = pos.y + 0.18;
-  mesh.position.set(pos.x, baseY, pos.z);
+  /* Chest body */
+  const geo = new THREE.BoxGeometry(0.40, 0.30, 0.30);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xCC7722, emissive: 0x663300, emissiveIntensity: 1.0,
+    roughness: 0.2, metalness: 0.8,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos);
   mesh.castShadow = true;
   scene.add(mesh);
 
-  /* Glow point light for rare / legendary */
-  let light = null;
-  if (def.rarity === 'legendary') {
-    light = new THREE.PointLight(def.color || 0xFF7700, 1.2, 1.5);
-    light.position.copy(mesh.position);
-    scene.add(light);
-  } else if (def.rarity === 'rare') {
-    light = new THREE.PointLight(def.color || 0xBB44FF, 0.6, 1.0);
-    light.position.copy(mesh.position);
-    scene.add(light);
-  }
+  /* Gold glow */
+  const light = new THREE.PointLight(0xFFAA00, 3.0, 3.0);
+  light.position.copy(pos);
+  scene.add(light);
 
-  GAME.collectibles.push({
-    mesh,
-    def,
-    baseY,
-    bobOffset: Math.random() * Math.PI * 2,
-    bobSpeed:  0.8 + Math.random() * 0.6,
-    light,
-  });
-
+  GAME.treasureEntry = { mesh, light, baseY: pos.y };
   popIn(mesh);
-  updatePlacedCount();
+  showToast('💰 TAP THE GLOWING CHEST to dig up the treasure!', 6000);
+  updateStatus('Treasure chest spotted — tap it!');
 }
 
-/* ─── Build a Three.js mesh for a collectible type ───────────────────────── */
-function buildCollectibleMesh(def) {
-  let geo;
-  switch (def.type) {
-    case 'coin':    geo = new THREE.CylinderGeometry(0.09, 0.09, 0.018, 32); break;
-    case 'gem':     geo = new THREE.OctahedronGeometry(0.10, 0);             break;
-    case 'potion':  geo = new THREE.SphereGeometry(0.075, 20, 20);          break;
-    case 'crystal': geo = new THREE.IcosahedronGeometry(0.095, 1);          break;
-    case 'chest':   geo = new THREE.BoxGeometry(0.16, 0.12, 0.14);         break;
-    case 'star':    geo = new THREE.OctahedronGeometry(0.12, 1);            break;
-    case 'relic':   geo = new THREE.DodecahedronGeometry(0.10, 0);         break;
-    case 'orb':     geo = new THREE.SphereGeometry(0.10, 28, 28);          break;
-    default:        geo = new THREE.SphereGeometry(0.08, 16, 16);
-  }
+/* ─── Collect the AR treasure chest ──────────────────────────────────────── */
+function collectARTreasure() {
+  if (!GAME.treasureEntry) return;
+  const { mesh, light } = GAME.treasureEntry;
 
-  /* Gems get a random hue */
-  let color    = def.color;
-  let emissive = def.emissive;
-  if (def.type === 'gem') {
-    const hue = Math.random();
-    color    = new THREE.Color().setHSL(hue, 0.95, 0.55).getHex();
-    emissive = new THREE.Color().setHSL(hue, 0.8, 0.15).getHex();
-  }
+  /* Score: 500 base + distance bonus (closer start = bigger bonus) */
+  const distBonus = Math.max(0, Math.round(300 - GAME.distToTreasure * 2));
+  GAME.score += 500 + distBonus;
 
-  const emissiveIntensity = { common: 0.3, uncommon: 0.55, rare: 0.8, legendary: 1.2 }[def.rarity];
-
-  const mat = new THREE.MeshStandardMaterial({
-    color:             color !== null ? color : 0xffffff,
-    emissive:          emissive !== null ? emissive : 0x000000,
-    emissiveIntensity,
-    roughness: def.rarity === 'legendary' ? 0.08 : 0.3,
-    metalness: def.rarity === 'legendary' ? 0.95 : 0.55,
-  });
-
-  return new THREE.Mesh(geo, mat);
-}
-
-/* ─── Try to collect the nearest collectible within COLLECT_RADIUS ───────── */
-function tryCollectNear(pos) {
-  if (!GAME.collectibles.length) return false;
-
-  let bestIdx  = -1;
-  let bestDist = COLLECT_RADIUS;
-  GAME.collectibles.forEach((entry, i) => {
-    const d = pos.distanceTo(entry.mesh.position);
-    if (d < bestDist) { bestDist = d; bestIdx = i; }
-  });
-
-  if (bestIdx >= 0) {
-    collectItem(bestIdx);
-    return true;
-  }
-  return false;
-}
-
-/* ─── Collect item at index ──────────────────────────────────────────────── */
-function collectItem(idx) {
-  const entry = GAME.collectibles.splice(idx, 1)[0];
-  const { mesh, def, light } = entry;
-
-  /* Streak */
-  GAME.streak++;
-  GAME.streakTimer = STREAK_WINDOW;
-  if (GAME.streak > GAME.maxStreak) GAME.maxStreak = GAME.streak;
-  GAME.multiplier = calcMultiplier(GAME.streak);
-  if (GAME.multiplier > GAME.maxMultiplier) GAME.maxMultiplier = GAME.multiplier;
-
-  /* Score */
-  const pts = def.points * GAME.multiplier;
-  GAME.score += pts;
-  GAME.totalCollected++;
-
-  /* Remove glow light */
-  if (light) scene.remove(light);
-
+  scene.remove(light);
   animateCollection(mesh);
-  showCollectToast(def, pts);
-  updateGameHUD();
-  updatePlacedCount();
+  GAME.treasureEntry = null;
+
+  showToast(`🏆 TREASURE FOUND! +${500 + distBonus} pts!`, 4000);
+  setTimeout(() => endGame(true), 1800);
 }
 
-/* ─── Collection pop-out animation ──────────────────────────────────────── */
-function animateCollection(mesh) {
-  const start      = performance.now();
-  const dur        = 380;
-  const startScale = mesh.scale.x;
-  mesh.material.transparent = true;
+/* ─── Per-frame game tick ─────────────────────────────────────────────────── */
+function tickGame(delta, timestamp) {
+  if (GAME.phase === 'idle' || GAME.phase === 'found') return;
 
-  (function tick() {
-    const t    = Math.min((performance.now() - start) / dur, 1);
-    const rise = Math.sin(t * Math.PI);           // arch: 0 → 1 → 0
-    mesh.scale.setScalar(startScale * (1 + rise * 0.6));
-    mesh.material.opacity = 1 - t;
-    if (t < 1) {
-      requestAnimationFrame(tick);
-    } else {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    }
-  }());
-}
+  /* Simulation: derive virtual GPS from camera movement */
+  if (GAME._noGPS) simTickGPS(delta);
 
-/* ─── Show a +points toast ───────────────────────────────────────────────── */
-let _toastTimer = null;
-function showCollectToast(def, pts) {
-  const el      = document.getElementById('collect-toast');
-  const rStyle  = RARITY_STYLE[def.rarity];
-  const multStr = GAME.multiplier > 1
-    ? ` <span class="toast-mult">×${GAME.multiplier}</span>` : '';
-  el.innerHTML = `<span style="color:${rStyle.textColor}">${def.emoji} ${def.label}</span>`
-               + `  <strong>+${pts.toLocaleString()}</strong>${multStr}`;
-  el.style.borderColor = rStyle.borderColor;
-  el.style.display     = '';
-  el.style.opacity     = '1';
-  el.style.transform   = 'translateX(-50%) translateY(0)';
-  if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => {
-    el.style.opacity   = '0';
-    el.style.transform = 'translateX(-50%) translateY(-20px)';
-    setTimeout(() => { el.style.display = 'none'; }, 420);
-  }, 1800);
-}
-
-/* ─── Streak multiplier ──────────────────────────────────────────────────── */
-function calcMultiplier(streak) {
-  if (streak >= 10) return 5;
-  if (streak >= 6)  return 3;
-  if (streak >= 3)  return 2;
-  return 1;
-}
-
-function resetStreak() {
-  GAME.streak     = 0;
-  GAME.multiplier = 1;
-  GAME.streakTimer = 0;
-  updateGameHUD();
-}
-
-/* ─── Animate all collectibles (bob + rotate + sync lights) ─────────────── */
-function tickGameAnimations(timestamp, delta) {
-  const t = timestamp * 0.001;
-  for (const entry of GAME.collectibles) {
-    const { mesh, baseY, bobOffset, bobSpeed, light } = entry;
-    mesh.position.y = baseY + 0.07 * Math.sin(t * bobSpeed + bobOffset);
-    mesh.rotation.y += delta * 1.2;
+  /* Animate treasure chest */
+  if (GAME.treasureEntry) {
+    const { mesh, light, baseY } = GAME.treasureEntry;
+    mesh.position.y = baseY + 0.09 * Math.sin(timestamp * 0.002);
+    mesh.rotation.y += delta * 1.8;
     if (light) light.position.copy(mesh.position);
   }
 
-  /* Fade out footprints over their lifetime */
+  /* Footprint fade */
+  tickFootprints(delta);
+
+  /* Compass arrow */
+  updateCompassArrow();
+
+  /* Score display */
+  document.getElementById('game-score').textContent = GAME.score.toLocaleString();
+}
+
+/* ─── Simulation: derive distance from camera position ───────────────────── */
+function simTickGPS(delta) {
+  const camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+
+  if (GAME._simLastCamPos) {
+    const moved = camPos.distanceTo(GAME._simLastCamPos);
+    if (moved > 0.005) {
+      const scale = SIM_MOVEMENT_SCALE;  // multiply real-world sim movement
+      const effective = moved * scale;
+      GAME.totalDistM += effective;
+      GAME.footAccumM += effective;
+      GAME.clueAccumM += effective;
+
+      if (GAME.footAccumM >= FOOTPRINT_DIST_M) { GAME.footAccumM = 0; placeFootprint(); }
+
+      if (GAME.phase === 'explore' && GAME.clueAccumM >= CLUE_INTERVAL_M) {
+        GAME.clueAccumM = 0;
+        collectClue(null);
+      }
+
+      if (GAME.distToTreasure < Infinity) {
+        GAME.distToTreasure = Math.max(0, GAME.distToTreasure - effective);
+        if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_SPAWN_M) {
+          spawnARTreasureChest();
+        }
+      }
+
+      updateExploreHUD();
+      updateHuntHUD();
+      updatePlacedCount();
+
+      /* Redraw mini-map occasionally */
+      if (Math.random() < MINIMAP_UPDATE_PROB) {
+        /* Simulate a fake GPS path for the map */
+        const lastPt = GAME.gpsPath[GAME.gpsPath.length - 1] || { lat: 0, lng: 0, mx: 0, mz: 0 };
+        GAME.gpsPath.push({
+          lat: lastPt.lat, lng: lastPt.lng,
+          mx: lastPt.mx + (camPos.x - (GAME._simLastCamPos ? GAME._simLastCamPos.x : camPos.x)) * scale * 0.1,
+          mz: lastPt.mz + (camPos.z - (GAME._simLastCamPos ? GAME._simLastCamPos.z : camPos.z)) * scale * 0.1,
+        });
+        if (GAME.gpsPath.length > MAX_GPS_PTS) GAME.gpsPath.shift();
+        drawMiniMap();
+      }
+    }
+  }
+  GAME._simLastCamPos = camPos.clone();
+}
+
+/* ─── Footprint trail ────────────────────────────────────────────────────── */
+function placeFootprint() {
+  if (GAME.footprints.length >= MAX_FOOTPRINTS) {
+    const old = GAME.footprints.shift();
+    scene.remove(old.mesh);
+    old.mesh.geometry.dispose();
+    old.mesh.material.dispose();
+  }
+  const geo  = new THREE.CircleGeometry(0.06, 12).rotateX(-Math.PI / 2);
+  const mat  = new THREE.MeshBasicMaterial({
+    color: 0x00ff88, transparent: true, opacity: 0.38,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  const cam  = new THREE.Vector3();
+  camera.getWorldPosition(cam);
+  const groundY = lastReticlePos ? lastReticlePos.y : 0;
+  mesh.position.set(cam.x, groundY + 0.004, cam.z);
+  scene.add(mesh);
+  GAME.footprints.push({ mesh, age: 0 });
+}
+
+function tickFootprints(delta) {
   for (let i = GAME.footprints.length - 1; i >= 0; i--) {
-    const fp   = GAME.footprints[i];
-    const life = 30;
+    const fp = GAME.footprints[i];
     fp.age += delta;
-    fp.mesh.material.opacity = Math.max(0, 0.28 * (1 - fp.age / life));
-    if (fp.age >= life) {
+    fp.mesh.material.opacity = Math.max(0, 0.38 * (1 - fp.age / FOOTPRINT_LIFE_S));
+    if (fp.age >= FOOTPRINT_LIFE_S) {
       scene.remove(fp.mesh);
       fp.mesh.geometry.dispose();
       fp.mesh.material.dispose();
@@ -1255,37 +1308,16 @@ function tickGameAnimations(timestamp, delta) {
   }
 }
 
-/* ─── Drop a footprint trail marker at the camera's ground position ──────── */
-function placeFootprint() {
-  if (GAME.footprints.length >= MAX_FOOTPRINTS) {
-    const old = GAME.footprints.shift();
-    scene.remove(old.mesh);
-    old.mesh.geometry.dispose();
-    old.mesh.material.dispose();
+/* ─── Clear game objects ─────────────────────────────────────────────────── */
+function clearGameObjects() {
+  if (GAME.treasureEntry) {
+    const { mesh, light } = GAME.treasureEntry;
+    scene.remove(mesh); scene.remove(light);
+    mesh.geometry.dispose(); mesh.material.dispose();
+    GAME.treasureEntry = null;
   }
-  const geo  = new THREE.CircleGeometry(0.07, 12).rotateX(-Math.PI / 2);
-  const mat  = new THREE.MeshBasicMaterial({
-    color: 0x00ff88, transparent: true, opacity: 0.28,
-    depthWrite: false, side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  const cam  = new THREE.Vector3();
-  camera.getWorldPosition(cam);
-  mesh.position.set(cam.x, 0.005, cam.z);
-  scene.add(mesh);
-  GAME.footprints.push({ mesh, age: 0 });
-}
-
-/* ─── Clear all game collectibles and footprints ─────────────────────────── */
-function clearGameCollectibles() {
-  for (const { mesh, light } of GAME.collectibles) {
-    scene.remove(mesh);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
-    if (light) scene.remove(light);
-  }
-  GAME.collectibles = [];
   clearFootprints();
+  GAME.arChestSpawned = false;
 }
 
 function clearFootprints() {
@@ -1297,42 +1329,240 @@ function clearFootprints() {
   GAME.footprints = [];
 }
 
-/* ─── Update the game HUD elements ──────────────────────────────────────── */
-function updateGameHUD() {
-  document.getElementById('game-score').textContent = GAME.score.toLocaleString();
+/* ─── Mini-map ───────────────────────────────────────────────────────────── */
+function drawMiniMap() {
+  const canvas = document.getElementById('minimap-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W   = canvas.width;
+  const H   = canvas.height;
+  ctx.clearRect(0, 0, W, H);
 
-  const timerEl = document.getElementById('game-timer');
-  timerEl.textContent = formatTime(GAME.timeLeft);
-  if (GAME.timeLeft <= 30) {
-    timerEl.classList.add('danger');
-  } else {
-    timerEl.classList.remove('danger');
+  /* Background */
+  ctx.fillStyle = 'rgba(4,8,18,0.90)';
+  mmRoundRect(ctx, 0, 0, W, H, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,255,136,0.30)';
+  ctx.lineWidth   = 1;
+  mmRoundRect(ctx, 0, 0, W, H, 10); ctx.stroke();
+
+  if (GAME.gpsPath.length === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font      = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(GAME._noGPS ? 'Sim mode' : 'Searching GPS…', W / 2, H / 2 - 4);
+    ctx.fillText(`${Math.round(GAME.totalDistM)}m walked`, W / 2, H / 2 + 10);
+    drawNorthDot(ctx, W - 12, 12);
+    return;
   }
 
-  /* Streak bar */
-  const streakBar  = document.getElementById('game-streak-bar');
-  const streakText = document.getElementById('game-streak-text');
-  if (GAME.streak >= 3) {
-    let streakRarity;
-    if (GAME.streak >= 10) {
-      streakRarity = 'legendary';
-    } else if (GAME.streak >= 6) {
-      streakRarity = 'rare';
-    } else {
-      streakRarity = 'uncommon';
+  /* Bounds */
+  let minX = 0, maxX = 0, minZ = 0, maxZ = 0;
+  for (const pt of GAME.gpsPath) {
+    minX = Math.min(minX, pt.mx); maxX = Math.max(maxX, pt.mx);
+    minZ = Math.min(minZ, pt.mz); maxZ = Math.max(maxZ, pt.mz);
+  }
+  /* Include treasure */
+  if (GAME.treasureGPS && GAME.gpsPath.length > 0) {
+    const o  = GAME.gpsPath[0];
+    const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    minX = Math.min(minX, tl.mx); maxX = Math.max(maxX, tl.mx);
+    minZ = Math.min(minZ, tl.mz); maxZ = Math.max(maxZ, tl.mz);
+  }
+  const rangeX = Math.max(maxX - minX, 20) * MINIMAP_PADDING;
+  const rangeZ = Math.max(maxZ - minZ, 20) * MINIMAP_PADDING;
+  const scale  = Math.min((W - 20) / rangeX, (H - 22) / rangeZ);
+  const cx     = (minX + maxX) / 2;
+  const cz     = (minZ + maxZ) / 2;
+  const toC    = (mx, mz) => ({ x: W / 2 + (mx - cx) * scale, y: H / 2 + (mz - cz) * scale });
+
+  /* Dotted trail */
+  if (GAME.gpsPath.length >= 2) {
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath();
+    const p0 = toC(GAME.gpsPath[0].mx, GAME.gpsPath[0].mz);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < GAME.gpsPath.length; i++) {
+      const p = toC(GAME.gpsPath[i].mx, GAME.gpsPath[i].mz);
+      ctx.lineTo(p.x, p.y);
     }
-    const rs = RARITY_STYLE[streakRarity];
-    streakText.textContent = `${GAME.streak}× Streak  ×${GAME.multiplier} pts`;
-    streakText.style.color = rs.textColor;
-    streakBar.style.opacity = '1';
-  } else {
-    streakText.textContent = '';
-    streakBar.style.opacity = '0';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  /* Start marker */
+  const sp = toC(0, 0);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, 2.5, 0, Math.PI * 2); ctx.fill();
+
+  /* Treasure marker */
+  if (GAME.treasureGPS && GAME.gpsPath.length > 0) {
+    const o  = GAME.gpsPath[0];
+    const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    const tp = toC(tl.mx, tl.mz);
+    if (GAME.phase === 'hunt' || GAME.phase === 'found') {
+      ctx.font = '13px serif'; ctx.textAlign = 'center';
+      ctx.fillText('💰', tp.x, tp.y + 5);
+    } else {
+      ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('?', tp.x, tp.y + 4);
+    }
+  }
+
+  /* Player dot */
+  const lp = GAME.gpsPath[GAME.gpsPath.length - 1];
+  const pp = toC(lp.mx, lp.mz);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(pp.x, pp.y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#00ff88';
+  ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+
+  /* Footer stats */
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.font = '8px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(`${Math.round(GAME.totalDistM)}m`, 5, H - 4);
+  if (GAME.distToTreasure < Infinity) {
+    ctx.textAlign = 'right';
+    ctx.fillText(`💰 ${Math.round(GAME.distToTreasure)}m`, W - 5, H - 4);
+  }
+
+  drawNorthDot(ctx, W - 12, 12);
+}
+
+function mmRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);     ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);     ctx.quadraticCurveTo(x, y + h,     x, y + h - r);
+  ctx.lineTo(x, y + r);         ctx.quadraticCurveTo(x, y,         x + r, y);
+  ctx.closePath();
+}
+
+function drawNorthDot(ctx, cx, cy) {
+  ctx.strokeStyle = 'rgba(255,170,0,0.5)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle   = '#ffaa00';
+  ctx.font        = 'bold 8px sans-serif';
+  ctx.textAlign   = 'center';
+  ctx.fillText('N', cx, cy + 3);
+}
+
+/* ─── Compass arrow ──────────────────────────────────────────────────────── */
+function updateCompassArrow() {
+  const el = document.getElementById('compass-arrow');
+  if (!el) return;
+  if (GAME.distToTreasure === Infinity || GAME.phase === 'explore') {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.style.transform = `rotate(${GAME.bearingToTreasure}deg)`;
+  const ratio = Math.min(1, GAME.distToTreasure / 80);
+  const r = Math.round(255 * ratio);
+  const g = Math.round(220 * (1 - ratio));
+  el.style.color = `rgb(${r},${g},40)`;
+}
+
+/* ─── Explore HUD ────────────────────────────────────────────────────────── */
+function updateExploreHUD() {
+  const distEl  = document.getElementById('explore-dist');
+  const clueEl  = document.getElementById('explore-clues');
+  if (distEl) distEl.textContent = `${Math.round(GAME.totalDistM)}m`;
+  if (clueEl) clueEl.textContent = `${GAME.clues.length}/${CLUES_NEEDED}`;
+}
+
+/* ─── Hunt HUD ───────────────────────────────────────────────────────────── */
+function updateHuntHUD() {
+  const el = document.getElementById('hunt-dist');
+  if (el && GAME.distToTreasure < Infinity) {
+    el.textContent = `${Math.round(GAME.distToTreasure)}m`;
   }
 }
 
-function formatTime(s) {
-  const m   = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
+/* ─── Toast helper ───────────────────────────────────────────────────────── */
+let _toastTimer = null;
+function showToast(html, durationMs) {
+  durationMs = durationMs || 2500;
+  const el = document.getElementById('collect-toast');
+  el.innerHTML         = html;
+  el.style.display     = '';
+  el.style.opacity     = '1';
+  el.style.transform   = 'translateX(-50%) translateY(0)';
+  el.style.borderColor = 'rgba(0,255,136,0.45)';
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.style.opacity   = '0';
+    el.style.transform = 'translateX(-50%) translateY(-20px)';
+    setTimeout(() => { el.style.display = 'none'; }, 420);
+  }, durationMs);
+}
+
+function showClueToast(num, text) {
+  showToast(`🗝️ <strong>Clue ${num} collected!</strong><br><small style="color:#ccc">${text}</small>`, 6000);
+}
+
+/* ─── Pop-out collection animation (reused for treasure) ─────────────────── */
+function animateCollection(mesh) {
+  const start      = performance.now();
+  const dur        = 420;
+  const startScale = mesh.scale.x;
+  mesh.material.transparent = true;
+
+  (function tick() {
+    const t    = Math.min((performance.now() - start) / dur, 1);
+    const rise = Math.sin(t * Math.PI);
+    mesh.scale.setScalar(startScale * (1 + rise * 0.7));
+    mesh.material.opacity = 1 - t;
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
+  }());
+}
+
+/* ─── Haversine distance (metres) ────────────────────────────────────────── */
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R    = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a    = Math.sin(dLat / 2) ** 2 +
+               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+               Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* ─── Compass bearing (degrees, 0=N 90=E …) ─────────────────────────────── */
+function bearingDeg(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const la1  = lat1 * Math.PI / 180;
+  const la2  = lat2 * Math.PI / 180;
+  const y    = Math.sin(dLng) * Math.cos(la2);
+  const x    = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+/* ─── GPS delta → local XZ metres ───────────────────────────────────────── */
+function gpsToLocal(originLat, originLng, lat, lng) {
+  const mx = haversineM(originLat, originLng, originLat, lng) * (lng >= originLng ? 1 : -1);
+  const mz = haversineM(originLat, originLng, lat, originLng) * (lat >= originLat ? -1 : 1);
+  return { mx, mz };
+}
+
+/* ─── Destination GPS from origin + bearing + distance ──────────────────── */
+function gpsDestination(lat, lng, bearingDegrees, distMetres) {
+  const R  = 6371000;
+  const δ  = distMetres / R;
+  const θ  = bearingDegrees * Math.PI / 180;
+  const φ1 = lat * Math.PI / 180;
+  const λ1 = lng * Math.PI / 180;
+  const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+  const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+                              Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+  return { lat: φ2 * 180 / Math.PI, lng: λ2 * 180 / Math.PI };
 }
