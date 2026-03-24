@@ -48,15 +48,11 @@
     </div>
   </div>
 
-  <!-- Hunt HUD: shown after all clues collected -->
+  <!-- Solve HUD: shown after all clues collected — riddle leads to treasure -->
   <div id="hunt-hud" style="display:none;">
-    <div id="compass-container">
-      <div id="compass-arrow">▲</div>
-      <div id="compass-label">TREASURE</div>
-    </div>
-    <div class="game-hud-block hunt-dist-block">
-      <span class="game-hud-label">AWAY</span>
-      <span id="hunt-dist">—</span>
+    <div id="solve-riddle-container">
+      <div class="game-hud-label">🔍 TREASURE RIDDLE</div>
+      <div id="solve-riddle">—</div>
     </div>
   </div>
 
@@ -165,11 +161,12 @@
   <div id="game-start-screen">
     <div class="game-logo">🗺️</div>
     <h2>Trail Treasure Hunt</h2>
-    <p class="game-tagline">Walk the world. Follow the clues. Dig up the treasure.</p>
+    <p class="game-tagline">Walk the world. Collect clues. Backtrack to the treasure.</p>
     <div class="game-rules">
       <div class="rule">🛰️ GPS traces your real-world path on the mini-map</div>
-      <div class="rule">🗝️ Collect 3 directional clues as you walk</div>
-      <div class="rule">🧭 An AR compass guides you to the buried treasure</div>
+      <div class="rule">🗝️ Collect 5 directional clues as you walk</div>
+      <div class="rule">🗺️ Each clue guides you further — the treasure is somewhere you've been!</div>
+      <div class="rule">🔍 A riddle reveals the location — use clue landmarks to find it</div>
       <div class="rule">💰 Tap the glowing chest to dig it up!</div>
     </div>
     <div id="game-highscore-display" style="display:none;">

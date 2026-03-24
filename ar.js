@@ -29,14 +29,12 @@
 
 /* ─── Trail Hunt constants ────────────────────────────────────────────────── */
 const CLUE_INTERVAL_M    = 40;    // metres walked per clue
-const CLUES_NEEDED       = 3;     // clues needed before compass fully unlocked
-const TREASURE_SPAWN_M   = 8;     // GPS metres before AR chest appears
-const TREASURE_MIN_M     = 40;    // min metres from start to bury
-const TREASURE_MAX_M     = 120;   // max metres from start to bury
-const FOOTPRINT_DIST_M   = 6;     // metres between footprint drops
-const FOOTPRINT_LIFE_S   = 90;    // seconds before a footprint fades away
-const MAX_FOOTPRINTS     = 40;    // max trail markers
-const MAX_GPS_PTS        = 200;   // max GPS waypoints stored
+const CLUES_NEEDED       = 5;     // clues to collect before treasure riddle is revealed
+const TREASURE_NEAR_M    = 8;     // GPS metres from backtrack point before AR chest appears
+const FOOTPRINT_DIST_M   = 4;     // metres between trail marker drops
+const FOOTPRINT_LIFE_S   = 300;   // seconds before a trail marker fades (5 minutes)
+const MAX_FOOTPRINTS     = 80;    // max trail markers in the scene
+const MAX_GPS_PTS        = 1000;  // max GPS waypoints stored (long-walk support)
 const GPS_MIN_MOVE_M     = 2;     // minimum GPS movement (m) to register (filters jitter)
 const SIM_MOVEMENT_SCALE = 15;    // multiply sim-mode camera distance for virtual metres
 const MINIMAP_SIZE       = 220;   // mini-map canvas px
@@ -46,7 +44,7 @@ const CLUE_COLLECT_RADIUS_M = 2.0; // metres from AR clue gem to auto-collect
 
 /* ─── Game state ──────────────────────────────────────────────────────────── */
 const GAME = {
-  phase:            'idle',  // 'idle' | 'explore' | 'hunt' | 'found'
+  phase:            'idle',  // 'idle' | 'explore' | 'solve' | 'found'
   score:            0,
   highScore:        0,
 
@@ -54,18 +52,21 @@ const GAME = {
   gpsPath:          [],      // [{lat, lng, mx, mz}]  mx/mz = metres from origin
   totalDistM:       0,       // total metres walked
   clues:            [],      // collected clue strings
+  clueSpots:        [],      // [{mx, mz, num}] — where each clue was collected (map markers)
   clueAccumM:       0,       // metres since last clue
   footAccumM:       0,       // metres since last footprint
+  footprintColorIdx: 0,      // cycles through pillar colours
 
   /* GPS watch */
   watchId:          null,
   lastGPS:          null,    // {lat, lng}
   gpsReady:         false,
 
-  /* treasure */
-  treasureGPS:      null,    // {lat, lng}
+  /* treasure — not pre-set; defined after all clues are collected */
+  treasureGPS:      null,    // {lat, lng} — set by defineBacktrackTreasure()
+  treasureMXMZ:     null,    // {mx, mz}   — local coords, used in sim mode too
+  treasureRiddle:   null,    // string shown to player in solve phase
   distToTreasure:   Infinity,
-  bearingToTreasure: 0,
   arChestSpawned:   false,
   treasureEntry:    null,    // {mesh, light, baseY}
 
@@ -74,7 +75,7 @@ const GAME = {
   _simLastCamPos:   null,
 
   /* AR trail markers */
-  footprints:       [],      // [{mesh, age}]
+  footprints:       [],      // [{mesh, light, age}]
 
   /* AR clue pickups */
   arClues:          [],      // [{mesh, light, baseY, clueIdx, clueText, mx, mz}]
@@ -267,7 +268,7 @@ function startSimulation() {
   document.getElementById('start-ar-btn').textContent = '↺ Restart';
   document.getElementById('start-ar-btn').disabled    = false;
   document.getElementById('reticle-hint').style.display = '';
-  document.getElementById('reticle-hint').textContent   = 'Walk to collect clues — find the buried treasure!';
+  document.getElementById('reticle-hint').textContent   = 'Walk to collect clues — then backtrack to find the treasure!';
 
   document.getElementById('no-ar-banner').style.display = 'block';
   setTimeout(() => { document.getElementById('no-ar-banner').style.display = 'none'; }, 4500);
@@ -297,7 +298,7 @@ function onSimClick(e) {
   const target = groundPositionFromNDC(ndc);
   if (!target) return;
 
-  if (GAME.phase === 'hunt' || GAME.phase === 'explore') {
+  if (GAME.phase === 'solve' || GAME.phase === 'explore') {
     /* Try to tap the AR treasure chest */
     if (GAME.treasureEntry) {
       const d = target.distanceTo(GAME.treasureEntry.mesh.position);
@@ -317,7 +318,7 @@ function onSimTouch(e) {
   const target = groundPositionFromNDC(ndc);
   if (!target) return;
 
-  if (GAME.phase === 'hunt' || GAME.phase === 'explore') {
+  if (GAME.phase === 'solve' || GAME.phase === 'explore') {
     if (GAME.treasureEntry) {
       const d = target.distanceTo(GAME.treasureEntry.mesh.position);
       if (d < 0.8) { collectARTreasure(); return; }
@@ -396,7 +397,7 @@ function onXREnd() {
   clearPlaneOverlays();
 
   /* Stop any running game */
-  if (GAME.phase === 'explore' || GAME.phase === 'hunt') {
+  if (GAME.phase === 'explore' || GAME.phase === 'solve') {
     stopGPS();
     clearGameObjects();
     GAME.phase = 'idle';
@@ -416,8 +417,8 @@ function onXREnd() {
 }
 
 function onXRSelect() {
-  /* Try to collect the AR treasure chest (hunt / explore phase) */
-  if ((GAME.phase === 'hunt' || GAME.phase === 'explore') && GAME.treasureEntry) {
+  /* Try to collect the AR treasure chest (solve / explore phase) */
+  if ((GAME.phase === 'solve' || GAME.phase === 'explore') && GAME.treasureEntry) {
     if (lastReticlePos) {
       const d = lastReticlePos.distanceTo(GAME.treasureEntry.mesh.position);
       if (d < 1.0) { collectARTreasure(); return; }
@@ -427,7 +428,7 @@ function onXRSelect() {
     }
   }
   /* Try to tap-collect a nearby AR clue gem */
-  if ((GAME.phase === 'explore' || GAME.phase === 'hunt') && GAME.arClues.length > 0) {
+  if ((GAME.phase === 'explore' || GAME.phase === 'solve') && GAME.arClues.length > 0) {
     if (lastReticlePos) {
       for (let i = GAME.arClues.length - 1; i >= 0; i--) {
         const clue = GAME.arClues[i];
@@ -875,7 +876,7 @@ function updateStatus(msg) {
 
 function updatePlacedCount() {
   const phase = GAME.phase;
-  if (phase === 'explore' || phase === 'hunt') {
+  if (phase === 'explore' || phase === 'solve') {
     document.getElementById('placed-count').textContent =
       `${Math.round(GAME.totalDistM)}m · Clues: ${GAME.clues.length}/${CLUES_NEEDED}`;
   } else {
@@ -944,14 +945,17 @@ function startGame() {
   GAME.gpsPath          = [];
   GAME.totalDistM       = 0;
   GAME.clues            = [];
+  GAME.clueSpots        = [];
   GAME.clueAccumM       = 0;
   GAME.footAccumM       = 0;
+  GAME.footprintColorIdx = 0;
   GAME.watchId          = null;
   GAME.lastGPS          = null;
   GAME.gpsReady         = false;
   GAME.treasureGPS      = null;
+  GAME.treasureMXMZ     = null;
+  GAME.treasureRiddle   = null;
   GAME.distToTreasure   = Infinity;
-  GAME.bearingToTreasure = 0;
   GAME.arChestSpawned   = false;
   GAME.treasureEntry    = null;
   GAME._noGPS           = false;
@@ -970,7 +974,7 @@ function startGame() {
   drawMiniMap();
 
   startGPS();
-  updateStatus('Exploring… walk to collect clues and find the buried treasure!');
+  updateStatus('Exploring… walk to collect clues — the treasure is somewhere you\'ve already been!');
 }
 
 /* ─── End game ────────────────────────────────────────────────────────────── */
@@ -1034,12 +1038,11 @@ function onGPSUpdate(pos) {
   const lat = pos.coords.latitude;
   const lng = pos.coords.longitude;
 
-  /* First fix — set origin and bury treasure */
+  /* First fix — set origin */
   if (!GAME.gpsReady) {
     GAME.gpsReady = true;
     GAME.lastGPS  = { lat, lng };
     GAME.gpsPath.push({ lat, lng, mx: 0, mz: 0 });
-    buryTreasure(lat, lng);
     showToast('🛰️ GPS locked! Walk to collect clues.', 3000);
     drawMiniMap();
     return;
@@ -1069,14 +1072,12 @@ function onGPSUpdate(pos) {
     }
   }
 
-  /* Treasure bearing + distance */
-  if (GAME.treasureGPS) {
-    GAME.distToTreasure    = haversineM(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    GAME.bearingToTreasure = bearingDeg(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_SPAWN_M) {
+  /* Treasure proximity check (solve phase only — chest spawns when player returns) */
+  if (GAME.phase === 'solve' && GAME.treasureGPS) {
+    GAME.distToTreasure = haversineM(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_NEAR_M) {
       spawnARTreasureChest();
     }
-    updateHuntHUD();
   }
 
   updateExploreHUD();
@@ -1090,25 +1091,85 @@ function onGPSError(err) {
   GAME._noGPS = true;
   console.warn('GPS error:', err);
   showToast('🎮 No GPS — sim mode: move the camera to explore!', 4000);
-  burySimTreasure();
+  /* No pre-buried treasure — defined dynamically after all clues are collected */
 }
 
-/* ─── Bury treasure at random GPS position from start ────────────────────── */
-function buryTreasure(originLat, originLng) {
-  const dist    = TREASURE_MIN_M + Math.random() * (TREASURE_MAX_M - TREASURE_MIN_M);
-  const bearing = Math.random() * 360;
-  GAME.treasureGPS       = gpsDestination(originLat, originLng, bearing, dist);
-  GAME.distToTreasure    = dist;
-  GAME.bearingToTreasure = bearing;
-  showToast('💰 Treasure buried nearby! Collect clues to find it.', 3500);
+/* ─── Define treasure location along the already-walked path ─────────────── */
+/* Called once all CLUES_NEEDED clues are collected.                          */
+/* Picks a GPS path point from early in the walk (20–50% in) so the player   */
+/* must backtrack to find it.  The location is described as a riddle in terms  */
+/* of paces and direction from the nearest numbered clue landmark.            */
+function defineBacktrackTreasure() {
+  const path = GAME.gpsPath;
+
+  if (path.length < 4 || GAME.clueSpots.length === 0) {
+    /* Fallback if path is too short */
+    GAME.treasureRiddle = 'The treasure is hidden somewhere along your path — retrace your steps!';
+    GAME.distToTreasure = 30;
+    _activateSolvePhase();
+    return;
+  }
+
+  /* Pick a point 20–50% into the walked path */
+  const idx  = Math.max(1, Math.floor(path.length * (0.20 + Math.random() * 0.30)));
+  const tPt  = path[idx];
+
+  GAME.treasureMXMZ = { mx: tPt.mx, mz: tPt.mz };
+
+  if (!GAME._noGPS) {
+    GAME.treasureGPS  = { lat: tPt.lat, lng: tPt.lng };
+    const cur         = path[path.length - 1];
+    GAME.distToTreasure = haversineM(cur.lat, cur.lng, tPt.lat, tPt.lng);
+  } else {
+    /* Sim mode: distance in virtual metres */
+    const cur = path[path.length - 1];
+    const dx  = cur.mx - tPt.mx;
+    const dz  = cur.mz - tPt.mz;
+    GAME.distToTreasure = Math.sqrt(dx * dx + dz * dz);
+  }
+
+  /* Find nearest collected clue spot to use as landmark in the riddle */
+  let bestClue = null, bestDist = Infinity;
+  for (let i = 0; i < GAME.clueSpots.length; i++) {
+    const s  = GAME.clueSpots[i];
+    const dx = s.mx - tPt.mx;
+    const dz = s.mz - tPt.mz;
+    const d  = Math.sqrt(dx * dx + dz * dz);
+    if (d < bestDist) { bestDist = d; bestClue = { spot: s, num: i + 1 }; }
+  }
+
+  GAME.treasureRiddle = buildTreasureRiddle(bestClue, bestDist, tPt);
+  _activateSolvePhase();
+}
+
+/* ─── Build the backtrack riddle text ────────────────────────────────────── */
+/* Uses local-coord bearing: mx = east(+)/west(−), mz = south(+)/north(−).  */
+function buildTreasureRiddle(bestClue, distM, tPt) {
+  if (!bestClue || distM < 3) {
+    return 'The treasure is right near one of your clue spots — search around!';
+  }
+  /* Bearing from clue landmark to treasure */
+  const dx      = tPt.mx - bestClue.spot.mx;
+  const dz      = tPt.mz - bestClue.spot.mz;
+  const bearRad = Math.atan2(dx, -dz);  /* atan2(east, north) */
+  const bearDeg = ((bearRad * 180 / Math.PI) + 360) % 360;
+  const cardinal = CARDINALS[Math.round(bearDeg / 45) % 8];
+  const paces    = Math.round(distM / 0.76);
+  const metres   = Math.round(distM);
+  return `~${paces} paces (${metres}m) ${cardinal} from where you found Clue ${bestClue.num}.`;
+}
+
+/* ─── Switch to solve phase and show the riddle HUD ─────────────────────── */
+function _activateSolvePhase() {
+  GAME.phase = 'solve';
+  document.getElementById('hunt-hud').style.display = '';
+  const riddleEl = document.getElementById('solve-riddle');
+  if (riddleEl) riddleEl.textContent = GAME.treasureRiddle;
+  showToast(
+    `🗺️ All ${CLUES_NEEDED} clues found! Retrace your steps — ` + GAME.treasureRiddle,
+    9000
+  );
   drawMiniMap();
-}
-
-/* ─── Simulation fallback: no GPS treasure placement ─────────────────────── */
-function burySimTreasure() {
-  GAME.treasureGPS    = null;
-  GAME.distToTreasure = 60;  // virtual metres
-  showToast('💰 Treasure buried 60m away — walk in sim to find it!', 3500);
 }
 
 /* ─── Spawn an AR clue gem pickup on a detected floor ────────────────────── */
@@ -1116,17 +1177,8 @@ function spawnARClue(currentGPS) {
   const num = GAME.clues.length + GAME.arClues.length + 1;
   if (num > CLUES_NEEDED) return;
 
-  /* Pre-compute clue text from current position */
-  let clueText;
-  if (GAME.treasureGPS && currentGPS) {
-    const dist = haversineM(currentGPS.lat, currentGPS.lng,
-                            GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    const bear = bearingDeg(currentGPS.lat, currentGPS.lng,
-                            GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    clueText = makeClueText(num, dist, bear);
-  } else {
-    clueText = SIM_CLUES[(num - 1) % SIM_CLUES.length];
-  }
+  /* Generate a directional exploration clue — not tied to a pre-set treasure */
+  const clueText = generateExploreClue(num);
 
   /* Place gem on detected floor (hit-test reticle) or ahead of camera */
   let pos;
@@ -1175,9 +1227,11 @@ function spawnARClue(currentGPS) {
 
 /* ─── Collect an AR clue gem (proximity or tap) ───────────────────────────── */
 function collectARClue(clueEntry) {
-  const { mesh, light, clueIdx, clueText } = clueEntry;
+  const { mesh, light, clueIdx, clueText, mx, mz } = clueEntry;
 
   GAME.clues.push(clueText);
+  /* Record collection spot as a numbered landmark on the mini-map */
+  GAME.clueSpots.push({ mx, mz, num: clueIdx });
   GAME.score += 100;
 
   scene.remove(light);
@@ -1190,31 +1244,27 @@ function collectARClue(clueEntry) {
   drawMiniMap();
 
   if (GAME.clues.length >= CLUES_NEEDED && GAME.phase === 'explore') {
-    GAME.phase = 'hunt';
-    document.getElementById('hunt-hud').style.display = '';
-    showToast('🗺️ All clues collected! Use the compass to find the treasure!', 4000);
-    drawMiniMap();
+    /* All clues collected — pick a backtrack location and reveal the riddle */
+    defineBacktrackTreasure();
   }
 }
 
-/* ─── Generate directional clue text ─────────────────────────────────────── */
+/* ─── Generate directional exploration clue text ─────────────────────────── */
+/* Each clue guides the player to keep walking — not toward a pre-set spot.   */
 const CARDINALS = ['north','north-east','east','south-east','south','south-west','west','north-west'];
-function makeClueText(num, distM, bear) {
-  const cardinal = CARDINALS[Math.round(bear / 45) % 8];
-  const paces    = Math.round(distM / 0.76);
+
+function generateExploreClue(num) {
+  const dir      = CARDINALS[Math.floor(Math.random() * CARDINALS.length)];
+  const distHint = 30 + Math.floor(Math.random() * 50);  // 30–80 m hint
   const opts = [
-    `${num}. The treasure is ~${paces} paces to the ${cardinal}.`,
-    `${num}. Head ${cardinal} — about ${Math.round(distM)}m away.`,
-    `${num}. A glimmer to the ${cardinal}… roughly ${paces} paces.`,
-    `${num}. Face ${cardinal} and walk about ${Math.round(distM)} metres.`,
+    `${num}. Continue heading ${dir} for about ${distHint}m.`,
+    `${num}. Head ${dir} — keep walking that way.`,
+    `${num}. Bear ${dir} and explore further.`,
+    `${num}. Turn towards ${dir} and press on.`,
+    `${num}. The path leads ${dir} from here.`,
   ];
   return opts[(num - 1) % opts.length];
 }
-const SIM_CLUES = [
-  '1. Something shiny lies to the north-east…',
-  '2. You feel warmer heading east.',
-  '3. You\'re very close — the treasure glows ahead!',
-];
 
 /* ─── Spawn AR treasure chest when player is near ─────────────────────────── */
 function spawnARTreasureChest() {
@@ -1337,10 +1387,16 @@ function simTickGPS(delta) {
         spawnARClue(null);
       }
 
-      if (GAME.distToTreasure < Infinity) {
-        GAME.distToTreasure = Math.max(0, GAME.distToTreasure - effective);
-        if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_SPAWN_M) {
-          spawnARTreasureChest();
+      if (GAME.phase === 'solve' && GAME.treasureMXMZ) {
+        /* Check proximity to backtrack treasure in virtual local coords */
+        const curPt = GAME.gpsPath[GAME.gpsPath.length - 1];
+        if (curPt) {
+          const dx = curPt.mx - GAME.treasureMXMZ.mx;
+          const dz = curPt.mz - GAME.treasureMXMZ.mz;
+          GAME.distToTreasure = Math.sqrt(dx * dx + dz * dz);
+          if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_NEAR_M) {
+            spawnARTreasureChest();
+          }
         }
       }
 
@@ -1365,38 +1421,60 @@ function simTickGPS(delta) {
   GAME._simLastCamPos = camPos.clone();
 }
 
-/* ─── Footprint trail ────────────────────────────────────────────────────── */
+/* ─── Trail marker pillars ───────────────────────────────────────────────── */
+const PILLAR_COLOURS = [0xff6600, 0x00ccff, 0xffdd00];  // orange, cyan, gold
+const PILLAR_LIGHTS  = [0xff4400, 0x00aaff, 0xffcc00];
+
 function placeFootprint() {
   if (GAME.footprints.length >= MAX_FOOTPRINTS) {
     const old = GAME.footprints.shift();
     scene.remove(old.mesh);
     old.mesh.geometry.dispose();
     old.mesh.material.dispose();
+    if (old.light) scene.remove(old.light);
   }
-  /* Dark treasure-map style dot — near-black with subtle dark border ring */
-  const geo  = new THREE.CircleGeometry(0.08, 14).rotateX(-Math.PI / 2);
-  const mat  = new THREE.MeshBasicMaterial({
-    color: 0x0d0500, transparent: true, opacity: 0.82,
-    depthWrite: false, side: THREE.DoubleSide,
+
+  const cIdx    = GAME.footprintColorIdx % PILLAR_COLOURS.length;
+  GAME.footprintColorIdx++;
+
+  /* Tall tapered cylinder — visible from a distance like a beacon */
+  const height = 1.5;
+  const geo    = new THREE.CylinderGeometry(0.025, 0.06, height, 8);
+  const mat    = new THREE.MeshStandardMaterial({
+    color:             PILLAR_COLOURS[cIdx],
+    emissive:          PILLAR_COLOURS[cIdx],
+    emissiveIntensity: 1.8,
+    transparent:       true,
+    opacity:           1.0,
   });
   const mesh = new THREE.Mesh(geo, mat);
   const cam  = new THREE.Vector3();
   camera.getWorldPosition(cam);
   const groundY = lastReticlePos ? lastReticlePos.y : 0;
-  mesh.position.set(cam.x, groundY + 0.004, cam.z);
+  mesh.position.set(cam.x, groundY + height / 2, cam.z);
+  mesh.castShadow = false;
   scene.add(mesh);
-  GAME.footprints.push({ mesh, age: 0 });
+
+  /* Glowing point light at the top of the pillar */
+  const light = new THREE.PointLight(PILLAR_LIGHTS[cIdx], 2.5, 5.0);
+  light.position.set(cam.x, groundY + height + 0.15, cam.z);
+  scene.add(light);
+
+  GAME.footprints.push({ mesh, light, age: 0 });
 }
 
 function tickFootprints(delta) {
   for (let i = GAME.footprints.length - 1; i >= 0; i--) {
     const fp = GAME.footprints[i];
     fp.age += delta;
-    fp.mesh.material.opacity = Math.max(0, 0.82 * (1 - fp.age / FOOTPRINT_LIFE_S));
+    const opacity = Math.max(0, 1.0 * (1 - fp.age / FOOTPRINT_LIFE_S));
+    fp.mesh.material.opacity = opacity;
+    if (fp.light) fp.light.intensity = opacity * 2.5;
     if (fp.age >= FOOTPRINT_LIFE_S) {
       scene.remove(fp.mesh);
       fp.mesh.geometry.dispose();
       fp.mesh.material.dispose();
+      if (fp.light) scene.remove(fp.light);
       GAME.footprints.splice(i, 1);
     }
   }
@@ -1427,6 +1505,7 @@ function clearFootprints() {
     scene.remove(fp.mesh);
     fp.mesh.geometry.dispose();
     fp.mesh.material.dispose();
+    if (fp.light) scene.remove(fp.light);
   }
   GAME.footprints = [];
 }
@@ -1464,11 +1543,11 @@ function drawMiniMap() {
   const scale = (W / 2 - 16) / MINIMAP_ZOOM_M;  // px per metre
   const toC   = (mx, mz) => ({ x: W / 2 + (mx - cx) * scale, y: H / 2 + (mz - cz) * scale });
 
-  /* Dotted trail */
+  /* Bright dotted trail — persists for the full session */
   if (GAME.gpsPath.length >= 2) {
-    ctx.strokeStyle = '#1a0800';
-    ctx.lineWidth   = 2.5;
-    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = 'rgba(0,220,80,0.75)';
+    ctx.lineWidth   = 3;
+    ctx.setLineDash([5, 5]);
     ctx.beginPath();
     const p0 = toC(GAME.gpsPath[0].mx, GAME.gpsPath[0].mz);
     ctx.moveTo(p0.x, p0.y);
@@ -1485,9 +1564,8 @@ function drawMiniMap() {
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.beginPath(); ctx.arc(sp.x, sp.y, 2.5, 0, Math.PI * 2); ctx.fill();
 
-  /* Treasure marker — only shown when player is in hunt/found phase */
-  if (GAME.treasureGPS && GAME.gpsPath.length > 0 &&
-      (GAME.phase === 'hunt' || GAME.phase === 'found')) {
+  /* Treasure marker — only shown after it is found (never spoils location) */
+  if (GAME.treasureGPS && GAME.gpsPath.length > 0 && GAME.phase === 'found') {
     const o  = GAME.gpsPath[0];
     const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
     const tp = toC(tl.mx, tl.mz);
@@ -1495,11 +1573,27 @@ function drawMiniMap() {
     ctx.fillText('💰', tp.x, tp.y + 5);
   }
 
-  /* AR clue gem icons on map */
+  /* Pending AR clue gem icons on map — pulsing dot with ? */
   for (const clue of GAME.arClues) {
     const cp = toC(clue.mx, clue.mz);
-    ctx.font = '13px serif'; ctx.textAlign = 'center';
-    ctx.fillText('🗝️', cp.x, cp.y + 5);
+    ctx.fillStyle = 'rgba(0,170,255,0.8)';
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('?', cp.x, cp.y + 3);
+  }
+
+  /* Collected clue landmark numbers — numbered circles on the map */
+  for (let i = 0; i < GAME.clueSpots.length; i++) {
+    const spot = GAME.clueSpots[i];
+    const cp   = toC(spot.mx, spot.mz);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0055cc';
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(String(i + 1), cp.x, cp.y + 2.5);
   }
 
   /* Player dot — always at centre */
@@ -1512,10 +1606,8 @@ function drawMiniMap() {
   ctx.fillStyle = 'rgba(255,255,255,0.38)';
   ctx.font = '8px sans-serif'; ctx.textAlign = 'left';
   ctx.fillText(`${Math.round(GAME.totalDistM)}m`, 5, H - 4);
-  if (GAME.distToTreasure < Infinity) {
-    ctx.textAlign = 'right';
-    ctx.fillText(`💰 ${Math.round(GAME.distToTreasure)}m`, W - 5, H - 4);
-  }
+  ctx.textAlign = 'right';
+  ctx.fillText(`Clues: ${GAME.clues.length}/${CLUES_NEEDED}`, W - 5, H - 4);
 
   drawNorthDot(ctx, W - 12, 12);
 }
@@ -1541,19 +1633,11 @@ function drawNorthDot(ctx, cx, cy) {
 }
 
 /* ─── Compass arrow ──────────────────────────────────────────────────────── */
+/* The treasure direction is not shown to the player — they must use the      */
+/* riddle to figure out where to go.  Hide the compass completely.            */
 function updateCompassArrow() {
   const el = document.getElementById('compass-arrow');
-  if (!el) return;
-  if (GAME.distToTreasure === Infinity || GAME.phase === 'explore') {
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = '';
-  el.style.transform = `rotate(${GAME.bearingToTreasure}deg)`;
-  const ratio = Math.min(1, GAME.distToTreasure / 80);
-  const r = Math.round(255 * ratio);
-  const g = Math.round(220 * (1 - ratio));
-  el.style.color = `rgb(${r},${g},40)`;
+  if (el) el.style.display = 'none';
 }
 
 /* ─── Explore HUD ────────────────────────────────────────────────────────── */
@@ -1564,12 +1648,11 @@ function updateExploreHUD() {
   if (clueEl) clueEl.textContent = `${GAME.clues.length}/${CLUES_NEEDED}`;
 }
 
-/* ─── Hunt HUD ───────────────────────────────────────────────────────────── */
+/* ─── Hunt / Solve HUD ───────────────────────────────────────────────────── */
+/* The riddle text is set once by defineBacktrackTreasure().                  */
+/* Distance to treasure is tracked internally but not shown on the HUD.      */
 function updateHuntHUD() {
-  const el = document.getElementById('hunt-dist');
-  if (el && GAME.distToTreasure < Infinity) {
-    el.textContent = `${Math.round(GAME.distToTreasure)}m`;
-  }
+  /* intentionally empty — treasure distance is not displayed to the player */
 }
 
 /* ─── Toast helper ───────────────────────────────────────────────────────── */
@@ -1642,17 +1725,4 @@ function gpsToLocal(originLat, originLng, lat, lng) {
   const mx = haversineM(originLat, originLng, originLat, lng) * (lng >= originLng ? 1 : -1);
   const mz = haversineM(originLat, originLng, lat, originLng) * (lat >= originLat ? -1 : 1);
   return { mx, mz };
-}
-
-/* ─── Destination GPS from origin + bearing + distance ──────────────────── */
-function gpsDestination(lat, lng, bearingDegrees, distMetres) {
-  const R  = 6371000;
-  const δ  = distMetres / R;
-  const θ  = bearingDegrees * Math.PI / 180;
-  const φ1 = lat * Math.PI / 180;
-  const λ1 = lng * Math.PI / 180;
-  const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-  const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
-                              Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
-  return { lat: φ2 * 180 / Math.PI, lng: λ2 * 180 / Math.PI };
 }
