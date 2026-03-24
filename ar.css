@@ -281,47 +281,31 @@ button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
   text-shadow: 0 0 10px rgba(0,255,136,0.5);
 }
 
-/* ── Hunt HUD (compass + distance) ──────────────────────────────────────────── */
+/* ── Solve HUD (riddle panel — shown after all clues collected) ──────────────── */
 #hunt-hud {
   position: absolute; top: 118px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center;
   pointer-events: none;
+  max-width: 88vw;
 }
 
-#compass-container {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.65);
-  border: 1px solid rgba(255,170,0,0.35);
-  border-radius: 50%;
-  width: 72px; height: 72px;
+#solve-riddle-container {
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,170,0,0.5);
+  border-radius: 12px;
+  padding: 10px 18px;
+  text-align: center;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-#compass-arrow {
-  font-size: 2rem; line-height: 1;
-  color: #ffaa00;
-  text-shadow: 0 0 12px rgba(255,170,0,0.7);
-  display: block;
-  transition: transform 0.5s ease, color 0.5s;
-}
-
-#compass-label {
-  font-size: 0.48rem; letter-spacing: 0.12em; text-transform: uppercase;
-  color: rgba(255,255,255,0.4);
-  margin-top: 2px;
-}
-
-.hunt-dist-block {
-  min-width: 80px; flex: none;
-}
-
-#hunt-dist {
-  font-size: 1.25rem; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #ffaa00;
-  line-height: 1.1;
-  text-shadow: 0 0 10px rgba(255,170,0,0.5);
+#solve-riddle {
+  font-size: 0.88rem;
+  color: #ffdd88;
+  line-height: 1.4;
+  margin-top: 4px;
+  font-weight: 600;
+  max-width: 80vw;
 }
 
 /* ── Mini-map ─────────────────────────────────────────────────────────────────── */
