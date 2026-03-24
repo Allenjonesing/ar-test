@@ -39,9 +39,10 @@ const MAX_FOOTPRINTS     = 40;    // max trail markers
 const MAX_GPS_PTS        = 200;   // max GPS waypoints stored
 const GPS_MIN_MOVE_M     = 2;     // minimum GPS movement (m) to register (filters jitter)
 const SIM_MOVEMENT_SCALE = 15;    // multiply sim-mode camera distance for virtual metres
-const MINIMAP_SIZE       = 160;   // mini-map canvas px
-const MINIMAP_PADDING    = 1.4;   // extra scale padding around the GPS path bounds
+const MINIMAP_SIZE       = 220;   // mini-map canvas px
+const MINIMAP_ZOOM_M     = 80;    // metres radius visible in player-centred mini-map
 const MINIMAP_UPDATE_PROB = 0.03; // probability per sim-frame of redrawing the mini-map
+const CLUE_COLLECT_RADIUS_M = 2.0; // metres from AR clue gem to auto-collect
 
 /* ─── Game state ──────────────────────────────────────────────────────────── */
 const GAME = {
@@ -74,6 +75,9 @@ const GAME = {
 
   /* AR trail markers */
   footprints:       [],      // [{mesh, age}]
+
+  /* AR clue pickups */
+  arClues:          [],      // [{mesh, light, baseY, clueIdx, clueText, mx, mz}]
 };
 
 let lastReticlePos = null;  // world-space position of reticle, updated each frame
@@ -420,6 +424,17 @@ function onXRSelect() {
     } else {
       /* No reticle — collect if chest has spawned */
       collectARTreasure(); return;
+    }
+  }
+  /* Try to tap-collect a nearby AR clue gem */
+  if ((GAME.phase === 'explore' || GAME.phase === 'hunt') && GAME.arClues.length > 0) {
+    if (lastReticlePos) {
+      for (let i = GAME.arClues.length - 1; i >= 0; i--) {
+        const clue = GAME.arClues[i];
+        if (lastReticlePos.distanceTo(clue.mesh.position) < CLUE_COLLECT_RADIUS_M) {
+          collectARClue(clue); return;
+        }
+      }
     }
   }
   /* Outside game: place a debug object */
@@ -942,6 +957,7 @@ function startGame() {
   GAME._noGPS           = false;
   GAME._simLastCamPos   = null;
   GAME.footprints       = [];
+  GAME.arClues          = [];
 
   document.getElementById('status-bar').style.display   = 'none';
   document.getElementById('game-hud').style.display     = '';
@@ -1046,7 +1062,11 @@ function onGPSUpdate(pos) {
   /* Clues (explore phase) */
   if (GAME.phase === 'explore') {
     GAME.clueAccumM += distFromLast;
-    if (GAME.clueAccumM >= CLUE_INTERVAL_M) { GAME.clueAccumM = 0; collectClue({ lat, lng }); }
+    if (GAME.clueAccumM >= CLUE_INTERVAL_M &&
+        GAME.clues.length + GAME.arClues.length < CLUES_NEEDED) {
+      GAME.clueAccumM = 0;
+      spawnARClue({ lat, lng });
+    }
   }
 
   /* Treasure bearing + distance */
@@ -1091,26 +1111,83 @@ function burySimTreasure() {
   showToast('💰 Treasure buried 60m away — walk in sim to find it!', 3500);
 }
 
-/* ─── Collect a directional clue ─────────────────────────────────────────── */
-function collectClue(currentGPS) {
-  const num = GAME.clues.length + 1;
-  let text;
+/* ─── Spawn an AR clue gem pickup on a detected floor ────────────────────── */
+function spawnARClue(currentGPS) {
+  const num = GAME.clues.length + GAME.arClues.length + 1;
+  if (num > CLUES_NEEDED) return;
 
+  /* Pre-compute clue text from current position */
+  let clueText;
   if (GAME.treasureGPS && currentGPS) {
     const dist = haversineM(currentGPS.lat, currentGPS.lng,
                             GAME.treasureGPS.lat, GAME.treasureGPS.lng);
     const bear = bearingDeg(currentGPS.lat, currentGPS.lng,
                             GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    text = makeClueText(num, dist, bear);
+    clueText = makeClueText(num, dist, bear);
   } else {
-    text = SIM_CLUES[(num - 1) % SIM_CLUES.length];
+    clueText = SIM_CLUES[(num - 1) % SIM_CLUES.length];
   }
 
-  GAME.clues.push(text);
+  /* Place gem on detected floor (hit-test reticle) or ahead of camera */
+  let pos;
+  if (lastReticlePos) {
+    pos = lastReticlePos.clone();
+    pos.x += (Math.random() - 0.5) * 0.8;
+    pos.z += (Math.random() - 0.5) * 0.8;
+    pos.y  = lastReticlePos.y + 0.18;
+  } else {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.y = 0; dir.normalize();
+    pos = new THREE.Vector3();
+    camera.getWorldPosition(pos);
+    pos.addScaledVector(dir, 2.0 + Math.random() * 1.0);
+    pos.y = 0.18;
+  }
+
+  /* Gem mesh — octahedron gives a gem / crystal look */
+  const geo = new THREE.OctahedronGeometry(0.12);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x00aaff, emissive: 0x003366, emissiveIntensity: 2.0,
+    roughness: 0.1, metalness: 0.7, transparent: true, opacity: 0.92,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  const light = new THREE.PointLight(0x00aaff, 2.5, 2.5);
+  light.position.copy(pos);
+  scene.add(light);
+
+  /* Store GPS-local coords so the mini-map can show the icon */
+  const gpsPt = GAME.gpsPath.length > 0 ? GAME.gpsPath[GAME.gpsPath.length - 1] : null;
+  GAME.arClues.push({
+    mesh, light, baseY: pos.y, clueIdx: num, clueText,
+    mx: gpsPt ? gpsPt.mx : 0,
+    mz: gpsPt ? gpsPt.mz : 0,
+  });
+
+  popIn(mesh);
+  showToast(`🗝️ Clue ${num} appeared nearby — walk to collect it!`, 4000);
+  drawMiniMap();
+}
+
+/* ─── Collect an AR clue gem (proximity or tap) ───────────────────────────── */
+function collectARClue(clueEntry) {
+  const { mesh, light, clueIdx, clueText } = clueEntry;
+
+  GAME.clues.push(clueText);
   GAME.score += 100;
-  showClueToast(num, text);
+
+  scene.remove(light);
+  animateCollection(mesh);
+  GAME.arClues = GAME.arClues.filter(c => c !== clueEntry);
+
+  showClueToast(clueIdx, clueText);
   updateExploreHUD();
   updatePlacedCount();
+  drawMiniMap();
 
   if (GAME.clues.length >= CLUES_NEEDED && GAME.phase === 'explore') {
     GAME.phase = 'hunt';
@@ -1213,6 +1290,21 @@ function tickGame(delta, timestamp) {
     if (light) light.position.copy(mesh.position);
   }
 
+  /* Animate AR clue gems and check proximity collection */
+  if (GAME.arClues.length > 0) {
+    const camPos = new THREE.Vector3();
+    camera.getWorldPosition(camPos);
+    for (let i = GAME.arClues.length - 1; i >= 0; i--) {
+      const clue = GAME.arClues[i];
+      clue.mesh.position.y = clue.baseY + 0.07 * Math.sin(timestamp * 0.002 + clue.clueIdx);
+      clue.mesh.rotation.y += delta * 2.0;
+      if (clue.light) clue.light.position.copy(clue.mesh.position);
+      if (camPos.distanceTo(clue.mesh.position) < CLUE_COLLECT_RADIUS_M) {
+        collectARClue(clue);
+      }
+    }
+  }
+
   /* Footprint fade */
   tickFootprints(delta);
 
@@ -1239,9 +1331,10 @@ function simTickGPS(delta) {
 
       if (GAME.footAccumM >= FOOTPRINT_DIST_M) { GAME.footAccumM = 0; placeFootprint(); }
 
-      if (GAME.phase === 'explore' && GAME.clueAccumM >= CLUE_INTERVAL_M) {
+      if (GAME.phase === 'explore' && GAME.clueAccumM >= CLUE_INTERVAL_M &&
+          GAME.clues.length + GAME.arClues.length < CLUES_NEEDED) {
         GAME.clueAccumM = 0;
-        collectClue(null);
+        spawnARClue(null);
       }
 
       if (GAME.distToTreasure < Infinity) {
@@ -1280,9 +1373,10 @@ function placeFootprint() {
     old.mesh.geometry.dispose();
     old.mesh.material.dispose();
   }
-  const geo  = new THREE.CircleGeometry(0.06, 12).rotateX(-Math.PI / 2);
+  /* Dark treasure-map style dot — near-black with subtle dark border ring */
+  const geo  = new THREE.CircleGeometry(0.08, 14).rotateX(-Math.PI / 2);
   const mat  = new THREE.MeshBasicMaterial({
-    color: 0x00ff88, transparent: true, opacity: 0.38,
+    color: 0x0d0500, transparent: true, opacity: 0.82,
     depthWrite: false, side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -1298,7 +1392,7 @@ function tickFootprints(delta) {
   for (let i = GAME.footprints.length - 1; i >= 0; i--) {
     const fp = GAME.footprints[i];
     fp.age += delta;
-    fp.mesh.material.opacity = Math.max(0, 0.38 * (1 - fp.age / FOOTPRINT_LIFE_S));
+    fp.mesh.material.opacity = Math.max(0, 0.82 * (1 - fp.age / FOOTPRINT_LIFE_S));
     if (fp.age >= FOOTPRINT_LIFE_S) {
       scene.remove(fp.mesh);
       fp.mesh.geometry.dispose();
@@ -1316,6 +1410,14 @@ function clearGameObjects() {
     mesh.geometry.dispose(); mesh.material.dispose();
     GAME.treasureEntry = null;
   }
+  /* Clear pending AR clue gems */
+  for (const clue of GAME.arClues) {
+    scene.remove(clue.mesh);
+    scene.remove(clue.light);
+    clue.mesh.geometry.dispose();
+    clue.mesh.material.dispose();
+  }
+  GAME.arClues = [];
   clearFootprints();
   GAME.arChestSpawned = false;
 }
@@ -1355,31 +1457,18 @@ function drawMiniMap() {
     return;
   }
 
-  /* Bounds */
-  let minX = 0, maxX = 0, minZ = 0, maxZ = 0;
-  for (const pt of GAME.gpsPath) {
-    minX = Math.min(minX, pt.mx); maxX = Math.max(maxX, pt.mx);
-    minZ = Math.min(minZ, pt.mz); maxZ = Math.max(maxZ, pt.mz);
-  }
-  /* Include treasure */
-  if (GAME.treasureGPS && GAME.gpsPath.length > 0) {
-    const o  = GAME.gpsPath[0];
-    const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    minX = Math.min(minX, tl.mx); maxX = Math.max(maxX, tl.mx);
-    minZ = Math.min(minZ, tl.mz); maxZ = Math.max(maxZ, tl.mz);
-  }
-  const rangeX = Math.max(maxX - minX, 20) * MINIMAP_PADDING;
-  const rangeZ = Math.max(maxZ - minZ, 20) * MINIMAP_PADDING;
-  const scale  = Math.min((W - 20) / rangeX, (H - 22) / rangeZ);
-  const cx     = (minX + maxX) / 2;
-  const cz     = (minZ + maxZ) / 2;
-  const toC    = (mx, mz) => ({ x: W / 2 + (mx - cx) * scale, y: H / 2 + (mz - cz) * scale });
+  /* Player-centred fixed-zoom projection */
+  const lp    = GAME.gpsPath[GAME.gpsPath.length - 1];
+  const cx    = lp.mx;
+  const cz    = lp.mz;
+  const scale = (W / 2 - 16) / MINIMAP_ZOOM_M;  // px per metre
+  const toC   = (mx, mz) => ({ x: W / 2 + (mx - cx) * scale, y: H / 2 + (mz - cz) * scale });
 
   /* Dotted trail */
   if (GAME.gpsPath.length >= 2) {
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth   = 1.5;
-    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = '#1a0800';
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([4, 6]);
     ctx.beginPath();
     const p0 = toC(GAME.gpsPath[0].mx, GAME.gpsPath[0].mz);
     ctx.moveTo(p0.x, p0.y);
@@ -1396,27 +1485,28 @@ function drawMiniMap() {
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.beginPath(); ctx.arc(sp.x, sp.y, 2.5, 0, Math.PI * 2); ctx.fill();
 
-  /* Treasure marker */
-  if (GAME.treasureGPS && GAME.gpsPath.length > 0) {
+  /* Treasure marker — only shown when player is in hunt/found phase */
+  if (GAME.treasureGPS && GAME.gpsPath.length > 0 &&
+      (GAME.phase === 'hunt' || GAME.phase === 'found')) {
     const o  = GAME.gpsPath[0];
     const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
     const tp = toC(tl.mx, tl.mz);
-    if (GAME.phase === 'hunt' || GAME.phase === 'found') {
-      ctx.font = '13px serif'; ctx.textAlign = 'center';
-      ctx.fillText('💰', tp.x, tp.y + 5);
-    } else {
-      ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('?', tp.x, tp.y + 4);
-    }
+    ctx.font = '13px serif'; ctx.textAlign = 'center';
+    ctx.fillText('💰', tp.x, tp.y + 5);
   }
 
-  /* Player dot */
-  const lp = GAME.gpsPath[GAME.gpsPath.length - 1];
-  const pp = toC(lp.mx, lp.mz);
+  /* AR clue gem icons on map */
+  for (const clue of GAME.arClues) {
+    const cp = toC(clue.mx, clue.mz);
+    ctx.font = '13px serif'; ctx.textAlign = 'center';
+    ctx.fillText('🗝️', cp.x, cp.y + 5);
+  }
+
+  /* Player dot — always at centre */
   ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(pp.x, pp.y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#00ff88';
-  ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 3.5, 0, Math.PI * 2); ctx.fill();
 
   /* Footer stats */
   ctx.fillStyle = 'rgba(255,255,255,0.38)';
