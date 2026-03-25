@@ -1217,6 +1217,17 @@ function tickGame(delta, timestamp) {
   if (GAME.phase === 'idle') return;
   if (GAME._noGPS) simTickGPS(delta);
   tickWaypoints(delta);
+
+  /* Always refresh the heading HUD so the live compass bearing is responsive
+     regardless of whether the player is moving or GPS has fired recently.   */
+  updateTrailHUD();
+
+  /* Redraw the minimap often enough for the heading arrow to feel responsive,
+     but throttled to avoid unnecessary canvas work on every frame.           */
+  if (!GAME._lastMapDraw || timestamp - GAME._lastMapDraw >= 200) {
+    drawMap();
+    GAME._lastMapDraw = timestamp;
+  }
 }
 
 function simTickGPS(delta) {
@@ -1350,7 +1361,7 @@ function drawMap() {
 
   /* Heading arrow from player dot */
   if (GAME.compassLocked) {
-    var hr = GAME.compassHeading * Math.PI / 180;
+    var hr = GAME.liveHeading * Math.PI / 180;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
