@@ -1080,6 +1080,9 @@ function onGPSUpdate(pos) {
     }
   }
 
+  /* Correct XR tracking drift: re-anchor every AR object to its GPS position */
+  resyncARObjectsToGPS();
+
   updateExploreHUD();
   updatePlacedCount();
   drawMiniMap();
@@ -1180,13 +1183,35 @@ function spawnARClue(currentGPS) {
   /* Generate a directional exploration clue — not tied to a pre-set treasure */
   const clueText = generateExploreClue(num);
 
-  /* Place gem on detected floor (hit-test reticle) or ahead of camera */
+  /* Place gem anchored to GPS when available; fall back to hit-test / camera */
   let pos;
-  if (lastReticlePos) {
+  let gpsLat = null, gpsLng = null;
+
+  if (currentGPS && GAME.gpsPath.length > 0) {
+    /* GPS available — derive Three.js position from GPS coordinates so the gem
+       stays in place even when the XR reference frame drifts.
+       Use a 2 m random offset so the gem appears slightly off the player's
+       exact footstep and is clearly visible in front of them.               */
+    const origin  = GAME.gpsPath[0];
+    const base    = gpsToLocal(origin.lat, origin.lng, currentGPS.lat, currentGPS.lng);
+    const offX    = (Math.random() - 0.5) * 2.0;
+    const offZ    = (Math.random() - 0.5) * 2.0;
+    const groundY = lastReticlePos ? lastReticlePos.y + 0.18 : 0.18;
+    pos = new THREE.Vector3(base.mx + offX, groundY, base.mz + offZ);
+    /* Compute exact GPS anchor for the offset position */
+    const anchor = localToGPS(origin.lat, origin.lng, pos.x, pos.z);
+    gpsLat = anchor.lat;
+    gpsLng = anchor.lng;
+  } else if (lastReticlePos) {
     pos = lastReticlePos.clone();
     pos.x += (Math.random() - 0.5) * 0.8;
     pos.z += (Math.random() - 0.5) * 0.8;
     pos.y  = lastReticlePos.y + 0.18;
+    if (GAME.gpsPath.length > 0) {
+      const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, pos.x, pos.z);
+      gpsLat = anchor.lat;
+      gpsLng = anchor.lng;
+    }
   } else {
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
@@ -1195,6 +1220,11 @@ function spawnARClue(currentGPS) {
     camera.getWorldPosition(pos);
     pos.addScaledVector(dir, 2.0 + Math.random() * 1.0);
     pos.y = 0.18;
+    if (GAME.gpsPath.length > 0) {
+      const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, pos.x, pos.z);
+      gpsLat = anchor.lat;
+      gpsLng = anchor.lng;
+    }
   }
 
   /* Gem mesh — octahedron gives a gem / crystal look */
@@ -1216,8 +1246,9 @@ function spawnARClue(currentGPS) {
   const gpsPt = GAME.gpsPath.length > 0 ? GAME.gpsPath[GAME.gpsPath.length - 1] : null;
   GAME.arClues.push({
     mesh, light, baseY: pos.y, clueIdx: num, clueText,
-    mx: gpsPt ? gpsPt.mx : 0,
-    mz: gpsPt ? gpsPt.mz : 0,
+    mx: gpsPt ? gpsPt.mx : pos.x,
+    mz: gpsPt ? gpsPt.mz : pos.z,
+    gpsLat, gpsLng,   /* GPS anchor — used by resyncARObjectsToGPS() */
   });
 
   popIn(mesh);
@@ -1272,7 +1303,14 @@ function spawnARTreasureChest() {
   GAME.arChestSpawned = true;
 
   let pos;
-  if (lastReticlePos) {
+  if (!GAME._noGPS && GAME.treasureGPS && GAME.gpsPath.length > 0) {
+    /* GPS available — place chest exactly at the GPS treasure coordinates so
+       it stays put even if the XR reference frame drifts.                    */
+    const origin  = GAME.gpsPath[0];
+    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    const groundY = lastReticlePos ? lastReticlePos.y : 0;
+    pos = new THREE.Vector3(mx, groundY, mz);
+  } else if (lastReticlePos) {
     pos = lastReticlePos.clone();
     pos.x += (Math.random() - 0.5) * 0.4;
     pos.z += (Math.random() - 0.5) * 0.4;
@@ -1460,7 +1498,17 @@ function placeFootprint() {
   light.position.set(cam.x, groundY + height + 0.15, cam.z);
   scene.add(light);
 
-  GAME.footprints.push({ mesh, light, age: 0 });
+  /* Compute GPS anchor so resyncARObjectsToGPS() can correct XR drift */
+  let gpsLat = null, gpsLng = null;
+  if (!GAME._noGPS && GAME.lastGPS) {
+    gpsLat = GAME.lastGPS.lat;
+    gpsLng = GAME.lastGPS.lng;
+  } else if (GAME.gpsPath.length > 0) {
+    const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, cam.x, cam.z);
+    gpsLat = anchor.lat; gpsLng = anchor.lng;
+  }
+
+  GAME.footprints.push({ mesh, light, age: 0, gpsLat, gpsLng });
 }
 
 function tickFootprints(delta) {
@@ -1725,4 +1773,58 @@ function gpsToLocal(originLat, originLng, lat, lng) {
   const mx = haversineM(originLat, originLng, originLat, lng) * (lng >= originLng ? 1 : -1);
   const mz = haversineM(originLat, originLng, lat, originLng) * (lat >= originLat ? -1 : 1);
   return { mx, mz };
+}
+
+/* ─── Local XZ metres → GPS coordinates ─────────────────────────────────── */
+/* Inverse of gpsToLocal() — linear approximation valid for < ~500 m offsets */
+/* Round-trip error is typically < 1 m at 500 m, < 0.1 m at 50 m.           */
+const METERS_PER_DEG_LAT = 111111; // metres per degree of latitude (Earth equatorial approx)
+function localToGPS(originLat, originLng, mx, mz) {
+  const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos(originLat * Math.PI / 180);
+  return {
+    lat: originLat - mz / METERS_PER_DEG_LAT,
+    lng: originLng + mx / metersPerDegLng,
+  };
+}
+
+/* ─── Re-anchor all AR game objects to their stored GPS positions ─────────── */
+/* Called on every real GPS update so XR tracking drift is continuously        */
+/* corrected: each object's Three.js X/Z is recomputed from its GPS anchor.   */
+function resyncARObjectsToGPS() {
+  if (!GAME.gpsReady || GAME.gpsPath.length === 0) return;
+  const origin = GAME.gpsPath[0];
+
+  /* AR clue gems */
+  for (const clue of GAME.arClues) {
+    if (clue.gpsLat == null || clue.gpsLng == null) continue;
+    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, clue.gpsLat, clue.gpsLng);
+    clue.mesh.position.x = mx;
+    clue.mesh.position.z = mz;
+    clue.mx = mx;
+    clue.mz = mz;
+    if (clue.light) {
+      clue.light.position.x = mx;
+      clue.light.position.z = mz;
+    }
+  }
+
+  /* Trail pillar footprints */
+  for (const fp of GAME.footprints) {
+    if (fp.gpsLat == null || fp.gpsLng == null) continue;
+    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, fp.gpsLat, fp.gpsLng);
+    fp.mesh.position.x = mx;
+    fp.mesh.position.z = mz;
+    if (fp.light) {
+      fp.light.position.x = mx;
+      fp.light.position.z = mz;
+    }
+  }
+
+  /* Treasure chest — re-anchor to the exact GPS treasure spot */
+  if (GAME.treasureEntry && GAME.treasureGPS) {
+    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
+    GAME.treasureEntry.mesh.position.x = mx;
+    GAME.treasureEntry.mesh.position.z = mz;
+    /* Y bob animation and light sync are handled by tickGame() */
+  }
 }
