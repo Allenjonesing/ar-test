@@ -76,9 +76,15 @@ const GAME = {
   /* Compass heading - degrees clockwise from geographic North.
      This is the compass bearing the XR world's -Z axis is pointing at session
      start.  All GPS local coords are rotated by this angle before use as XR
-     coordinates.                                                              */
+     coordinates.  Frozen at tracking start so it never changes mid-session.  */
   compassHeading: 0,
   compassLocked:  false,
+
+  /* XR camera position (x, z) when the first GPS fix arrives.
+     Used to offset GPS-computed XR positions so that waypoints appear at the
+     correct physical location even if the player moved between AR session start
+     and the first GPS fix.                                                    */
+  gpsOriginXR:    null,
 };
 
 let lastReticlePos = null;  // world-space reticle position, updated each frame
@@ -184,7 +190,13 @@ function setupCompass() {
     }
 
     if (heading !== null) {
-      GAME.compassHeading = heading;
+      /* Only update heading when NOT actively tracking — once tracking starts
+         the heading is frozen so all GPS→XR conversions use the same rotation
+         throughout the entire session (the XR local frame is fixed from
+         session start).                                                        */
+      if (GAME.phase !== 'tracking') {
+        GAME.compassHeading = heading;
+      }
       if (!GAME.compassLocked) {
         GAME.compassLocked = true;
         updateGPSDebugDisplay();
@@ -220,10 +232,14 @@ async function requestOrientationPermission() {
  * session start.
  * --------------------------------------------------------------------------- */
 function gpsLocalToXR(mx, mz) {
-  const H = GAME.compassHeading * Math.PI / 180;
+  const H  = GAME.compassHeading * Math.PI / 180;
+  /* Offset to align GPS origin (first fix) with XR camera position at that
+     moment — corrects for any movement between AR session start and first fix */
+  const ox = GAME.gpsOriginXR ? GAME.gpsOriginXR.x : 0;
+  const oz = GAME.gpsOriginXR ? GAME.gpsOriginXR.z : 0;
   return {
-    x:  mx * Math.cos(H) + mz * Math.sin(H),
-    z: -mx * Math.sin(H) + mz * Math.cos(H),
+    x:  mx * Math.cos(H) + mz * Math.sin(H) + ox,
+    z: -mx * Math.sin(H) + mz * Math.cos(H) + oz,
   };
 }
 
@@ -955,6 +971,7 @@ function startTracking() {
   GAME._noGPS         = false;
   GAME._simLastCamPos = null;
   GAME.waypoints      = [];
+  GAME.gpsOriginXR    = null;
 
   document.getElementById('status-bar').style.display = 'none';
   document.getElementById('trail-hud').style.display  = '';
@@ -1009,6 +1026,14 @@ function onGPSUpdate(pos) {
   if (!GAME.gpsReady) {
     GAME.gpsReady = true;
     GAME.lastGPS  = { lat: lat, lng: lng };
+
+    /* Capture the XR camera position at this moment so that the GPS origin
+       aligns with the correct spot in XR world space, even if the player
+       moved between AR session start and the first GPS fix.                */
+    const _camOrigin = new THREE.Vector3();
+    camera.getWorldPosition(_camOrigin);
+    GAME.gpsOriginXR = { x: _camOrigin.x, z: _camOrigin.z };
+
     GAME.gpsPath.push({ lat: lat, lng: lng, mx: 0, mz: 0 });
     showToast('\ud83d\udee0\ufe0f GPS locked! Walk to place waypoints.', 3000);
     drawMap();
@@ -1049,6 +1074,7 @@ function onGPSError(err) {
   GAME._noGPS = true;
   console.warn('GPS error:', err);
   showToast('\ud83c\udfae No GPS - sim mode: move the camera to explore!', 4000);
+  drawMap();  /* Immediately show the "Sim mode" message on the map */
 }
 
 /* ===========================================================================
