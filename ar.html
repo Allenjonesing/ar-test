@@ -15,14 +15,16 @@
 <!-- Three.js rendering canvas -->
 <canvas id="ar-canvas"></canvas>
 
-<!-- Map divider line (shown when tracking) -->
-<div id="map-divider" style="display:none;"></div>
-
-<!-- Full-screen map canvas (bottom half) -->
-<canvas id="minimap-canvas" style="display:none;"></canvas>
-
 <!-- HUD overlay (sits above canvas, passes pointer events through itself) -->
 <div id="ui-overlay">
+
+  <!-- Map divider line (shown when tracking) — must be inside ui-overlay to
+       appear in WebXR dom-overlay mode -->
+  <div id="map-divider" style="display:none;"></div>
+
+  <!-- GPS map canvas (bottom half when tracking) — must be inside ui-overlay
+       to appear in WebXR dom-overlay mode -->
+  <canvas id="minimap-canvas" style="display:none;"></canvas>
 
   <!-- Header -->
   <div id="header">
