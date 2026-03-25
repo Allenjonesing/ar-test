@@ -80,6 +80,11 @@ const GAME = {
   compassHeading: 0,
   compassLocked:  false,
 
+  /* Live heading - always updated from the device orientation sensor, even
+     during tracking.  Used for HUD display only; never used for coordinate
+     transforms.                                                              */
+  liveHeading:    0,
+
   /* XR camera position (x, z) when the first GPS fix arrives.
      Used to offset GPS-computed XR positions so that waypoints appear at the
      correct physical location even if the player moved between AR session start
@@ -190,6 +195,9 @@ function setupCompass() {
     }
 
     if (heading !== null) {
+      /* Always keep the live heading up-to-date for HUD display. */
+      GAME.liveHeading = heading;
+
       /* Only update heading when NOT actively tracking — once tracking starts
          the heading is frozen so all GPS→XR conversions use the same rotation
          throughout the entire session (the XR local frame is fixed from
@@ -945,7 +953,7 @@ function updateTrailHUD() {
   var headingEl = document.getElementById('trail-heading');
   if (distEl)    distEl.textContent    = Math.round(GAME.totalDistM) + 'm';
   if (ptsEl)     ptsEl.textContent     = String(GAME.waypoints.length);
-  if (headingEl) headingEl.textContent = Math.round(GAME.compassHeading) + '\u00b0';
+  if (headingEl) headingEl.textContent = Math.round(GAME.liveHeading) + '\u00b0';
 }
 
 /* ===========================================================================
