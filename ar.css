@@ -1,4 +1,4 @@
-/* ar.css — AR Experiment styles */
+/* ar.css — GPS AR Trail styles */
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -13,10 +13,35 @@ html, body {
   user-select: none;
 }
 
-/* ── Canvas ─────────────────────────────────────────────────────────────────── */
+/* ── Canvas (XR view — top half when tracking, full screen otherwise) ─────── */
 #ar-canvas {
-  position: fixed; inset: 0;
-  display: block; width: 100%; height: 100%;
+  position: fixed; top: 0; left: 0;
+  display: block; width: 100%;
+  height: 100%;       /* overridden by JS to 50% when tracking */
+  touch-action: none;
+}
+
+/* ── Map divider ─────────────────────────────────────────────────────────────── */
+#map-divider {
+  position: fixed;
+  top: 50%; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right,
+    transparent 0%, rgba(0,255,136,0.6) 20%,
+    rgba(0,255,136,0.6) 80%, transparent 100%);
+  z-index: 11;
+  pointer-events: none;
+}
+
+/* ── Minimap (bottom half when tracking) ─────────────────────────────────────── */
+#minimap-canvas {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  width: 100%;
+  height: 50%;       /* JS sets exact pixel size matching this */
+  display: block;
+  z-index: 10;
+  image-rendering: crisp-edges;
   touch-action: none;
 }
 
@@ -24,7 +49,7 @@ html, body {
 #ui-overlay {
   position: fixed; inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: 12;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
@@ -78,33 +103,72 @@ html, body {
   min-width: 60px; text-align: right;
 }
 
-/* ── Reticle label ───────────────────────────────────────────────────────────── */
-#reticle-hint {
-  position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%);
-  font-size: 0.82rem; color: rgba(255,255,255,0.55);
-  background: rgba(0,0,0,0.4);
-  padding: 6px 16px; border-radius: 20px;
+/* ── Trail HUD (visible during GPS tracking) ─────────────────────────────────── */
+#trail-hud {
+  position: absolute; top: 48px; left: 12px; right: 12px;
+  display: flex; justify-content: space-between; align-items: stretch;
+  gap: 6px;
   pointer-events: none;
-  transition: opacity 0.3s;
-  white-space: nowrap;
+}
+
+.hud-block {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(0,255,136,0.25);
+  border-radius: 10px;
+  padding: 6px 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  min-width: 72px;
+  flex: 1;
+}
+
+.hud-label {
+  font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+}
+
+#trail-dist, #trail-pts, #trail-heading {
+  font-size: 1.1rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #00ff88;
+  line-height: 1.1;
+  text-shadow: 0 0 10px rgba(0,255,136,0.5);
 }
 
 /* ── Controls row ────────────────────────────────────────────────────────────── */
+/* When tracking, controls sit just above the map divider (top 50% bottom) */
 #controls {
-  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  position: absolute;
+  bottom: calc(50% + 16px);   /* above the map area when tracking */
+  left: 50%; transform: translateX(-50%);
   display: flex; gap: 12px; align-items: center;
   pointer-events: all;
+  transition: bottom 0.3s;
+}
+
+#controls.no-split {
+  bottom: 40px;
 }
 
 /* ── Object counter ──────────────────────────────────────────────────────────── */
 #placed-count {
-  position: absolute; bottom: 14px; right: 14px;
+  position: absolute;
+  bottom: calc(50% + 6px);
+  right: 14px;
   font-size: 0.75rem; color: rgba(255,255,255,0.4);
   pointer-events: none;
+  transition: bottom 0.3s;
+}
+
+#placed-count.no-split {
+  bottom: 14px;
 }
 
 #plane-count {
-  position: absolute; bottom: 32px; right: 14px;
+  position: absolute;
+  bottom: calc(50% + 22px);
+  right: 14px;
   font-size: 0.75rem; color: rgba(255,180,80,0.75);
   pointer-events: none;
 }
@@ -233,7 +297,7 @@ button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 /* ── Not-supported banner ─────────────────────────────────────────────────────── */
 #no-ar-banner {
   display: none;
-  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  position: fixed; top: 25%; left: 50%; transform: translate(-50%,-50%);
   background: rgba(10,10,30,0.92);
   border: 1px solid rgba(255,200,0,0.35);
   border-radius: 16px; padding: 28px 32px;
@@ -247,201 +311,3 @@ button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 #debug-panel::-webkit-scrollbar { width: 4px; }
 #debug-panel::-webkit-scrollbar-track { background: transparent; }
 #debug-panel::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.25); border-radius: 2px; }
-
-/* ── Game HUD ─────────────────────────────────────────────────────────────────── */
-#game-hud {
-  position: absolute; top: 48px; left: 12px; right: 12px;
-  display: flex; justify-content: space-between; align-items: stretch;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.game-hud-block {
-  display: flex; flex-direction: column; align-items: center;
-  background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(0,255,136,0.25);
-  border-radius: 10px;
-  padding: 6px 10px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  min-width: 72px;
-  flex: 1;
-}
-
-.game-hud-label {
-  font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase;
-  color: rgba(255,255,255,0.45);
-}
-
-#game-score, #explore-dist, #explore-clues {
-  font-size: 1.25rem; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #00ff88;
-  line-height: 1.1;
-  text-shadow: 0 0 10px rgba(0,255,136,0.5);
-}
-
-/* ── Solve HUD (riddle panel — shown after all clues collected) ──────────────── */
-#hunt-hud {
-  position: absolute; top: 118px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center;
-  pointer-events: none;
-  max-width: 88vw;
-}
-
-#solve-riddle-container {
-  background: rgba(0,0,0,0.72);
-  border: 1px solid rgba(255,170,0,0.5);
-  border-radius: 12px;
-  padding: 10px 18px;
-  text-align: center;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-#solve-riddle {
-  font-size: 0.88rem;
-  color: #ffdd88;
-  line-height: 1.4;
-  margin-top: 4px;
-  font-weight: 600;
-  max-width: 80vw;
-}
-
-/* ── Mini-map ─────────────────────────────────────────────────────────────────── */
-#minimap-canvas {
-  position: absolute;
-  bottom: 90px; left: 14px;
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: 12;
-  image-rendering: crisp-edges;
-}
-
-/* ── Collection toast ────────────────────────────────────────────────────────── */
-#collect-toast {
-  position: absolute;
-  bottom: 160px; left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.72);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 24px;
-  padding: 10px 22px;
-  font-size: 0.95rem; font-weight: 600;
-  white-space: pre;
-  pointer-events: none;
-  transition: opacity 0.4s, transform 0.4s;
-  z-index: 15;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  text-align: center;
-  max-width: 88vw;
-}
-
-#collect-toast strong { color: #fff; }
-#collect-toast small { font-weight: 400; white-space: normal; display: block; margin-top: 3px; }
-.toast-mult { color: #ffaa00; margin-left: 4px; }
-
-/* ── Game overlay ─────────────────────────────────────────────────────────────── */
-#game-overlay {
-  position: fixed; inset: 0;
-  background: rgba(4, 8, 18, 0.90);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  z-index: 25;
-  padding: 24px;
-  text-align: center;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  overflow-y: auto;
-}
-
-#game-overlay.hidden { display: none; }
-
-.game-logo {
-  font-size: 3.2rem;
-  margin-bottom: 12px;
-  filter: drop-shadow(0 0 16px rgba(0,255,136,0.4));
-}
-
-#game-start-screen h2, #game-over-screen h2 {
-  margin: 0 0 6px;
-  font-size: clamp(1.5rem, 5vw, 2.2rem);
-  font-weight: 800;
-  color: #fff;
-}
-
-.game-tagline {
-  font-size: 0.95rem;
-  color: rgba(255,255,255,0.5);
-  margin: 0 0 20px;
-}
-
-.game-rules {
-  margin: 0 0 20px;
-  text-align: left;
-  max-width: 340px;
-}
-
-.rule {
-  font-size: 0.875rem;
-  color: rgba(255,255,255,0.75);
-  padding: 5px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-
-#game-highscore-display {
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.4);
-  margin-bottom: 18px;
-}
-
-#game-highscore { color: #ffaa00; font-weight: 700; }
-
-#play-btn, #play-again-btn {
-  margin-top: 16px;
-  padding: 13px 34px;
-  font-size: 1.1rem;
-}
-
-.final-score-wrap {
-  display: flex; flex-direction: column; align-items: center;
-  margin: 12px 0 4px;
-}
-
-.final-label {
-  font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase;
-  color: rgba(255,255,255,0.4);
-}
-
-#final-score {
-  font-size: 3rem; font-weight: 900;
-  color: #00ff88;
-  text-shadow: 0 0 20px rgba(0,255,136,0.55);
-  font-variant-numeric: tabular-nums;
-}
-
-#new-record-badge {
-  font-size: 1rem; font-weight: 700;
-  color: #ffaa00;
-  padding: 4px 16px;
-  background: rgba(255,160,0,0.12);
-  border: 1px solid rgba(255,160,0,0.4);
-  border-radius: 20px;
-  margin: 6px 0 12px;
-}
-
-.game-stats {
-  font-size: 0.875rem;
-  color: rgba(255,255,255,0.65);
-  line-height: 1.9;
-}
-
-.game-stats span { color: #fff; font-weight: 700; }
-
-.stat-best {
-  margin-top: 6px;
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.4);
-}
-
-.stat-best span { color: #ffaa00; }

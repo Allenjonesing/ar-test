@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Trail Treasure Hunt — AR Test</title>
+  <title>GPS AR Trail</title>
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="ar.css">
 </head>
@@ -15,14 +15,20 @@
 <!-- Three.js rendering canvas -->
 <canvas id="ar-canvas"></canvas>
 
-<!-- HUD overlay -->
+<!-- Map divider line (shown when tracking) -->
+<div id="map-divider" style="display:none;"></div>
+
+<!-- Full-screen map canvas (bottom half) -->
+<canvas id="minimap-canvas" style="display:none;"></canvas>
+
+<!-- HUD overlay (sits above canvas, passes pointer events through itself) -->
 <div id="ui-overlay">
 
   <!-- Header -->
   <div id="header">
-    <h1>Trail Treasure Hunt</h1>
+    <h1>GPS AR Trail</h1>
     <div id="header-right">
-      <span id="version-badge">Alpha v0.3</span>
+      <span id="version-badge">Alpha v0.4</span>
     </div>
   </div>
 
@@ -32,36 +38,20 @@
     <span id="fps-counter"></span>
   </div>
 
-  <!-- Game HUD: score + explore stats (visible during game) -->
-  <div id="game-hud" style="display:none;">
-    <div class="game-hud-block">
-      <span class="game-hud-label">SCORE</span>
-      <span id="game-score">0</span>
+  <!-- Trail stats HUD (visible during tracking) -->
+  <div id="trail-hud" style="display:none;">
+    <div class="hud-block">
+      <span class="hud-label">WALKED</span>
+      <span id="trail-dist">0m</span>
     </div>
-    <div class="game-hud-block">
-      <span class="game-hud-label">WALKED</span>
-      <span id="explore-dist">0m</span>
+    <div class="hud-block">
+      <span class="hud-label">WAYPOINTS</span>
+      <span id="trail-pts">0</span>
     </div>
-    <div class="game-hud-block">
-      <span class="game-hud-label">CLUES</span>
-      <span id="explore-clues">0/3</span>
+    <div class="hud-block">
+      <span class="hud-label">HEADING</span>
+      <span id="trail-heading">—°</span>
     </div>
-  </div>
-
-  <!-- Solve HUD: shown after all clues collected — riddle leads to treasure -->
-  <div id="hunt-hud" style="display:none;">
-    <div id="solve-riddle-container">
-      <div class="game-hud-label">🔍 TREASURE RIDDLE</div>
-      <div id="solve-riddle">—</div>
-    </div>
-  </div>
-
-  <!-- Collection toast (clue, treasure, etc.) -->
-  <div id="collect-toast" style="display:none;"></div>
-
-  <!-- Reticle hint shown while AR is active -->
-  <div id="reticle-hint" style="display:none;">
-    Walk to collect clues — find the buried treasure!
   </div>
 
   <!-- Main controls -->
@@ -70,14 +60,11 @@
     <button id="debug-toggle-btn">⚙ Debug</button>
   </div>
 
-  <!-- Distance + clue counter -->
-  <div id="placed-count">0m · Clues: 0/3</div>
+  <!-- Object/distance counter -->
+  <div id="placed-count">Objects: 0</div>
 
   <!-- Plane counter (shown while AR is active) -->
   <div id="plane-count" style="display:none;">Walls: 0 · Floors: 0</div>
-
-  <!-- Mini-map (bottom-left) -->
-  <canvas id="minimap-canvas" width="220" height="220" style="display:none;"></canvas>
 
   <!-- Back link -->
   <a id="back-link" href="index.html">← Home</a>
@@ -136,6 +123,14 @@
 
   <hr class="debug-divider">
 
+  <!-- GPS/Heading debug -->
+  <div class="debug-section">
+    <h4>GPS / Heading</h4>
+    <pre class="debug-data" id="gps-debug-display">—</pre>
+  </div>
+
+  <hr class="debug-divider">
+
   <!-- Actions -->
   <div class="debug-section">
     <h4>Actions</h4>
@@ -150,49 +145,8 @@
   <p>
     This device or browser doesn't support WebXR immersive-AR.<br><br>
     Running in <strong>simulation mode</strong> — drag the scene to move, and
-    watch your trail grow on the mini-map!
+    watch your trail grow on the map!
   </p>
-</div>
-
-<!-- Game overlay — shown on game over -->
-<div id="game-overlay" class="hidden">
-
-  <!-- Start screen -->
-  <div id="game-start-screen">
-    <div class="game-logo">🗺️</div>
-    <h2>Trail Treasure Hunt</h2>
-    <p class="game-tagline">Walk the world. Collect clues. Backtrack to the treasure.</p>
-    <div class="game-rules">
-      <div class="rule">🛰️ GPS traces your real-world path on the mini-map</div>
-      <div class="rule">🗝️ Collect 5 directional clues as you walk</div>
-      <div class="rule">🗺️ Each clue guides you further — the treasure is somewhere you've been!</div>
-      <div class="rule">🔍 A riddle reveals the location — use clue landmarks to find it</div>
-      <div class="rule">💰 Tap the glowing chest to dig it up!</div>
-    </div>
-    <div id="game-highscore-display" style="display:none;">
-      Best: <span id="game-highscore">0</span>
-    </div>
-    <button id="play-btn">▶ Start Hunt</button>
-  </div>
-
-  <!-- Game-over screen -->
-  <div id="game-over-screen" style="display:none;">
-    <div class="game-logo">🏆</div>
-    <h2>Adventure Complete!</h2>
-    <div class="final-score-wrap">
-      <span class="final-label">SCORE</span>
-      <span id="final-score">0</span>
-    </div>
-    <div id="new-record-badge" style="display:none;">🎉 New Record!</div>
-    <div class="game-stats">
-      <div>Distance: <span id="stat-collected">0m walked</span></div>
-      <div>Clues: <span id="stat-streak">0 clues</span></div>
-      <div>Result: <span id="stat-mult">—</span></div>
-      <div class="stat-best">All-time best: <span id="game-over-best">0</span></div>
-    </div>
-    <button id="play-again-btn">▶ Play Again</button>
-  </div>
-
 </div>
 
 <!-- Three.js (global THREE) -->

@@ -1,89 +1,91 @@
 /**
- * ar.js — AR Experiment
+ * ar.js - GPS AR Trail
  *
  * Uses Three.js + WebXR (immersive-ar + hit-test + plane-detection) to:
- *   • Stream the real-world camera as the scene background
- *   • Detect surfaces via the hit-test API and show a reticle
- *   • Detect floors and walls via the plane-detection API
- *   • Place random 3D objects on detected surfaces with a tap/click
- *   • Fall back to a simulation mode on non-XR browsers
+ *   - Stream the real-world camera as the scene background (top half)
+ *   - Place waypoint pillars anchored to GPS coordinates in XR space
+ *   - Show an accurate GPS map in the bottom half
+ *   - Continuously re-sync XR object positions to their GPS anchors
  *
- * Debug panel (toggle with the ⚙ Debug button) exposes:
- *   Axes helper, ground grid, plane overlays (floors + walls),
- *   bounding boxes, wireframe, FPS counter, camera-world-matrix,
- *   XR session state, and live hit-test pose readout.
+ * Compass heading is captured at session start and used to rotate GPS local
+ * coordinates (East=+X, South=+Z) into the XR world coordinate frame so that
+ * waypoints appear in the correct direction regardless of which way the device
+ * was facing when the AR session began.
+ *
+ * GPS-to-XR rotation:
+ *   The WebXR "local" reference space sets its -Z axis to the device forward
+ *   direction at session start.  If the device compass heading is H degrees
+ *   (0=North, clockwise), then to map GPS local metres (mx=East, mz=South)
+ *   to XR world (x, z) we rotate by -H around the Y axis:
+ *
+ *       x  =  mx * cos(H) + mz * sin(H)
+ *       z  = -mx * sin(H) + mz * cos(H)
+ *
+ *   Verification:
+ *     H=0  (pointing North): (1,0) -> (1,0)  East stays +X ✓
+ *     H=90 (pointing East):  (1,0) -> (0,-1) East maps to XR -Z (forward) ✓
+ *     H=90 (pointing East):  (0,-1)-> (-1,0) North maps to XR -X (left)   ✓
  */
 
 'use strict';
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * TRAIL TREASURE HUNT
- * ═══════════════════════════════════════════════════════════════════════════
- * GPS-powered real-world adventure:
- *   • Your path is traced as a dotted line on the mini-map + AR footprints
- *   • A treasure is buried nearby when the game starts
- *   • Walk to collect 3 directional clues — each narrows the location
- *   • After all clues: an AR compass arrow guides you to the spot
- *   • When close enough a glowing chest appears — tap to dig it up!
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ===========================================================================
+ * TRAIL CONSTANTS
+ * =========================================================================== */
+const WAYPOINT_DIST_M    = 4;      // metres walked between automatic waypoint drops
+const WAYPOINT_LIFE_S    = 600;    // seconds before a waypoint fades (10 min)
+const MAX_WAYPOINTS      = 120;    // max waypoints kept in scene simultaneously
+const MAX_GPS_PTS        = 2000;   // max GPS path points stored
+const GPS_MIN_MOVE_M     = 2;      // minimum GPS movement (m) to register (filters jitter)
+const SIM_MOVEMENT_SCALE = 15;     // sim-mode: multiply camera metres to virtual metres
+const MINIMAP_ZOOM_M     = 80;     // metres radius visible in player-centred map
+const MINIMAP_UPDATE_PROB= 0.04;   // probability per sim-frame of redrawing the map
 
-/* ─── Trail Hunt constants ────────────────────────────────────────────────── */
-const CLUE_INTERVAL_M    = 40;    // metres walked per clue
-const CLUES_NEEDED       = 5;     // clues to collect before treasure riddle is revealed
-const TREASURE_NEAR_M    = 8;     // GPS metres from backtrack point before AR chest appears
-const FOOTPRINT_DIST_M   = 4;     // metres between trail marker drops
-const FOOTPRINT_LIFE_S   = 300;   // seconds before a trail marker fades (5 minutes)
-const MAX_FOOTPRINTS     = 80;    // max trail markers in the scene
-const MAX_GPS_PTS        = 1000;  // max GPS waypoints stored (long-walk support)
-const GPS_MIN_MOVE_M     = 2;     // minimum GPS movement (m) to register (filters jitter)
-const SIM_MOVEMENT_SCALE = 15;    // multiply sim-mode camera distance for virtual metres
-const MINIMAP_SIZE       = 220;   // mini-map canvas px
-const MINIMAP_ZOOM_M     = 80;    // metres radius visible in player-centred mini-map
-const MINIMAP_UPDATE_PROB = 0.03; // probability per sim-frame of redrawing the mini-map
-const CLUE_COLLECT_RADIUS_M = 2.0; // metres from AR clue gem to auto-collect
+/* Waypoint colour - single hue that shifts gradually with total distance walked */
+const HUE_CYCLE_M   = 600;   // metres for one full hue rotation
+const WAYPOINT_SAT  = 0.85;
+const WAYPOINT_LIT  = 0.55;
 
-/* ─── Game state ──────────────────────────────────────────────────────────── */
+function waypointHue() {
+  return (GAME.totalDistM / HUE_CYCLE_M) % 1.0;
+}
+
+/* ===========================================================================
+ * GAME / TRACKING STATE
+ * =========================================================================== */
 const GAME = {
-  phase:            'idle',  // 'idle' | 'explore' | 'solve' | 'found'
-  score:            0,
-  highScore:        0,
+  phase:          'idle',   // 'idle' | 'tracking'
 
-  /* exploration */
-  gpsPath:          [],      // [{lat, lng, mx, mz}]  mx/mz = metres from origin
-  totalDistM:       0,       // total metres walked
-  clues:            [],      // collected clue strings
-  clueSpots:        [],      // [{mx, mz, num}] — where each clue was collected (map markers)
-  clueAccumM:       0,       // metres since last clue
-  footAccumM:       0,       // metres since last footprint
-  footprintColorIdx: 0,      // cycles through pillar colours
+  /* GPS path */
+  gpsPath:        [],       // [{lat, lng, mx, mz}]
+  totalDistM:     0,
+  waypointAccumM: 0,        // metres since last waypoint drop
 
   /* GPS watch */
-  watchId:          null,
-  lastGPS:          null,    // {lat, lng}
-  gpsReady:         false,
+  watchId:        null,
+  lastGPS:        null,
+  gpsReady:       false,
 
-  /* treasure — not pre-set; defined after all clues are collected */
-  treasureGPS:      null,    // {lat, lng} — set by defineBacktrackTreasure()
-  treasureMXMZ:     null,    // {mx, mz}   — local coords, used in sim mode too
-  treasureRiddle:   null,    // string shown to player in solve phase
-  distToTreasure:   Infinity,
-  arChestSpawned:   false,
-  treasureEntry:    null,    // {mesh, light, baseY}
+  /* Sim fallback (no GPS) */
+  _noGPS:         false,
+  _simLastCamPos: null,
 
-  /* sim fallback (no GPS) */
-  _noGPS:           false,
-  _simLastCamPos:   null,
+  /* AR waypoint markers */
+  waypoints:      [],       // [{mesh, light, age, gpsLat, gpsLng, hue}]
 
-  /* AR trail markers */
-  footprints:       [],      // [{mesh, light, age}]
-
-  /* AR clue pickups */
-  arClues:          [],      // [{mesh, light, baseY, clueIdx, clueText, mx, mz}]
+  /* Compass heading - degrees clockwise from geographic North.
+     This is the compass bearing the XR world's -Z axis is pointing at session
+     start.  All GPS local coords are rotated by this angle before use as XR
+     coordinates.                                                              */
+  compassHeading: 0,
+  compassLocked:  false,
 };
 
-let lastReticlePos = null;  // world-space position of reticle, updated each frame
+let lastReticlePos = null;  // world-space reticle position, updated each frame
 
-/* ─── Debug state ─────────────────────────────────────────────────────────── */
+/* ===========================================================================
+ * DEBUG STATE
+ * =========================================================================== */
 const DEBUG = {
   showAxes:       false,
   showGrid:       false,
@@ -97,44 +99,49 @@ const DEBUG = {
   showHitInfo:    false,
 };
 
-/* ─── Three.js objects ────────────────────────────────────────────────────── */
+/* ===========================================================================
+ * THREE.JS OBJECTS
+ * =========================================================================== */
 let renderer, scene, camera, clock;
 let axesHelper, gridHelper, shadowPlane;
 let reticle, reticleRing;
 
-/* ─── WebXR state ─────────────────────────────────────────────────────────── */
+/* ===========================================================================
+ * WEBXR STATE
+ * =========================================================================== */
 let xrSession        = null;
 let hitTestSource    = null;
 let htSourcePending  = false;
 let isARActive       = false;
 let simulationMode   = false;
 
-/* ─── Placed objects ──────────────────────────────────────────────────────── */
-let placedObjects = [];   // [{ mesh, bboxHelper, material }]
+/* Placed objects in idle/debug mode */
+let placedObjects = [];
 
-/* ─── Plane detection state ──────────────────────────────────────────────── */
-// Map from XRPlane → { mesh, lastChanged }
+/* Plane detection */
 const planeOverlays = new Map();
 
-/* ─── FPS tracking ────────────────────────────────────────────────────────── */
+/* FPS tracking */
 let fpsFrames = 0, fpsLast = 0, fpsCurrent = 0;
 
-/* ─── Simulation orbit state ─────────────────────────────────────────────── */
+/* Simulation orbit state */
 let orbitTheta = 0, orbitPhi = Math.PI / 4;
 let isDragging = false, dragX = 0, dragY = 0;
-let simPreviewMesh = null;    // the rotating torus-knot in sim preview
+let simPreviewMesh = null;
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* Split-screen state */
+let isSplitScreen = false;
+
+/* ===========================================================================
  * INIT
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 async function init() {
   setupThreeJS();
   setupDebugPanel();
   setupResizeHandler();
   setupOrbitControls();
-  setupGameUI();
+  setupCompass();
 
-  /* Check WebXR AR support */
   let arSupported = false;
   if (navigator.xr) {
     try { arSupported = await navigator.xr.isSessionSupported('immersive-ar'); }
@@ -143,7 +150,7 @@ async function init() {
 
   if (arSupported) {
     document.getElementById('start-ar-btn').disabled = false;
-    updateStatus('AR ready — tap "Start AR" to begin.');
+    updateStatus('AR ready - tap "Start AR" to begin tracking.');
   } else {
     document.getElementById('start-ar-btn').disabled = false;
     simulationMode = true;
@@ -154,15 +161,80 @@ async function init() {
   document.getElementById('start-ar-btn').addEventListener('click', toggleAR);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
+ * COMPASS HEADING
+ *
+ * We listen for deviceorientationabsolute (Android) and deviceorientation
+ * (iOS).  The heading is locked at the moment the AR session starts and stays
+ * fixed for the session lifetime so all GPS-to-XR conversions use the same
+ * rotation throughout.
+ * ===========================================================================  */
+function setupCompass() {
+  function handleOrientation(e) {
+    let heading = null;
+
+    /* iOS Safari: webkitCompassHeading is degrees CW from geographic North   */
+    if (e.webkitCompassHeading != null && !isNaN(e.webkitCompassHeading)) {
+      heading = e.webkitCompassHeading;
+
+    /* Android absolute orientation: alpha is CCW from North, so
+       compass heading = (360 - alpha) % 360                                  */
+    } else if (e.absolute && e.alpha != null && !isNaN(e.alpha)) {
+      heading = (360 - e.alpha) % 360;
+    }
+
+    if (heading !== null) {
+      GAME.compassHeading = heading;
+      if (!GAME.compassLocked) {
+        GAME.compassLocked = true;
+        updateGPSDebugDisplay();
+      }
+    }
+  }
+
+  window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+  window.addEventListener('deviceorientation', function(e) {
+    if (!e.absolute) handleOrientation(e);
+  }, true);
+}
+
+/* Request iOS 13+ orientation permission (must be called from a user gesture) */
+async function requestOrientationPermission() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const result = await DeviceOrientationEvent.requestPermission();
+      if (result !== 'granted') {
+        console.warn('DeviceOrientation permission denied - compass alignment unavailable.');
+      }
+    } catch (err) {
+      console.warn('DeviceOrientation requestPermission error:', err);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Convert GPS local metres (East=+mx, South=+mz) to XR world (x, z).
+ * Rotates the GPS local frame by the compass heading so that geographic
+ * North aligns with the XR world's North regardless of device orientation at
+ * session start.
+ * --------------------------------------------------------------------------- */
+function gpsLocalToXR(mx, mz) {
+  const H = GAME.compassHeading * Math.PI / 180;
+  return {
+    x:  mx * Math.cos(H) + mz * Math.sin(H),
+    z: -mx * Math.sin(H) + mz * Math.cos(H),
+  };
+}
+
+/* ===========================================================================
  * THREE.JS SETUP
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function setupThreeJS() {
-  /* Renderer */
   renderer = new THREE.WebGLRenderer({
     canvas:    document.getElementById('ar-canvas'),
     antialias: true,
-    alpha:     true,   // transparent so the camera feed shows through in AR
+    alpha:     true,
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -170,18 +242,14 @@ function setupThreeJS() {
   renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
   renderer.xr.enabled        = true;
 
-  /* Scene */
   scene = new THREE.Scene();
 
-  /* Camera */
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200);
   camera.position.set(0, 1.2, 2.5);
   camera.lookAt(0, 0, 0);
 
-  /* Clock */
   clock = new THREE.Clock();
 
-  /* Lighting */
   const ambient = new THREE.AmbientLight(0xffffff, 0.55);
   scene.add(ambient);
 
@@ -195,27 +263,23 @@ function setupThreeJS() {
   sun.shadow.camera.right = sun.shadow.camera.top   = 5;
   scene.add(sun);
 
-  /* Axes helper (debug) */
   axesHelper = new THREE.AxesHelper(0.5);
   axesHelper.visible = DEBUG.showAxes;
   scene.add(axesHelper);
 
-  /* Grid helper (debug) */
   gridHelper = new THREE.GridHelper(6, 30, 0x444444, 0x222222);
-  gridHelper.position.y = 0;
   gridHelper.visible = DEBUG.showGrid;
   scene.add(gridHelper);
 
-  /* Shadow-receiving ground (invisible but casts shadows from placed objects) */
   const shadowGeo = new THREE.PlaneGeometry(20, 20);
   const shadowMat = new THREE.ShadowMaterial({ opacity: 0.35 });
   shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
   shadowPlane.rotation.x = -Math.PI / 2;
   shadowPlane.receiveShadow = true;
-  shadowPlane.visible = false;   // shown in simulation, hidden in AR (AR has real floor)
+  shadowPlane.visible = false;
   scene.add(shadowPlane);
 
-  /* Reticle — ring that snaps to detected surfaces */
+  /* Reticle ring */
   const reticleGeo = new THREE.RingGeometry(0.06, 0.10, 36).rotateX(-Math.PI / 2);
   const reticleMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide });
   reticle = new THREE.Mesh(reticleGeo, reticleMat);
@@ -223,33 +287,72 @@ function setupThreeJS() {
   reticle.visible = false;
   scene.add(reticle);
 
-  /* Outer pulsing ring */
   const outerRingGeo = new THREE.RingGeometry(0.11, 0.135, 36).rotateX(-Math.PI / 2);
   const outerRingMat = new THREE.MeshBasicMaterial({
-    color: 0x00ff88, side: THREE.DoubleSide, transparent: true, opacity: 0.4
+    color: 0x00ff88, side: THREE.DoubleSide, transparent: true, opacity: 0.4,
   });
   reticleRing = new THREE.Mesh(outerRingGeo, outerRingMat);
   reticleRing.matrixAutoUpdate = false;
   reticleRing.visible = false;
   scene.add(reticleRing);
 
-  /* Start render loop */
   renderer.setAnimationLoop(renderLoop);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ---------------------------------------------------------------------------
+ * Apply or remove split-screen (XR view top half, map bottom half)
+ * --------------------------------------------------------------------------- */
+function setSplitScreen(enabled) {
+  isSplitScreen = enabled;
+  const mapH = Math.round(window.innerHeight / 2);
+  const arH  = window.innerHeight - mapH;
+
+  if (enabled) {
+    /* Three.js renders only into the top half via viewport + scissor.
+       The canvas itself remains full-screen so the AR camera feed fills the
+       whole screen (the bottom half camera feed is covered by the map).      */
+    renderer.setViewport(0, mapH, window.innerWidth, arH);
+    renderer.setScissor(0, mapH, window.innerWidth, arH);
+    renderer.setScissorTest(true);
+    camera.aspect = window.innerWidth / arH;
+    camera.updateProjectionMatrix();
+
+    document.getElementById('map-divider').style.display    = '';
+    document.getElementById('minimap-canvas').style.display = '';
+    document.getElementById('controls').classList.remove('no-split');
+    document.getElementById('placed-count').classList.remove('no-split');
+    updateMapCanvas();
+  } else {
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissorTest(false);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    document.getElementById('map-divider').style.display    = 'none';
+    document.getElementById('minimap-canvas').style.display = 'none';
+    document.getElementById('controls').classList.add('no-split');
+    document.getElementById('placed-count').classList.add('no-split');
+  }
+}
+
+/* Resize minimap canvas to exactly fill the bottom half */
+function updateMapCanvas() {
+  const mc  = document.getElementById('minimap-canvas');
+  mc.width  = window.innerWidth;
+  mc.height = Math.round(window.innerHeight / 2);
+}
+
+/* ===========================================================================
  * SIMULATION MODE
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function startSimulation() {
-  /* Show shadow plane / grid in simulation */
   shadowPlane.visible = true;
   gridHelper.visible  = true;
 
-  /* Environment — subtle gradient sky colour */
   scene.background = new THREE.Color(0x0a0e1a);
-  scene.fog = new THREE.Fog(0x0a0e1a, 8, 20);
+  scene.fog        = new THREE.Fog(0x0a0e1a, 8, 20);
 
-  /* Preview object: torus-knot */
   const geo = new THREE.TorusKnotGeometry(0.38, 0.14, 120, 18);
   const mat = new THREE.MeshStandardMaterial({
     color: 0x00ff88, roughness: 0.3, metalness: 0.55,
@@ -260,93 +363,71 @@ function startSimulation() {
   simPreviewMesh.position.set(0, 0.5, 0);
   scene.add(simPreviewMesh);
 
-  /* Click / tap interaction in simulation mode */
-  const canvas = document.getElementById('ar-canvas');
-  canvas.addEventListener('click',      onSimClick);
-  canvas.addEventListener('touchstart', onSimTouch, { passive: true });
-
-  document.getElementById('start-ar-btn').textContent = '↺ Restart';
+  document.getElementById('start-ar-btn').textContent = '\u21ba Restart';
   document.getElementById('start-ar-btn').disabled    = false;
-  document.getElementById('reticle-hint').style.display = '';
-  document.getElementById('reticle-hint').textContent   = 'Walk to collect clues — then backtrack to find the treasure!';
 
   document.getElementById('no-ar-banner').style.display = 'block';
-  setTimeout(() => { document.getElementById('no-ar-banner').style.display = 'none'; }, 4500);
+  setTimeout(function() { document.getElementById('no-ar-banner').style.display = 'none'; }, 4500);
 
-  /* Override start button for simulation: restart game */
   document.getElementById('start-ar-btn').removeEventListener('click', toggleAR);
-  document.getElementById('start-ar-btn').addEventListener('click', () => {
+  document.getElementById('start-ar-btn').addEventListener('click', function() {
     if (GAME.phase !== 'idle') {
-      /* Restart */
-      stopGPS();
-      clearGameObjects();
-      GAME.phase = 'idle';
+      stopTracking();
     }
-    startGame();
+    startTracking();
   });
 
-  /* Auto-start game in sim mode */
-  startGame();
+  /* Attach idle-mode click handlers */
+  var canvas = document.getElementById('ar-canvas');
+  canvas.addEventListener('click', onSimClick);
+  canvas.addEventListener('touchstart', onSimTouch, { passive: true });
+
+  startTracking();
 }
 
 function onSimClick(e) {
-  const rect = renderer.domElement.getBoundingClientRect();
-  const ndc  = new THREE.Vector2(
+  if (GAME.phase !== 'idle') return;
+  var rect = renderer.domElement.getBoundingClientRect();
+  var ndc  = new THREE.Vector2(
     ((e.clientX - rect.left) / rect.width)  * 2 - 1,
     -((e.clientY - rect.top)  / rect.height) * 2 + 1
   );
-  const target = groundPositionFromNDC(ndc);
-  if (!target) return;
-
-  if (GAME.phase === 'solve' || GAME.phase === 'explore') {
-    /* Try to tap the AR treasure chest */
-    if (GAME.treasureEntry) {
-      const d = target.distanceTo(GAME.treasureEntry.mesh.position);
-      if (d < 0.8) { collectARTreasure(); return; }
-    }
-  }
-}
-
-function onSimTouch(e) {
-  if (e.touches.length !== 1) return;
-  const touch = e.touches[0];
-  const rect  = renderer.domElement.getBoundingClientRect();
-  const ndc   = new THREE.Vector2(
-    ((touch.clientX - rect.left) / rect.width)  * 2 - 1,
-    -((touch.clientY - rect.top)  / rect.height) * 2 + 1
-  );
-  const target = groundPositionFromNDC(ndc);
-  if (!target) return;
-
-  if (GAME.phase === 'solve' || GAME.phase === 'explore') {
-    if (GAME.treasureEntry) {
-      const d = target.distanceTo(GAME.treasureEntry.mesh.position);
-      if (d < 0.8) { collectARTreasure(); return; }
-    }
-  }
-}
-
-function groundPositionFromNDC(ndc) {
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(ndc, camera);
-  const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const target = new THREE.Vector3();
-  return raycaster.ray.intersectPlane(ground, target) ? target : null;
-}
-
-function rayCastToGround(ndc) {
-  const target = groundPositionFromNDC(ndc);
+  var target = groundPositionFromNDC(ndc);
   if (target) placeObjectAtPosition(target);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+function onSimTouch(e) {
+  if (GAME.phase !== 'idle') return;
+  if (e.touches.length !== 1) return;
+  var touch = e.touches[0];
+  var rect  = renderer.domElement.getBoundingClientRect();
+  var ndc   = new THREE.Vector2(
+    ((touch.clientX - rect.left) / rect.width)  * 2 - 1,
+    -((touch.clientY - rect.top)  / rect.height) * 2 + 1
+  );
+  var target = groundPositionFromNDC(ndc);
+  if (target) placeObjectAtPosition(target);
+}
+
+function groundPositionFromNDC(ndc) {
+  var raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(ndc, camera);
+  var ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  var target = new THREE.Vector3();
+  return raycaster.ray.intersectPlane(ground, target) ? target : null;
+}
+
+/* ===========================================================================
  * AR SESSION
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 async function toggleAR() {
   if (isARActive) { stopAR(); } else { startAR(); }
 }
 
 async function startAR() {
+  /* Request iOS orientation permission before session so compass works */
+  await requestOrientationPermission();
+
   try {
     xrSession = await navigator.xr.requestSession('immersive-ar', {
       requiredFeatures: ['hit-test'],
@@ -365,20 +446,18 @@ async function startAR() {
   xrSession.addEventListener('end', onXREnd);
   xrSession.addEventListener('select', onXRSelect);
 
-  isARActive   = true;
+  isARActive      = true;
   htSourcePending = false;
   hitTestSource   = null;
 
   document.getElementById('start-ar-btn').textContent = 'Stop AR';
   document.getElementById('start-ar-btn').classList.add('active');
-  document.getElementById('reticle-hint').style.display = '';
   document.getElementById('plane-count').style.display  = '';
 
-  updateStatus('AR active — walk to collect clues and find the treasure!');
+  updateStatus('AR active - walk to place GPS waypoints along your path.');
   updateXRInfoDisplay('Session started\nMode: immersive-ar\nFeatures: hit-test');
 
-  /* Auto-start game immediately — no overlay required */
-  startGame();
+  startTracking();
 }
 
 async function stopAR() {
@@ -396,20 +475,10 @@ function onXREnd() {
 
   clearPlaneOverlays();
 
-  /* Stop any running game */
-  if (GAME.phase === 'explore' || GAME.phase === 'solve') {
-    stopGPS();
-    clearGameObjects();
-    GAME.phase = 'idle';
-    document.getElementById('game-hud').style.display     = 'none';
-    document.getElementById('hunt-hud').style.display     = 'none';
-    document.getElementById('minimap-canvas').style.display = 'none';
-    document.getElementById('status-bar').style.display   = '';
-  }
+  if (GAME.phase === 'tracking') stopTracking();
 
   document.getElementById('start-ar-btn').textContent = 'Start AR';
   document.getElementById('start-ar-btn').classList.remove('active');
-  document.getElementById('reticle-hint').style.display = 'none';
   document.getElementById('plane-count').style.display  = 'none';
 
   updateStatus('AR session ended.');
@@ -417,100 +486,72 @@ function onXREnd() {
 }
 
 function onXRSelect() {
-  /* Try to collect the AR treasure chest (solve / explore phase) */
-  if ((GAME.phase === 'solve' || GAME.phase === 'explore') && GAME.treasureEntry) {
-    if (lastReticlePos) {
-      const d = lastReticlePos.distanceTo(GAME.treasureEntry.mesh.position);
-      if (d < 1.0) { collectARTreasure(); return; }
-    } else {
-      /* No reticle — collect if chest has spawned */
-      collectARTreasure(); return;
-    }
-  }
-  /* Try to tap-collect a nearby AR clue gem */
-  if ((GAME.phase === 'explore' || GAME.phase === 'solve') && GAME.arClues.length > 0) {
-    if (lastReticlePos) {
-      for (let i = GAME.arClues.length - 1; i >= 0; i--) {
-        const clue = GAME.arClues[i];
-        if (lastReticlePos.distanceTo(clue.mesh.position) < CLUE_COLLECT_RADIUS_M) {
-          collectARClue(clue); return;
-        }
-      }
-    }
-  }
-  /* Outside game: place a debug object */
+  /* Only place debug objects when not tracking */
   if (GAME.phase === 'idle' && reticle.visible) {
-    const pos  = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
+    var pos  = new THREE.Vector3();
+    var quat = new THREE.Quaternion();
     reticle.matrix.decompose(pos, quat, new THREE.Vector3());
     placeObjectAtPosition(pos, quat);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * RENDER LOOP
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function renderLoop(timestamp, frame) {
-  const delta = clock.getDelta();
+  var delta = clock.getDelta();
 
-  /* FPS */
+  /* FPS counter */
   if (DEBUG.showFPS) {
     fpsFrames++;
     if (timestamp - fpsLast >= 1000) {
       fpsCurrent = Math.round(fpsFrames * 1000 / (timestamp - fpsLast));
       fpsFrames  = 0;
       fpsLast    = timestamp;
-      document.getElementById('fps-counter').textContent = `${fpsCurrent} FPS`;
+      document.getElementById('fps-counter').textContent = fpsCurrent + ' FPS';
     }
   }
 
-  /* Simulation: rotate preview mesh, pulse reticle ring */
   if (simulationMode && simPreviewMesh) {
     simPreviewMesh.rotation.x += delta * 0.4;
     simPreviewMesh.rotation.y += delta * 0.7;
   }
 
-  /* Reticle ring pulse */
   if (reticleRing.visible) {
-    const pulse = 0.4 + 0.3 * Math.sin(timestamp * 0.003);
-    reticleRing.material.opacity = pulse;
+    reticleRing.material.opacity = 0.4 + 0.3 * Math.sin(timestamp * 0.003);
   }
 
   /* WebXR per-frame work */
   if (frame) {
-    const refSpace = renderer.xr.getReferenceSpace();
-    const session  = renderer.xr.getSession();
+    var refSpace = renderer.xr.getReferenceSpace();
+    var session  = renderer.xr.getSession();
 
-    /* Request hit-test source once */
     if (!htSourcePending && !hitTestSource) {
       htSourcePending = true;
-      session.requestReferenceSpace('viewer').then(viewerSpace => {
+      session.requestReferenceSpace('viewer').then(function(viewerSpace) {
         session.requestHitTestSource({ space: viewerSpace })
-          .then(src => { hitTestSource = src; })
-          .catch(err => console.warn('hitTestSource failed:', err));
+          .then(function(src) { hitTestSource = src; })
+          .catch(function(err) { console.warn('hitTestSource failed:', err); });
       });
     }
 
-    /* Process hit-test results */
     if (hitTestSource) {
-      const results = frame.getHitTestResults(hitTestSource);
+      var results = frame.getHitTestResults(hitTestSource);
       if (results.length > 0) {
-        const pose = results[0].getPose(refSpace);
+        var pose = results[0].getPose(refSpace);
         if (pose) {
-          const show = DEBUG.showReticle;
+          var show = DEBUG.showReticle;
           reticle.visible     = show;
           reticleRing.visible = show;
           reticle.matrix.fromArray(pose.transform.matrix);
           reticleRing.matrix.fromArray(pose.transform.matrix);
 
           if (DEBUG.showHitInfo) {
-            const m = pose.transform.matrix;
-            const pos = `pos: (${m[12].toFixed(3)}, ${m[13].toFixed(3)}, ${m[14].toFixed(3)})`;
-            updateHitInfoDisplay(pos);
+            var m = pose.transform.matrix;
+            updateHitInfoDisplay('pos: (' + m[12].toFixed(3) + ', ' + m[13].toFixed(3) + ', ' + m[14].toFixed(3) + ')');
           }
 
-          /* Track reticle world position for game collection */
-          const _p = new THREE.Vector3();
+          var _p = new THREE.Vector3();
           reticle.matrix.decompose(_p, new THREE.Quaternion(), new THREE.Vector3());
           lastReticlePos = _p;
         }
@@ -521,70 +562,62 @@ function renderLoop(timestamp, frame) {
       }
     }
 
-    /* Camera world matrix debug */
     if (DEBUG.showCamMatrix) {
-      const viewerPose = frame.getViewerPose(refSpace);
+      var viewerPose = frame.getViewerPose(refSpace);
       if (viewerPose && viewerPose.views.length > 0) {
-        const v = viewerPose.views[0];
-        updateCamMatrixDisplay(v.transform.matrix);
+        updateCamMatrixDisplay(viewerPose.views[0].transform.matrix);
       }
     }
 
-    /* XR session state */
     if (DEBUG.showXRInfo) {
       updateXRInfoDisplay(
-        `Mode:        immersive-ar\n` +
-        `renderState: ${JSON.stringify({ baseLayer: session.renderState.baseLayer ? 'set' : 'none' })}\n` +
-        `visibilityState: ${session.visibilityState || '—'}`
+        'Mode:        immersive-ar\n' +
+        'renderState: ' + JSON.stringify({ baseLayer: session.renderState.baseLayer ? 'set' : 'none' }) + '\n' +
+        'visibilityState: ' + (session.visibilityState || '-')
       );
     }
 
-    /* Plane detection — floors and walls */
     if (frame.detectedPlanes) {
       updatePlaneOverlays(frame, refSpace);
     }
   }
 
-  /* ── Game per-frame update ──────────────────────────────────────────────── */
   tickGame(delta, timestamp);
 
   renderer.render(scene, camera);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * PLACE OBJECT
- * ═══════════════════════════════════════════════════════════════════════════ */
-const SHAPE_NAMES = ['box', 'sphere', 'cone', 'cylinder', 'torus', 'dodecahedron', 'octahedron'];
+/* ===========================================================================
+ * PLACE OBJECT (idle / debug mode)
+ * =========================================================================== */
+var SHAPE_NAMES = ['box', 'sphere', 'cone', 'cylinder', 'torus', 'dodecahedron', 'octahedron'];
 
 function placeObjectAtPosition(position, quaternion) {
-  const shape = SHAPE_NAMES[Math.floor(Math.random() * SHAPE_NAMES.length)];
-  const geo   = buildGeometry(shape);
+  var shape = SHAPE_NAMES[Math.floor(Math.random() * SHAPE_NAMES.length)];
+  var geo   = buildGeometry(shape);
 
-  const hue  = Math.random();
-  const col  = new THREE.Color().setHSL(hue, 0.9, 0.55);
-  const mat  = new THREE.MeshStandardMaterial({
+  var hue  = Math.random();
+  var col  = new THREE.Color().setHSL(hue, 0.9, 0.55);
+  var mat  = new THREE.MeshStandardMaterial({
     color:     col,
     roughness: 0.45,
     metalness: 0.35,
     wireframe: DEBUG.wireframe,
   });
 
-  const mesh = new THREE.Mesh(geo, mat);
+  var mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(position);
   if (quaternion) mesh.quaternion.copy(quaternion);
   mesh.castShadow    = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
 
-  /* Bounding box helper (debug) */
-  const bboxHelper = new THREE.BoxHelper(mesh, 0xffff00);
+  var bboxHelper = new THREE.BoxHelper(mesh, 0xffff00);
   bboxHelper.visible = DEBUG.showBBox;
   scene.add(bboxHelper);
 
-  placedObjects.push({ mesh, bboxHelper, material: mat });
+  placedObjects.push({ mesh: mesh, bboxHelper: bboxHelper, material: mat });
   updatePlacedCount();
-
-  /* Pop-in scale animation */
   popIn(mesh);
 }
 
@@ -603,114 +636,88 @@ function buildGeometry(shape) {
 
 function popIn(mesh) {
   mesh.scale.set(0.001, 0.001, 0.001);
-  const start = performance.now();
-  const dur   = 420;
-  const target = new THREE.Vector3(1, 1, 1);
+  var start = performance.now();
+  var dur   = 420;
 
   function tick() {
-    const t    = Math.min((performance.now() - start) / dur, 1);
-    const ease = 1 - Math.pow(1 - t, 3);  // ease-out cubic
+    var t    = Math.min((performance.now() - start) / dur, 1);
+    var ease = 1 - Math.pow(1 - t, 3);
     mesh.scale.setScalar(ease);
     if (t < 1) requestAnimationFrame(tick);
-    else mesh.scale.copy(target);
+    else mesh.scale.set(1, 1, 1);
   }
   requestAnimationFrame(tick);
 }
 
 function clearObjects() {
-  placedObjects.forEach(({ mesh, bboxHelper }) => {
-    scene.remove(mesh);
-    scene.remove(bboxHelper);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
+  placedObjects.forEach(function(obj) {
+    scene.remove(obj.mesh);
+    scene.remove(obj.bboxHelper);
+    obj.mesh.geometry.dispose();
+    obj.mesh.material.dispose();
   });
   placedObjects = [];
-  clearGameObjects();
+  clearWaypoints();
   updatePlacedCount();
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * PLANE DETECTION (walls + floors via WebXR Plane Detection API)
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * Build a BufferGeometry from an XRPlane polygon.
- * Polygon vertices are in the plane's local coordinate system where y = 0
- * and the surface spans the XZ plane.  A simple fan triangulation is used
- * (works correctly for the convex polygons XR returns).
- */
+/* ===========================================================================
+ * PLANE DETECTION
+ * =========================================================================== */
 function buildPlaneGeometry(polygon) {
-  if (!polygon || polygon.length < 3) {
-    return new THREE.PlaneGeometry(0.1, 0.1);
-  }
-  const n = polygon.length;
-  const verts = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
+  if (!polygon || polygon.length < 3) return new THREE.PlaneGeometry(0.1, 0.1);
+  var n = polygon.length;
+  var verts = new Float32Array(n * 3);
+  for (var i = 0; i < n; i++) {
     verts[i * 3]     = polygon[i].x;
     verts[i * 3 + 1] = 0;
     verts[i * 3 + 2] = polygon[i].z;
   }
-  const idx = [];
-  for (let i = 1; i < n - 1; i++) idx.push(0, i, i + 1);
+  var idx = [];
+  for (var i2 = 1; i2 < n - 1; i2++) idx.push(0, i2, i2 + 1);
 
-  const geo = new THREE.BufferGeometry();
+  var geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
   return geo;
 }
 
-/**
- * Called every AR frame.  Syncs Three.js overlay meshes with the set of
- * XRPlane objects tracked by the device.
- *
- *   • Vertical planes  (walls)  → orange overlay
- *   • Horizontal planes (floors/ceilings) → blue overlay
- *
- * Meshes are only visible when the "Detected-plane overlays" debug toggle
- * is enabled, but the poses are always updated so the overlay is ready
- * the moment the toggle is switched on.
- */
 function updatePlaneOverlays(frame, refSpace) {
-  const currentPlanes = frame.detectedPlanes;
+  var currentPlanes = frame.detectedPlanes;
 
-  /* Remove overlays for planes no longer tracked */
-  for (const [plane, data] of planeOverlays) {
-    if (!currentPlanes.has(plane)) {
-      scene.remove(data.mesh);
-      data.mesh.geometry.dispose();
-      data.mesh.material.dispose();
-      planeOverlays.delete(plane);
+  for (var entry of planeOverlays) {
+    if (!currentPlanes.has(entry[0])) {
+      scene.remove(entry[1].mesh);
+      entry[1].mesh.geometry.dispose();
+      entry[1].mesh.material.dispose();
+      planeOverlays.delete(entry[0]);
     }
   }
 
-  let wallCount = 0, floorCount = 0;
+  var wallCount = 0, floorCount = 0;
 
-  for (const plane of currentPlanes) {
-    const isWall = plane.orientation === 'vertical';
+  for (var plane of currentPlanes) {
+    var isWall = plane.orientation === 'vertical';
     if (isWall) wallCount++; else floorCount++;
 
-    let data = planeOverlays.get(plane);
+    var data = planeOverlays.get(plane);
+    var needsRebuild = !data || data.lastChanged !== plane.lastChangedTime;
 
-    /* (Re-)build geometry when the device updates the polygon */
-    const needsRebuild = !data || data.lastChanged !== plane.lastChangedTime;
     if (needsRebuild) {
-      const geo   = buildPlaneGeometry(plane.polygon);
-      const color = isWall ? 0xff6600 : 0x0066ff;
+      var geo   = buildPlaneGeometry(plane.polygon);
+      var color = isWall ? 0xff6600 : 0x0066ff;
 
       if (!data) {
-        const mat = new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity:     0.25,
-          side:        THREE.DoubleSide,
-          depthWrite:  false,
+        var mat = new THREE.MeshBasicMaterial({
+          color: color, transparent: true, opacity: 0.25,
+          side: THREE.DoubleSide, depthWrite: false,
         });
-        const mesh = new THREE.Mesh(geo, mat);
+        var mesh = new THREE.Mesh(geo, mat);
         mesh.matrixAutoUpdate = false;
         mesh.visible = DEBUG.showPlanes;
         scene.add(mesh);
-        data = { mesh, lastChanged: plane.lastChangedTime };
+        data = { mesh: mesh, lastChanged: plane.lastChangedTime };
         planeOverlays.set(plane, data);
       } else {
         data.mesh.geometry.dispose();
@@ -719,33 +726,29 @@ function updatePlaneOverlays(frame, refSpace) {
       }
     }
 
-    /* Update world pose every frame */
-    const pose = frame.getPose(plane.planeSpace, refSpace);
-    if (pose) {
-      data.mesh.matrix.fromArray(pose.transform.matrix);
-    }
+    var pose = frame.getPose(plane.planeSpace, refSpace);
+    if (pose) data.mesh.matrix.fromArray(pose.transform.matrix);
   }
 
   updatePlaneCount(wallCount, floorCount);
 }
 
-/** Remove all plane overlay meshes (called when AR session ends). */
 function clearPlaneOverlays() {
-  for (const [, data] of planeOverlays) {
-    scene.remove(data.mesh);
-    data.mesh.geometry.dispose();
-    data.mesh.material.dispose();
+  for (var entry of planeOverlays) {
+    scene.remove(entry[1].mesh);
+    entry[1].mesh.geometry.dispose();
+    entry[1].mesh.material.dispose();
   }
   planeOverlays.clear();
   updatePlaneCount(0, 0);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * ORBIT CONTROLS (simulation mode only — mouse / touch drag)
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ===========================================================================
+ * ORBIT CONTROLS (simulation only)
+ * =========================================================================== */
 function setupOrbitControls() {
-  const canvas = document.getElementById('ar-canvas');
-  const R = 3.5;
+  var canvas = document.getElementById('ar-canvas');
+  var R = 3.5;
 
   function applyOrbit() {
     orbitPhi = Math.max(0.1, Math.min(Math.PI / 2.2, orbitPhi));
@@ -757,146 +760,146 @@ function setupOrbitControls() {
     camera.lookAt(0, 0.3, 0);
   }
 
-  canvas.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    if (!simulationMode) return;
+  canvas.addEventListener('mousedown', function(e) {
+    if (e.button !== 0 || !simulationMode) return;
     isDragging = true; dragX = e.clientX; dragY = e.clientY;
   });
-  window.addEventListener('mousemove', e => {
+  window.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
     orbitTheta -= (e.clientX - dragX) * 0.006;
     orbitPhi   += (e.clientY - dragY) * 0.006;
     dragX = e.clientX; dragY = e.clientY;
     applyOrbit();
   });
-  window.addEventListener('mouseup', () => { isDragging = false; });
+  window.addEventListener('mouseup', function() { isDragging = false; });
 
-  let pinchDist = 0;
-  canvas.addEventListener('touchmove', e => {
+  var pinchDist = 0;
+  canvas.addEventListener('touchmove', function(e) {
     if (!simulationMode) return;
     if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const d  = Math.sqrt(dx * dx + dy * dy);
-      if (pinchDist) {
-        const ratio = d / pinchDist;
-        camera.position.multiplyScalar(1 / ratio);
-      }
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var d  = Math.sqrt(dx * dx + dy * dy);
+      if (pinchDist) camera.position.multiplyScalar(1 / (d / pinchDist));
       pinchDist = d;
     } else if (e.touches.length === 1) {
       pinchDist = 0;
     }
   }, { passive: true });
-  canvas.addEventListener('touchend', () => { pinchDist = 0; });
+  canvas.addEventListener('touchend', function() { pinchDist = 0; });
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * DEBUG PANEL
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function setupDebugPanel() {
-  /* Toggle panel visibility */
-  document.getElementById('debug-toggle-btn').addEventListener('click', () => {
-    const panel = document.getElementById('debug-panel');
+  document.getElementById('debug-toggle-btn').addEventListener('click', function() {
+    var panel = document.getElementById('debug-panel');
     panel.classList.toggle('hidden');
     document.getElementById('debug-toggle-btn').classList.toggle('active', !panel.classList.contains('hidden'));
   });
-  document.getElementById('close-debug-btn').addEventListener('click', () => {
+  document.getElementById('close-debug-btn').addEventListener('click', function() {
     document.getElementById('debug-panel').classList.add('hidden');
     document.getElementById('debug-toggle-btn').classList.remove('active');
   });
-
-  /* Clear button */
   document.getElementById('clear-btn').addEventListener('click', clearObjects);
 
-  /* Bind all toggles */
-  bindToggle('dbg-axes',      'showAxes',      v => { axesHelper.visible  = v; });
-  bindToggle('dbg-grid',      'showGrid',      v => { gridHelper.visible  = v; });
-  bindToggle('dbg-planes',    'showPlanes',    v => {
-    for (const [, data] of planeOverlays) data.mesh.visible = v;
+  bindToggle('dbg-axes',      'showAxes',      function(v) { axesHelper.visible  = v; });
+  bindToggle('dbg-grid',      'showGrid',      function(v) { gridHelper.visible  = v; });
+  bindToggle('dbg-planes',    'showPlanes',    function(v) {
+    for (var e of planeOverlays) e[1].mesh.visible = v;
   });
-  bindToggle('dbg-reticle',   'showReticle',   v => {
+  bindToggle('dbg-reticle',   'showReticle',   function(v) {
     reticle.visible     = isARActive && v;
     reticleRing.visible = isARActive && v;
   });
-  bindToggle('dbg-bbox',      'showBBox',      v => {
-    placedObjects.forEach(o => { o.bboxHelper.visible = v; });
+  bindToggle('dbg-bbox',      'showBBox',      function(v) {
+    placedObjects.forEach(function(o) { o.bboxHelper.visible = v; });
   });
-  bindToggle('dbg-wireframe', 'wireframe',     v => {
-    placedObjects.forEach(o => { o.material.wireframe = v; });
+  bindToggle('dbg-wireframe', 'wireframe',     function(v) {
+    placedObjects.forEach(function(o) { o.material.wireframe = v; });
   });
-  bindToggle('dbg-fps',       'showFPS',       v => {
+  bindToggle('dbg-fps',       'showFPS',       function(v) {
     document.getElementById('fps-counter').style.display = v ? '' : 'none';
     if (!v) document.getElementById('fps-counter').textContent = '';
   });
-  bindToggle('dbg-cam-matrix','showCamMatrix', v => {
+  bindToggle('dbg-cam-matrix','showCamMatrix', function(v) {
     document.getElementById('section-cam-matrix').style.display = v ? '' : 'none';
-    if (!v) document.getElementById('cam-matrix-display').textContent = '—';
+    if (!v) document.getElementById('cam-matrix-display').textContent = '-';
   });
-  bindToggle('dbg-xr-info',   'showXRInfo',    v => {
+  bindToggle('dbg-xr-info',   'showXRInfo',    function(v) {
     document.getElementById('section-xr-info').style.display = v ? '' : 'none';
-    if (!v) document.getElementById('xr-info-display').textContent = '—';
+    if (!v) document.getElementById('xr-info-display').textContent = '-';
   });
-  bindToggle('dbg-hit-info',  'showHitInfo',   v => {
+  bindToggle('dbg-hit-info',  'showHitInfo',   function(v) {
     document.getElementById('section-hit-info').style.display = v ? '' : 'none';
-    if (!v) document.getElementById('hit-info-display').textContent = '—';
+    if (!v) document.getElementById('hit-info-display').textContent = '-';
   });
 
-  /* Sync checked state with initial DEBUG values */
   document.getElementById('dbg-reticle').checked = DEBUG.showReticle;
   document.getElementById('dbg-fps').checked      = DEBUG.showFPS;
 }
 
 function bindToggle(id, key, callback) {
-  const el = document.getElementById(id);
+  var el = document.getElementById(id);
   if (!el) return;
-  el.addEventListener('change', e => {
+  el.addEventListener('change', function(e) {
     DEBUG[key] = e.target.checked;
     callback(e.target.checked);
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * RESIZE
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function setupResizeHandler() {
-  window.addEventListener('resize', () => {
-    if (isARActive) return;   // AR handles its own viewport
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+  window.addEventListener('resize', function() {
+    if (isARActive) return;
     renderer.setSize(window.innerWidth, window.innerHeight);
+    if (isSplitScreen) {
+      var mapH = Math.round(window.innerHeight / 2);
+      var arH  = window.innerHeight - mapH;
+      renderer.setViewport(0, mapH, window.innerWidth, arH);
+      renderer.setScissor(0, mapH, window.innerWidth, arH);
+      camera.aspect = window.innerWidth / arH;
+      updateMapCanvas();
+    } else {
+      camera.aspect = window.innerWidth / window.innerHeight;
+    }
+    camera.updateProjectionMatrix();
+    drawMap();
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * UI HELPERS
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 function updateStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
 function updatePlacedCount() {
-  const phase = GAME.phase;
-  if (phase === 'explore' || phase === 'solve') {
-    document.getElementById('placed-count').textContent =
-      `${Math.round(GAME.totalDistM)}m · Clues: ${GAME.clues.length}/${CLUES_NEEDED}`;
+  var el = document.getElementById('placed-count');
+  if (!el) return;
+  if (GAME.phase === 'tracking') {
+    el.textContent = Math.round(GAME.totalDistM) + 'm \u00b7 Pts: ' + GAME.waypoints.length;
   } else {
-    document.getElementById('placed-count').textContent = `Objects: ${placedObjects.length}`;
+    el.textContent = 'Objects: ' + placedObjects.length;
   }
 }
 
 function updatePlaneCount(walls, floors) {
-  const el = document.getElementById('plane-count');
-  if (!el) return;
-  el.textContent = `Walls: ${walls} · Floors: ${floors}`;
+  var el = document.getElementById('plane-count');
+  if (el) el.textContent = 'Walls: ' + walls + ' \u00b7 Floors: ' + floors;
 }
 
 function updateCamMatrixDisplay(matrix) {
-  const m = Array.from(matrix).map(v => v.toFixed(3).padStart(7));
+  var m = Array.from(matrix).map(function(v) { return v.toFixed(3).padStart(7); });
   document.getElementById('cam-matrix-display').textContent =
-    `[${m[0]},${m[4]},${m[8]},${m[12]}]\n` +
-    `[${m[1]},${m[5]},${m[9]},${m[13]}]\n` +
-    `[${m[2]},${m[6]},${m[10]},${m[14]}]\n` +
-    `[${m[3]},${m[7]},${m[11]},${m[15]}]`;
+    '[' + m[0] + ',' + m[4] + ',' + m[8]  + ',' + m[12] + ']\n' +
+    '[' + m[1] + ',' + m[5] + ',' + m[9]  + ',' + m[13] + ']\n' +
+    '[' + m[2] + ',' + m[6] + ',' + m[10] + ',' + m[14] + ']\n' +
+    '[' + m[3] + ',' + m[7] + ',' + m[11] + ',' + m[15] + ']';
 }
 
 function updateXRInfoDisplay(text) {
@@ -907,114 +910,73 @@ function updateHitInfoDisplay(text) {
   document.getElementById('hit-info-display').textContent = text;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+function updateGPSDebugDisplay() {
+  var el = document.getElementById('gps-debug-display');
+  if (!el) return;
+  var lp = GAME.gpsPath.length > 0 ? GAME.gpsPath[GAME.gpsPath.length - 1] : null;
+  el.textContent =
+    'compassHeading: ' + GAME.compassHeading.toFixed(1) + '\u00b0\n' +
+    'compassLocked:  ' + GAME.compassLocked + '\n' +
+    'gpsReady:       ' + GAME.gpsReady + '\n' +
+    'totalDistM:     ' + GAME.totalDistM.toFixed(1) + 'm\n' +
+    'waypoints:      ' + GAME.waypoints.length + '\n' +
+    (lp ? 'lastPos: (' + lp.mx.toFixed(1) + ', ' + lp.mz.toFixed(1) + ')' : 'lastPos: -');
+}
+
+function updateTrailHUD() {
+  var distEl    = document.getElementById('trail-dist');
+  var ptsEl     = document.getElementById('trail-pts');
+  var headingEl = document.getElementById('trail-heading');
+  if (distEl)    distEl.textContent    = Math.round(GAME.totalDistM) + 'm';
+  if (ptsEl)     ptsEl.textContent     = String(GAME.waypoints.length);
+  if (headingEl) headingEl.textContent = Math.round(GAME.compassHeading) + '\u00b0';
+}
+
+/* ===========================================================================
  * BOOT
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 window.addEventListener('DOMContentLoaded', init);
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * GAME FUNCTIONS — Trail Treasure Hunt
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ===========================================================================
+ * GPS TRAIL TRACKING
+ * =========================================================================== */
 
-/* ─── Wire up game overlay buttons ───────────────────────────────────────── */
-function setupGameUI() {
-  GAME.highScore = parseInt(localStorage.getItem('arHuntHighScore') || '0', 10);
-  if (GAME.highScore > 0) {
-    document.getElementById('game-highscore').textContent = GAME.highScore.toLocaleString();
-    document.getElementById('game-highscore-display').style.display = '';
-  }
-
-  document.getElementById('play-btn').addEventListener('click', () => {
-    document.getElementById('game-overlay').classList.add('hidden');
-    startGame();
-  });
-
-  document.getElementById('play-again-btn').addEventListener('click', () => {
-    document.getElementById('game-overlay').classList.add('hidden');
-    startGame();
-  });
-}
-
-/* ─── Start a new game ────────────────────────────────────────────────────── */
-function startGame() {
+function startTracking() {
   stopGPS();
-  clearGameObjects();
+  clearWaypoints();
 
-  GAME.phase            = 'explore';
-  GAME.score            = 0;
-  GAME.gpsPath          = [];
-  GAME.totalDistM       = 0;
-  GAME.clues            = [];
-  GAME.clueSpots        = [];
-  GAME.clueAccumM       = 0;
-  GAME.footAccumM       = 0;
-  GAME.footprintColorIdx = 0;
-  GAME.watchId          = null;
-  GAME.lastGPS          = null;
-  GAME.gpsReady         = false;
-  GAME.treasureGPS      = null;
-  GAME.treasureMXMZ     = null;
-  GAME.treasureRiddle   = null;
-  GAME.distToTreasure   = Infinity;
-  GAME.arChestSpawned   = false;
-  GAME.treasureEntry    = null;
-  GAME._noGPS           = false;
-  GAME._simLastCamPos   = null;
-  GAME.footprints       = [];
-  GAME.arClues          = [];
+  GAME.phase          = 'tracking';
+  GAME.gpsPath        = [];
+  GAME.totalDistM     = 0;
+  GAME.waypointAccumM = 0;
+  GAME.watchId        = null;
+  GAME.lastGPS        = null;
+  GAME.gpsReady       = false;
+  GAME._noGPS         = false;
+  GAME._simLastCamPos = null;
+  GAME.waypoints      = [];
 
-  document.getElementById('status-bar').style.display   = 'none';
-  document.getElementById('game-hud').style.display     = '';
-  document.getElementById('hunt-hud').style.display     = 'none';
-  document.getElementById('game-overlay').classList.add('hidden');
-  document.getElementById('minimap-canvas').style.display = '';
+  document.getElementById('status-bar').style.display = 'none';
+  document.getElementById('trail-hud').style.display  = '';
 
-  updateExploreHUD();
+  setSplitScreen(true);
+  updateTrailHUD();
   updatePlacedCount();
-  drawMiniMap();
-
+  drawMap();
   startGPS();
-  updateStatus('Exploring… walk to collect clues — the treasure is somewhere you\'ve already been!');
+
+  updateStatus('GPS tracking started - walk to place waypoints.');
 }
 
-/* ─── End game ────────────────────────────────────────────────────────────── */
-function endGame(won) {
-  GAME.phase = 'found';
+function stopTracking() {
+  GAME.phase = 'idle';
   stopGPS();
-
-  const isNewRecord = GAME.score > GAME.highScore;
-  if (isNewRecord) {
-    GAME.highScore = GAME.score;
-    localStorage.setItem('arHuntHighScore', String(GAME.highScore));
-    document.getElementById('game-highscore').textContent = GAME.highScore.toLocaleString();
-    document.getElementById('game-highscore-display').style.display = '';
-  }
-
-  clearFootprints();
-
-  document.getElementById('game-hud').style.display     = 'none';
-  document.getElementById('hunt-hud').style.display     = 'none';
-  document.getElementById('minimap-canvas').style.display = 'none';
-
-  /* Populate game-over screen */
-  document.getElementById('final-score').textContent    = GAME.score.toLocaleString();
-  document.getElementById('stat-collected').textContent = `${Math.round(GAME.totalDistM)}m walked`;
-  document.getElementById('stat-streak').textContent    = `${GAME.clues.length} clue${GAME.clues.length !== 1 ? 's' : ''}`;
-  document.getElementById('stat-mult').textContent      = won ? '🎉 Found it!' : '💀 Gave up';
-  document.getElementById('game-over-best').textContent = GAME.highScore.toLocaleString();
-  document.getElementById('new-record-badge').style.display = isNewRecord ? '' : 'none';
-
-  setTimeout(() => {
-    document.getElementById('game-start-screen').style.display = 'none';
-    document.getElementById('game-over-screen').style.display  = '';
-    document.getElementById('game-overlay').classList.remove('hidden');
-    document.getElementById('status-bar').style.display = '';
-  }, 1400);
-
-  updateStatus(won ? '🏆 Treasure found! Amazing!' : 'Adventure over — try again!');
+  document.getElementById('trail-hud').style.display  = 'none';
+  document.getElementById('status-bar').style.display = '';
+  setSplitScreen(false);
+  updateStatus('Tracking stopped.');
 }
 
-/* ─── GPS: start watching ─────────────────────────────────────────────────── */
 function startGPS() {
   if (!navigator.geolocation) { onGPSError({ message: 'not supported' }); return; }
   GAME.watchId = navigator.geolocation.watchPosition(
@@ -1023,7 +985,6 @@ function startGPS() {
   );
 }
 
-/* ─── GPS: stop watching ──────────────────────────────────────────────────── */
 function stopGPS() {
   if (GAME.watchId !== null) {
     navigator.geolocation.clearWatch(GAME.watchId);
@@ -1031,800 +992,451 @@ function stopGPS() {
   }
 }
 
-/* ─── GPS update ──────────────────────────────────────────────────────────── */
 function onGPSUpdate(pos) {
-  if (GAME.phase === 'idle' || GAME.phase === 'found') return;
+  if (GAME.phase !== 'tracking') return;
 
-  const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
+  var lat = pos.coords.latitude;
+  var lng = pos.coords.longitude;
 
-  /* First fix — set origin */
+  /* Use GPS heading to lock compass if not yet locked from device orientation */
+  if (!GAME.compassLocked &&
+      pos.coords.heading != null && !isNaN(pos.coords.heading)) {
+    GAME.compassHeading = pos.coords.heading;
+    GAME.compassLocked  = true;
+  }
+
+  /* First fix: set origin */
   if (!GAME.gpsReady) {
     GAME.gpsReady = true;
-    GAME.lastGPS  = { lat, lng };
-    GAME.gpsPath.push({ lat, lng, mx: 0, mz: 0 });
-    showToast('🛰️ GPS locked! Walk to collect clues.', 3000);
-    drawMiniMap();
+    GAME.lastGPS  = { lat: lat, lng: lng };
+    GAME.gpsPath.push({ lat: lat, lng: lng, mx: 0, mz: 0 });
+    showToast('\ud83d\udee0\ufe0f GPS locked! Walk to place waypoints.', 3000);
+    drawMap();
+    updateGPSDebugDisplay();
     return;
   }
 
-  const distFromLast = haversineM(GAME.lastGPS.lat, GAME.lastGPS.lng, lat, lng);
-  if (distFromLast < GPS_MIN_MOVE_M) return;  // filter sub-2m GPS jitter
+  var distFromLast = haversineM(GAME.lastGPS.lat, GAME.lastGPS.lng, lat, lng);
+  if (distFromLast < GPS_MIN_MOVE_M) return;
 
   GAME.totalDistM += distFromLast;
-  GAME.lastGPS = { lat, lng };
+  GAME.lastGPS = { lat: lat, lng: lng };
 
-  const origin = GAME.gpsPath[0];
-  const { mx, mz } = gpsToLocal(origin.lat, origin.lng, lat, lng);
-  if (GAME.gpsPath.length < MAX_GPS_PTS) GAME.gpsPath.push({ lat, lng, mx, mz });
-
-  /* Footprints */
-  GAME.footAccumM += distFromLast;
-  if (GAME.footAccumM >= FOOTPRINT_DIST_M) { GAME.footAccumM = 0; placeFootprint(); }
-
-  /* Clues (explore phase) */
-  if (GAME.phase === 'explore') {
-    GAME.clueAccumM += distFromLast;
-    if (GAME.clueAccumM >= CLUE_INTERVAL_M &&
-        GAME.clues.length + GAME.arClues.length < CLUES_NEEDED) {
-      GAME.clueAccumM = 0;
-      spawnARClue({ lat, lng });
-    }
+  var origin = GAME.gpsPath[0];
+  var local  = gpsToLocal(origin.lat, origin.lng, lat, lng);
+  if (GAME.gpsPath.length < MAX_GPS_PTS) {
+    GAME.gpsPath.push({ lat: lat, lng: lng, mx: local.mx, mz: local.mz });
   }
 
-  /* Treasure proximity check (solve phase only — chest spawns when player returns) */
-  if (GAME.phase === 'solve' && GAME.treasureGPS) {
-    GAME.distToTreasure = haversineM(lat, lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_NEAR_M) {
-      spawnARTreasureChest();
-    }
+  /* Drop a waypoint pillar */
+  GAME.waypointAccumM += distFromLast;
+  if (GAME.waypointAccumM >= WAYPOINT_DIST_M) {
+    GAME.waypointAccumM = 0;
+    placeWaypoint(lat, lng);
   }
 
-  /* Correct XR tracking drift: re-anchor every AR object to its GPS position */
-  resyncARObjectsToGPS();
+  /* Re-anchor all AR waypoints to their GPS positions */
+  resyncWaypointsToGPS();
 
-  updateExploreHUD();
+  updateTrailHUD();
   updatePlacedCount();
-  drawMiniMap();
+  drawMap();
+  updateGPSDebugDisplay();
 }
 
-/* ─── GPS error / unavailable ─────────────────────────────────────────────── */
 function onGPSError(err) {
   if (GAME._noGPS) return;
   GAME._noGPS = true;
   console.warn('GPS error:', err);
-  showToast('🎮 No GPS — sim mode: move the camera to explore!', 4000);
-  /* No pre-buried treasure — defined dynamically after all clues are collected */
+  showToast('\ud83c\udfae No GPS - sim mode: move the camera to explore!', 4000);
 }
 
-/* ─── Define treasure location along the already-walked path ─────────────── */
-/* Called once all CLUES_NEEDED clues are collected.                          */
-/* Picks a GPS path point from early in the walk (20–50% in) so the player   */
-/* must backtrack to find it.  The location is described as a riddle in terms  */
-/* of paces and direction from the nearest numbered clue landmark.            */
-function defineBacktrackTreasure() {
-  const path = GAME.gpsPath;
+/* ===========================================================================
+ * WAYPOINT PILLARS
+ *
+ * Each waypoint is a tall glowing cylinder anchored to GPS coordinates.
+ * All waypoints use the same hue at any given moment; the hue shifts
+ * gradually as more distance is walked so older waypoints have a slightly
+ * different tint - making them visually distinguishable by time/distance.
+ * The same hue value is stored with each waypoint and used in both XR and
+ * the map so the colours always match.
+ * ===========================================================================  */
 
-  if (path.length < 4 || GAME.clueSpots.length === 0) {
-    /* Fallback if path is too short */
-    GAME.treasureRiddle = 'The treasure is hidden somewhere along your path — retrace your steps!';
-    GAME.distToTreasure = 30;
-    _activateSolvePhase();
-    return;
-  }
+var WAYPOINT_HEIGHT = 1.5;   /* metres tall */
 
-  /* Pick a point 20–50% into the walked path */
-  const idx  = Math.max(1, Math.floor(path.length * (0.20 + Math.random() * 0.30)));
-  const tPt  = path[idx];
-
-  GAME.treasureMXMZ = { mx: tPt.mx, mz: tPt.mz };
-
-  if (!GAME._noGPS) {
-    GAME.treasureGPS  = { lat: tPt.lat, lng: tPt.lng };
-    const cur         = path[path.length - 1];
-    GAME.distToTreasure = haversineM(cur.lat, cur.lng, tPt.lat, tPt.lng);
-  } else {
-    /* Sim mode: distance in virtual metres */
-    const cur = path[path.length - 1];
-    const dx  = cur.mx - tPt.mx;
-    const dz  = cur.mz - tPt.mz;
-    GAME.distToTreasure = Math.sqrt(dx * dx + dz * dz);
-  }
-
-  /* Find nearest collected clue spot to use as landmark in the riddle */
-  let bestClue = null, bestDist = Infinity;
-  for (let i = 0; i < GAME.clueSpots.length; i++) {
-    const s  = GAME.clueSpots[i];
-    const dx = s.mx - tPt.mx;
-    const dz = s.mz - tPt.mz;
-    const d  = Math.sqrt(dx * dx + dz * dz);
-    if (d < bestDist) { bestDist = d; bestClue = { spot: s, num: i + 1 }; }
-  }
-
-  GAME.treasureRiddle = buildTreasureRiddle(bestClue, bestDist, tPt);
-  _activateSolvePhase();
-}
-
-/* ─── Build the backtrack riddle text ────────────────────────────────────── */
-/* Uses local-coord bearing: mx = east(+)/west(−), mz = south(+)/north(−).  */
-function buildTreasureRiddle(bestClue, distM, tPt) {
-  if (!bestClue || distM < 3) {
-    return 'The treasure is right near one of your clue spots — search around!';
-  }
-  /* Bearing from clue landmark to treasure */
-  const dx      = tPt.mx - bestClue.spot.mx;
-  const dz      = tPt.mz - bestClue.spot.mz;
-  const bearRad = Math.atan2(dx, -dz);  /* atan2(east, north) */
-  const bearDeg = ((bearRad * 180 / Math.PI) + 360) % 360;
-  const cardinal = CARDINALS[Math.round(bearDeg / 45) % 8];
-  const paces    = Math.round(distM / 0.76);
-  const metres   = Math.round(distM);
-  return `~${paces} paces (${metres}m) ${cardinal} from where you found Clue ${bestClue.num}.`;
-}
-
-/* ─── Switch to solve phase and show the riddle HUD ─────────────────────── */
-function _activateSolvePhase() {
-  GAME.phase = 'solve';
-  document.getElementById('hunt-hud').style.display = '';
-  const riddleEl = document.getElementById('solve-riddle');
-  if (riddleEl) riddleEl.textContent = GAME.treasureRiddle;
-  showToast(
-    `🗺️ All ${CLUES_NEEDED} clues found! Retrace your steps — ` + GAME.treasureRiddle,
-    9000
-  );
-  drawMiniMap();
-}
-
-/* ─── Spawn an AR clue gem pickup on a detected floor ────────────────────── */
-function spawnARClue(currentGPS) {
-  const num = GAME.clues.length + GAME.arClues.length + 1;
-  if (num > CLUES_NEEDED) return;
-
-  /* Generate a directional exploration clue — not tied to a pre-set treasure */
-  const clueText = generateExploreClue(num);
-
-  /* Place gem anchored to GPS when available; fall back to hit-test / camera */
-  let pos;
-  let gpsLat = null, gpsLng = null;
-
-  if (currentGPS && GAME.gpsPath.length > 0) {
-    /* GPS available — derive Three.js position from GPS coordinates so the gem
-       stays in place even when the XR reference frame drifts.
-       Use a 2 m random offset so the gem appears slightly off the player's
-       exact footstep and is clearly visible in front of them.               */
-    const origin  = GAME.gpsPath[0];
-    const base    = gpsToLocal(origin.lat, origin.lng, currentGPS.lat, currentGPS.lng);
-    const offX    = (Math.random() - 0.5) * 2.0;
-    const offZ    = (Math.random() - 0.5) * 2.0;
-    const groundY = lastReticlePos ? lastReticlePos.y + 0.18 : 0.18;
-    pos = new THREE.Vector3(base.mx + offX, groundY, base.mz + offZ);
-    /* Compute exact GPS anchor for the offset position */
-    const anchor = localToGPS(origin.lat, origin.lng, pos.x, pos.z);
-    gpsLat = anchor.lat;
-    gpsLng = anchor.lng;
-  } else if (lastReticlePos) {
-    pos = lastReticlePos.clone();
-    pos.x += (Math.random() - 0.5) * 0.8;
-    pos.z += (Math.random() - 0.5) * 0.8;
-    pos.y  = lastReticlePos.y + 0.18;
-    if (GAME.gpsPath.length > 0) {
-      const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, pos.x, pos.z);
-      gpsLat = anchor.lat;
-      gpsLng = anchor.lng;
-    }
-  } else {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    dir.y = 0; dir.normalize();
-    pos = new THREE.Vector3();
-    camera.getWorldPosition(pos);
-    pos.addScaledVector(dir, 2.0 + Math.random() * 1.0);
-    pos.y = 0.18;
-    if (GAME.gpsPath.length > 0) {
-      const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, pos.x, pos.z);
-      gpsLat = anchor.lat;
-      gpsLng = anchor.lng;
-    }
-  }
-
-  /* Gem mesh — octahedron gives a gem / crystal look */
-  const geo = new THREE.OctahedronGeometry(0.12);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0x00aaff, emissive: 0x003366, emissiveIntensity: 2.0,
-    roughness: 0.1, metalness: 0.7, transparent: true, opacity: 0.92,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos);
-  mesh.castShadow = true;
-  scene.add(mesh);
-
-  const light = new THREE.PointLight(0x00aaff, 2.5, 2.5);
-  light.position.copy(pos);
-  scene.add(light);
-
-  /* Store GPS-local coords so the mini-map can show the icon */
-  const gpsPt = GAME.gpsPath.length > 0 ? GAME.gpsPath[GAME.gpsPath.length - 1] : null;
-  GAME.arClues.push({
-    mesh, light, baseY: pos.y, clueIdx: num, clueText,
-    mx: gpsPt ? gpsPt.mx : pos.x,
-    mz: gpsPt ? gpsPt.mz : pos.z,
-    gpsLat, gpsLng,   /* GPS anchor — used by resyncARObjectsToGPS() */
-  });
-
-  popIn(mesh);
-  showToast(`🗝️ Clue ${num} appeared nearby — walk to collect it!`, 4000);
-  drawMiniMap();
-}
-
-/* ─── Collect an AR clue gem (proximity or tap) ───────────────────────────── */
-function collectARClue(clueEntry) {
-  const { mesh, light, clueIdx, clueText, mx, mz } = clueEntry;
-
-  GAME.clues.push(clueText);
-  /* Record collection spot as a numbered landmark on the mini-map */
-  GAME.clueSpots.push({ mx, mz, num: clueIdx });
-  GAME.score += 100;
-
-  scene.remove(light);
-  animateCollection(mesh);
-  GAME.arClues = GAME.arClues.filter(c => c !== clueEntry);
-
-  showClueToast(clueIdx, clueText);
-  updateExploreHUD();
-  updatePlacedCount();
-  drawMiniMap();
-
-  if (GAME.clues.length >= CLUES_NEEDED && GAME.phase === 'explore') {
-    /* All clues collected — pick a backtrack location and reveal the riddle */
-    defineBacktrackTreasure();
-  }
-}
-
-/* ─── Generate directional exploration clue text ─────────────────────────── */
-/* Each clue guides the player to keep walking — not toward a pre-set spot.   */
-const CARDINALS = ['north','north-east','east','south-east','south','south-west','west','north-west'];
-
-function generateExploreClue(num) {
-  const dir      = CARDINALS[Math.floor(Math.random() * CARDINALS.length)];
-  const distHint = 30 + Math.floor(Math.random() * 50);  // 30–80 m hint
-  const opts = [
-    `${num}. Continue heading ${dir} for about ${distHint}m.`,
-    `${num}. Head ${dir} — keep walking that way.`,
-    `${num}. Bear ${dir} and explore further.`,
-    `${num}. Turn towards ${dir} and press on.`,
-    `${num}. The path leads ${dir} from here.`,
-  ];
-  return opts[(num - 1) % opts.length];
-}
-
-/* ─── Spawn AR treasure chest when player is near ─────────────────────────── */
-function spawnARTreasureChest() {
-  if (GAME.arChestSpawned || GAME.treasureEntry) return;
-  GAME.arChestSpawned = true;
-
-  let pos;
-  if (!GAME._noGPS && GAME.treasureGPS && GAME.gpsPath.length > 0) {
-    /* GPS available — place chest exactly at the GPS treasure coordinates so
-       it stays put even if the XR reference frame drifts.                    */
-    const origin  = GAME.gpsPath[0];
-    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    const groundY = lastReticlePos ? lastReticlePos.y : 0;
-    pos = new THREE.Vector3(mx, groundY, mz);
-  } else if (lastReticlePos) {
-    pos = lastReticlePos.clone();
-    pos.x += (Math.random() - 0.5) * 0.4;
-    pos.z += (Math.random() - 0.5) * 0.4;
-  } else {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    dir.y = 0; dir.normalize();
-    pos = new THREE.Vector3();
-    camera.getWorldPosition(pos);
-    pos.addScaledVector(dir, 1.5);
-    pos.y = 0;
-  }
-
-  /* Chest body */
-  const geo = new THREE.BoxGeometry(0.40, 0.30, 0.30);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xCC7722, emissive: 0x663300, emissiveIntensity: 1.0,
-    roughness: 0.2, metalness: 0.8,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos);
-  mesh.castShadow = true;
-  scene.add(mesh);
-
-  /* Gold glow */
-  const light = new THREE.PointLight(0xFFAA00, 3.0, 3.0);
-  light.position.copy(pos);
-  scene.add(light);
-
-  GAME.treasureEntry = { mesh, light, baseY: pos.y };
-  popIn(mesh);
-  showToast('💰 TAP THE GLOWING CHEST to dig up the treasure!', 6000);
-  updateStatus('Treasure chest spotted — tap it!');
-}
-
-/* ─── Collect the AR treasure chest ──────────────────────────────────────── */
-function collectARTreasure() {
-  if (!GAME.treasureEntry) return;
-  const { mesh, light } = GAME.treasureEntry;
-
-  /* Score: 500 base + distance bonus (closer start = bigger bonus) */
-  const distBonus = Math.max(0, Math.round(300 - GAME.distToTreasure * 2));
-  GAME.score += 500 + distBonus;
-
-  scene.remove(light);
-  animateCollection(mesh);
-  GAME.treasureEntry = null;
-
-  showToast(`🏆 TREASURE FOUND! +${500 + distBonus} pts!`, 4000);
-  setTimeout(() => endGame(true), 1800);
-}
-
-/* ─── Per-frame game tick ─────────────────────────────────────────────────── */
-function tickGame(delta, timestamp) {
-  if (GAME.phase === 'idle' || GAME.phase === 'found') return;
-
-  /* Simulation: derive virtual GPS from camera movement */
-  if (GAME._noGPS) simTickGPS(delta);
-
-  /* Animate treasure chest */
-  if (GAME.treasureEntry) {
-    const { mesh, light, baseY } = GAME.treasureEntry;
-    mesh.position.y = baseY + 0.09 * Math.sin(timestamp * 0.002);
-    mesh.rotation.y += delta * 1.8;
-    if (light) light.position.copy(mesh.position);
-  }
-
-  /* Animate AR clue gems and check proximity collection */
-  if (GAME.arClues.length > 0) {
-    const camPos = new THREE.Vector3();
-    camera.getWorldPosition(camPos);
-    for (let i = GAME.arClues.length - 1; i >= 0; i--) {
-      const clue = GAME.arClues[i];
-      clue.mesh.position.y = clue.baseY + 0.07 * Math.sin(timestamp * 0.002 + clue.clueIdx);
-      clue.mesh.rotation.y += delta * 2.0;
-      if (clue.light) clue.light.position.copy(clue.mesh.position);
-      if (camPos.distanceTo(clue.mesh.position) < CLUE_COLLECT_RADIUS_M) {
-        collectARClue(clue);
-      }
-    }
-  }
-
-  /* Footprint fade */
-  tickFootprints(delta);
-
-  /* Compass arrow */
-  updateCompassArrow();
-
-  /* Score display */
-  document.getElementById('game-score').textContent = GAME.score.toLocaleString();
-}
-
-/* ─── Simulation: derive distance from camera position ───────────────────── */
-function simTickGPS(delta) {
-  const camPos = new THREE.Vector3();
-  camera.getWorldPosition(camPos);
-
-  if (GAME._simLastCamPos) {
-    const moved = camPos.distanceTo(GAME._simLastCamPos);
-    if (moved > 0.005) {
-      const scale = SIM_MOVEMENT_SCALE;  // multiply real-world sim movement
-      const effective = moved * scale;
-      GAME.totalDistM += effective;
-      GAME.footAccumM += effective;
-      GAME.clueAccumM += effective;
-
-      if (GAME.footAccumM >= FOOTPRINT_DIST_M) { GAME.footAccumM = 0; placeFootprint(); }
-
-      if (GAME.phase === 'explore' && GAME.clueAccumM >= CLUE_INTERVAL_M &&
-          GAME.clues.length + GAME.arClues.length < CLUES_NEEDED) {
-        GAME.clueAccumM = 0;
-        spawnARClue(null);
-      }
-
-      if (GAME.phase === 'solve' && GAME.treasureMXMZ) {
-        /* Check proximity to backtrack treasure in virtual local coords */
-        const curPt = GAME.gpsPath[GAME.gpsPath.length - 1];
-        if (curPt) {
-          const dx = curPt.mx - GAME.treasureMXMZ.mx;
-          const dz = curPt.mz - GAME.treasureMXMZ.mz;
-          GAME.distToTreasure = Math.sqrt(dx * dx + dz * dz);
-          if (!GAME.arChestSpawned && GAME.distToTreasure <= TREASURE_NEAR_M) {
-            spawnARTreasureChest();
-          }
-        }
-      }
-
-      updateExploreHUD();
-      updateHuntHUD();
-      updatePlacedCount();
-
-      /* Redraw mini-map occasionally */
-      if (Math.random() < MINIMAP_UPDATE_PROB) {
-        /* Simulate a fake GPS path for the map */
-        const lastPt = GAME.gpsPath[GAME.gpsPath.length - 1] || { lat: 0, lng: 0, mx: 0, mz: 0 };
-        GAME.gpsPath.push({
-          lat: lastPt.lat, lng: lastPt.lng,
-          mx: lastPt.mx + (camPos.x - (GAME._simLastCamPos ? GAME._simLastCamPos.x : camPos.x)) * scale * 0.1,
-          mz: lastPt.mz + (camPos.z - (GAME._simLastCamPos ? GAME._simLastCamPos.z : camPos.z)) * scale * 0.1,
-        });
-        if (GAME.gpsPath.length > MAX_GPS_PTS) GAME.gpsPath.shift();
-        drawMiniMap();
-      }
-    }
-  }
-  GAME._simLastCamPos = camPos.clone();
-}
-
-/* ─── Trail marker pillars ───────────────────────────────────────────────── */
-const PILLAR_COLOURS = [0xff6600, 0x00ccff, 0xffdd00];  // orange, cyan, gold
-const PILLAR_LIGHTS  = [0xff4400, 0x00aaff, 0xffcc00];
-
-function placeFootprint() {
-  if (GAME.footprints.length >= MAX_FOOTPRINTS) {
-    const old = GAME.footprints.shift();
+function placeWaypoint(gpsLat, gpsLng) {
+  /* Evict oldest if at capacity */
+  if (GAME.waypoints.length >= MAX_WAYPOINTS) {
+    var old = GAME.waypoints.shift();
     scene.remove(old.mesh);
     old.mesh.geometry.dispose();
     old.mesh.material.dispose();
     if (old.light) scene.remove(old.light);
   }
 
-  const cIdx    = GAME.footprintColorIdx % PILLAR_COLOURS.length;
-  GAME.footprintColorIdx++;
+  /* Current hue for this waypoint */
+  var hue    = waypointHue();
+  var col    = new THREE.Color().setHSL(hue, WAYPOINT_SAT, WAYPOINT_LIT);
+  var colHex = col.getHex();
 
-  /* Tall tapered cylinder — visible from a distance like a beacon */
-  const height = 1.5;
-  const geo    = new THREE.CylinderGeometry(0.025, 0.06, height, 8);
-  const mat    = new THREE.MeshStandardMaterial({
-    color:             PILLAR_COLOURS[cIdx],
-    emissive:          PILLAR_COLOURS[cIdx],
+  var geo = new THREE.CylinderGeometry(0.025, 0.06, WAYPOINT_HEIGHT, 8);
+  var mat = new THREE.MeshStandardMaterial({
+    color:             colHex,
+    emissive:          colHex,
     emissiveIntensity: 1.8,
     transparent:       true,
     opacity:           1.0,
   });
-  const mesh = new THREE.Mesh(geo, mat);
-  const cam  = new THREE.Vector3();
-  camera.getWorldPosition(cam);
-  const groundY = lastReticlePos ? lastReticlePos.y : 0;
-  mesh.position.set(cam.x, groundY + height / 2, cam.z);
+  var mesh = new THREE.Mesh(geo, mat);
+
+  /* Determine initial XR position from GPS immediately (no drift on first frame) */
+  var groundY = lastReticlePos ? lastReticlePos.y : 0;
+  if (gpsLat !== null && GAME.gpsPath.length > 0) {
+    var origin = GAME.gpsPath[0];
+    var lc     = gpsToLocal(origin.lat, origin.lng, gpsLat, gpsLng);
+    var xr     = gpsLocalToXR(lc.mx, lc.mz);
+    mesh.position.set(xr.x, groundY + WAYPOINT_HEIGHT / 2, xr.z);
+  } else {
+    /* Sim / no-GPS fallback: place at camera */
+    var cam = new THREE.Vector3();
+    camera.getWorldPosition(cam);
+    mesh.position.set(cam.x, groundY + WAYPOINT_HEIGHT / 2, cam.z);
+  }
+
   mesh.castShadow = false;
   scene.add(mesh);
 
-  /* Glowing point light at the top of the pillar */
-  const light = new THREE.PointLight(PILLAR_LIGHTS[cIdx], 2.5, 5.0);
-  light.position.set(cam.x, groundY + height + 0.15, cam.z);
+  /* Point light at top of pillar */
+  var light = new THREE.PointLight(colHex, 2.5, 5.0);
+  light.position.set(mesh.position.x, groundY + WAYPOINT_HEIGHT + 0.15, mesh.position.z);
   scene.add(light);
 
-  /* Compute GPS anchor so resyncARObjectsToGPS() can correct XR drift */
-  let gpsLat = null, gpsLng = null;
-  if (!GAME._noGPS && GAME.lastGPS) {
-    gpsLat = GAME.lastGPS.lat;
-    gpsLng = GAME.lastGPS.lng;
-  } else if (GAME.gpsPath.length > 0) {
-    const anchor = localToGPS(GAME.gpsPath[0].lat, GAME.gpsPath[0].lng, cam.x, cam.z);
-    gpsLat = anchor.lat; gpsLng = anchor.lng;
-  }
-
-  GAME.footprints.push({ mesh, light, age: 0, gpsLat, gpsLng });
+  GAME.waypoints.push({
+    mesh: mesh, light: light,
+    age: 0,
+    gpsLat: gpsLat, gpsLng: gpsLng,
+    hue: hue,
+  });
+  popIn(mesh);
 }
 
-function tickFootprints(delta) {
-  for (let i = GAME.footprints.length - 1; i >= 0; i--) {
-    const fp = GAME.footprints[i];
-    fp.age += delta;
-    const opacity = Math.max(0, 1.0 * (1 - fp.age / FOOTPRINT_LIFE_S));
-    fp.mesh.material.opacity = opacity;
-    if (fp.light) fp.light.intensity = opacity * 2.5;
-    if (fp.age >= FOOTPRINT_LIFE_S) {
-      scene.remove(fp.mesh);
-      fp.mesh.geometry.dispose();
-      fp.mesh.material.dispose();
-      if (fp.light) scene.remove(fp.light);
-      GAME.footprints.splice(i, 1);
+function tickWaypoints(delta) {
+  for (var i = GAME.waypoints.length - 1; i >= 0; i--) {
+    var wp = GAME.waypoints[i];
+    wp.age += delta;
+    var opacity = Math.max(0, 1 - wp.age / WAYPOINT_LIFE_S);
+    wp.mesh.material.opacity = opacity;
+    if (wp.light) wp.light.intensity = opacity * 2.5;
+
+    if (wp.age >= WAYPOINT_LIFE_S) {
+      scene.remove(wp.mesh);
+      wp.mesh.geometry.dispose();
+      wp.mesh.material.dispose();
+      if (wp.light) scene.remove(wp.light);
+      GAME.waypoints.splice(i, 1);
     }
   }
 }
 
-/* ─── Clear game objects ─────────────────────────────────────────────────── */
-function clearGameObjects() {
-  if (GAME.treasureEntry) {
-    const { mesh, light } = GAME.treasureEntry;
-    scene.remove(mesh); scene.remove(light);
-    mesh.geometry.dispose(); mesh.material.dispose();
-    GAME.treasureEntry = null;
+function clearWaypoints() {
+  for (var i = 0; i < GAME.waypoints.length; i++) {
+    var wp = GAME.waypoints[i];
+    scene.remove(wp.mesh);
+    wp.mesh.geometry.dispose();
+    wp.mesh.material.dispose();
+    if (wp.light) scene.remove(wp.light);
   }
-  /* Clear pending AR clue gems */
-  for (const clue of GAME.arClues) {
-    scene.remove(clue.mesh);
-    scene.remove(clue.light);
-    clue.mesh.geometry.dispose();
-    clue.mesh.material.dispose();
-  }
-  GAME.arClues = [];
-  clearFootprints();
-  GAME.arChestSpawned = false;
+  GAME.waypoints = [];
 }
 
-function clearFootprints() {
-  for (const fp of GAME.footprints) {
-    scene.remove(fp.mesh);
-    fp.mesh.geometry.dispose();
-    fp.mesh.material.dispose();
-    if (fp.light) scene.remove(fp.light);
+/* ---------------------------------------------------------------------------
+ * Re-anchor all waypoints to their GPS positions.
+ *
+ * Called on every real GPS update.  XR tracking (SLAM) can accumulate drift
+ * between GPS fixes.  By recomputing each waypoint's Three.js X/Z from its
+ * stored GPS latitude/longitude (transformed by the compass heading rotation)
+ * we ensure every waypoint stays at the exact real-world location where it
+ * was dropped - even after minutes of walking.
+ * --------------------------------------------------------------------------- */
+function resyncWaypointsToGPS() {
+  if (!GAME.gpsReady || GAME.gpsPath.length === 0) return;
+  var origin = GAME.gpsPath[0];
+
+  for (var i = 0; i < GAME.waypoints.length; i++) {
+    var wp = GAME.waypoints[i];
+    if (wp.gpsLat == null || wp.gpsLng == null) continue;
+    var lc = gpsToLocal(origin.lat, origin.lng, wp.gpsLat, wp.gpsLng);
+    var xr = gpsLocalToXR(lc.mx, lc.mz);
+    wp.mesh.position.x = xr.x;
+    wp.mesh.position.z = xr.z;
+    if (wp.light) {
+      wp.light.position.x = xr.x;
+      wp.light.position.z = xr.z;
+    }
   }
-  GAME.footprints = [];
 }
 
-/* ─── Mini-map ───────────────────────────────────────────────────────────── */
-function drawMiniMap() {
-  const canvas = document.getElementById('minimap-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W   = canvas.width;
-  const H   = canvas.height;
+/* ===========================================================================
+ * PER-FRAME GAME TICK
+ * =========================================================================== */
+function tickGame(delta, timestamp) {
+  if (GAME.phase === 'idle') return;
+  if (GAME._noGPS) simTickGPS(delta);
+  tickWaypoints(delta);
+}
+
+function simTickGPS(delta) {
+  var camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+
+  if (GAME._simLastCamPos) {
+    var moved = camPos.distanceTo(GAME._simLastCamPos);
+    if (moved > 0.005) {
+      var effective = moved * SIM_MOVEMENT_SCALE;
+      GAME.totalDistM      += effective;
+      GAME.waypointAccumM  += effective;
+
+      if (GAME.waypointAccumM >= WAYPOINT_DIST_M) {
+        GAME.waypointAccumM = 0;
+        placeWaypoint(null, null);
+      }
+
+      updateTrailHUD();
+      updatePlacedCount();
+
+      if (Math.random() < MINIMAP_UPDATE_PROB) {
+        var lastPt = GAME.gpsPath[GAME.gpsPath.length - 1] || { lat: 0, lng: 0, mx: 0, mz: 0 };
+        var sc     = SIM_MOVEMENT_SCALE * 0.1;
+        GAME.gpsPath.push({
+          lat: lastPt.lat, lng: lastPt.lng,
+          mx: lastPt.mx + (camPos.x - GAME._simLastCamPos.x) * sc,
+          mz: lastPt.mz + (camPos.z - GAME._simLastCamPos.z) * sc,
+        });
+        if (GAME.gpsPath.length > MAX_GPS_PTS) GAME.gpsPath.shift();
+        drawMap();
+      }
+    }
+  }
+  GAME._simLastCamPos = camPos.clone();
+}
+
+/* ===========================================================================
+ * GPS MAP  (rendered into the bottom-half canvas)
+ *
+ * Player-centred, fixed zoom, North-up.
+ * Waypoints are drawn with their stored hue so their map colour always
+ * matches their XR pillar colour.
+ * ===========================================================================  */
+function drawMap() {
+  var canvas = document.getElementById('minimap-canvas');
+  if (!canvas || canvas.style.display === 'none') return;
+  var ctx = canvas.getContext('2d');
+  var W   = canvas.width;
+  var H   = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
   /* Background */
-  ctx.fillStyle = 'rgba(4,8,18,0.90)';
-  mmRoundRect(ctx, 0, 0, W, H, 10); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,255,136,0.30)';
-  ctx.lineWidth   = 1;
-  mmRoundRect(ctx, 0, 0, W, H, 10); ctx.stroke();
+  ctx.fillStyle = 'rgba(4,8,20,0.97)';
+  ctx.fillRect(0, 0, W, H);
+
+  /* Top border */
+  ctx.strokeStyle = 'rgba(0,255,136,0.35)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, 1); ctx.lineTo(W, 1); ctx.stroke();
 
   if (GAME.gpsPath.length === 0) {
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font      = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font      = '13px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(GAME._noGPS ? 'Sim mode' : 'Searching GPS…', W / 2, H / 2 - 4);
-    ctx.fillText(`${Math.round(GAME.totalDistM)}m walked`, W / 2, H / 2 + 10);
-    drawNorthDot(ctx, W - 12, 12);
+    ctx.fillText(GAME._noGPS ? 'Sim mode - move camera to explore' : 'Searching GPS\u2026', W / 2, H / 2 - 6);
+    ctx.font      = '11px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillText(Math.round(GAME.totalDistM) + 'm walked', W / 2, H / 2 + 14);
+    drawNorthIndicator(ctx, W - 18, 18);
     return;
   }
 
-  /* Player-centred fixed-zoom projection */
-  const lp    = GAME.gpsPath[GAME.gpsPath.length - 1];
-  const cx    = lp.mx;
-  const cz    = lp.mz;
-  const scale = (W / 2 - 16) / MINIMAP_ZOOM_M;  // px per metre
-  const toC   = (mx, mz) => ({ x: W / 2 + (mx - cx) * scale, y: H / 2 + (mz - cz) * scale });
+  /* Player-centred projection.
+     mx = East (+right on map), mz = South (+down on map) -> North is UP. */
+  var lp    = GAME.gpsPath[GAME.gpsPath.length - 1];
+  var cx    = lp.mx;
+  var cz    = lp.mz;
+  var scale = (Math.min(W, H) / 2 - 20) / MINIMAP_ZOOM_M;
+  function toC(mx, mz) {
+    return {
+      x: W / 2 + (mx - cx) * scale,
+      y: H / 2 + (mz - cz) * scale,
+    };
+  }
 
-  /* Bright dotted trail — persists for the full session */
+  /* GPS trail */
   if (GAME.gpsPath.length >= 2) {
-    ctx.strokeStyle = 'rgba(0,220,80,0.75)';
-    ctx.lineWidth   = 3;
-    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'rgba(0,220,80,0.6)';
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([6, 5]);
     ctx.beginPath();
-    const p0 = toC(GAME.gpsPath[0].mx, GAME.gpsPath[0].mz);
+    var p0 = toC(GAME.gpsPath[0].mx, GAME.gpsPath[0].mz);
     ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < GAME.gpsPath.length; i++) {
-      const p = toC(GAME.gpsPath[i].mx, GAME.gpsPath[i].mz);
+    for (var i = 1; i < GAME.gpsPath.length; i++) {
+      var p = toC(GAME.gpsPath[i].mx, GAME.gpsPath[i].mz);
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  /* Start marker */
-  const sp = toC(0, 0);
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.beginPath(); ctx.arc(sp.x, sp.y, 2.5, 0, Math.PI * 2); ctx.fill();
+  /* Origin marker */
+  var sp = toC(0, 0);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, 3, 0, Math.PI * 2); ctx.fill();
 
-  /* Treasure marker — only shown after it is found (never spoils location) */
-  if (GAME.treasureGPS && GAME.gpsPath.length > 0 && GAME.phase === 'found') {
-    const o  = GAME.gpsPath[0];
-    const tl = gpsToLocal(o.lat, o.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    const tp = toC(tl.mx, tl.mz);
-    ctx.font = '13px serif'; ctx.textAlign = 'center';
-    ctx.fillText('💰', tp.x, tp.y + 5);
+  /* Waypoint dots - each uses its stored hue to match the XR pillar */
+  var origin = GAME.gpsPath[0];
+  for (var i = 0; i < GAME.waypoints.length; i++) {
+    var wp = GAME.waypoints[i];
+    if (wp.gpsLat == null) continue;
+    var lc  = gpsToLocal(origin.lat, origin.lng, wp.gpsLat, wp.gpsLng);
+    var cp  = toC(lc.mx, lc.mz);
+    var col = new THREE.Color().setHSL(wp.hue, WAYPOINT_SAT, WAYPOINT_LIT);
+    var opac = Math.max(0.2, 1 - wp.age / WAYPOINT_LIFE_S);
+
+    ctx.globalAlpha = opac;
+    ctx.fillStyle   = '#' + col.getHexString();
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
-  /* Pending AR clue gem icons on map — pulsing dot with ? */
-  for (const clue of GAME.arClues) {
-    const cp = toC(clue.mx, clue.mz);
-    ctx.fillStyle = 'rgba(0,170,255,0.8)';
-    ctx.beginPath(); ctx.arc(cp.x, cp.y, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('?', cp.x, cp.y + 3);
-  }
-
-  /* Collected clue landmark numbers — numbered circles on the map */
-  for (let i = 0; i < GAME.clueSpots.length; i++) {
-    const spot = GAME.clueSpots[i];
-    const cp   = toC(spot.mx, spot.mz);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(cp.x, cp.y, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#0055cc';
-    ctx.beginPath(); ctx.arc(cp.x, cp.y, 6.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(String(i + 1), cp.x, cp.y + 2.5);
-  }
-
-  /* Player dot — always at centre */
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(W / 2, H / 2, 5, 0, Math.PI * 2); ctx.fill();
+  /* Player dot at centre */
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#00ff88';
-  ctx.beginPath(); ctx.arc(W / 2, H / 2, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2); ctx.fill();
 
-  /* Footer stats */
-  ctx.fillStyle = 'rgba(255,255,255,0.38)';
-  ctx.font = '8px sans-serif'; ctx.textAlign = 'left';
-  ctx.fillText(`${Math.round(GAME.totalDistM)}m`, 5, H - 4);
+  /* Heading arrow from player dot */
+  if (GAME.compassLocked) {
+    var hr = GAME.compassHeading * Math.PI / 180;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(W / 2, H / 2);
+    ctx.lineTo(W / 2 + 10 * Math.sin(hr), H / 2 - 10 * Math.cos(hr));
+    ctx.stroke();
+  }
+
+  /* Stats */
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(Math.round(GAME.totalDistM) + 'm', 8, H - 6);
   ctx.textAlign = 'right';
-  ctx.fillText(`Clues: ${GAME.clues.length}/${CLUES_NEEDED}`, W - 5, H - 4);
+  ctx.fillText(GAME.waypoints.length + ' waypoints', W - 8, H - 6);
 
-  drawNorthDot(ctx, W - 12, 12);
-}
-
-function mmRoundRect(ctx, x, y, w, h, r) {
+  /* Scale bar (20 m) */
+  var barM  = 20;
+  var barPx = barM * scale;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth   = 1.5;
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);     ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
-  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);     ctx.quadraticCurveTo(x, y + h,     x, y + h - r);
-  ctx.lineTo(x, y + r);         ctx.quadraticCurveTo(x, y,         x + r, y);
-  ctx.closePath();
+  ctx.moveTo(W / 2 - barPx / 2, H - 14);
+  ctx.lineTo(W / 2 + barPx / 2, H - 14);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(barM + 'm', W / 2, H - 4);
+
+  drawNorthIndicator(ctx, W - 18, 18);
 }
 
-function drawNorthDot(ctx, cx, cy) {
-  ctx.strokeStyle = 'rgba(255,170,0,0.5)';
+function drawNorthIndicator(ctx, cx, cy) {
+  ctx.strokeStyle = 'rgba(255,170,0,0.55)';
   ctx.lineWidth   = 1;
-  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle   = '#ffaa00';
-  ctx.font        = 'bold 8px sans-serif';
+  ctx.font        = 'bold 9px sans-serif';
   ctx.textAlign   = 'center';
-  ctx.fillText('N', cx, cy + 3);
+  ctx.fillText('N', cx, cy + 3.5);
 }
 
-/* ─── Compass arrow ──────────────────────────────────────────────────────── */
-/* The treasure direction is not shown to the player — they must use the      */
-/* riddle to figure out where to go.  Hide the compass completely.            */
-function updateCompassArrow() {
-  const el = document.getElementById('compass-arrow');
-  if (el) el.style.display = 'none';
-}
+/* ===========================================================================
+ * TOAST NOTIFICATIONS
+ * =========================================================================== */
+var _toastEl    = null;
+var _toastTimer = null;
 
-/* ─── Explore HUD ────────────────────────────────────────────────────────── */
-function updateExploreHUD() {
-  const distEl  = document.getElementById('explore-dist');
-  const clueEl  = document.getElementById('explore-clues');
-  if (distEl) distEl.textContent = `${Math.round(GAME.totalDistM)}m`;
-  if (clueEl) clueEl.textContent = `${GAME.clues.length}/${CLUES_NEEDED}`;
-}
-
-/* ─── Hunt / Solve HUD ───────────────────────────────────────────────────── */
-/* The riddle text is set once by defineBacktrackTreasure().                  */
-/* Distance to treasure is tracked internally but not shown on the HUD.      */
-function updateHuntHUD() {
-  /* intentionally empty — treasure distance is not displayed to the player */
-}
-
-/* ─── Toast helper ───────────────────────────────────────────────────────── */
-let _toastTimer = null;
 function showToast(html, durationMs) {
   durationMs = durationMs || 2500;
-  const el = document.getElementById('collect-toast');
-  el.innerHTML         = html;
-  el.style.display     = '';
-  el.style.opacity     = '1';
-  el.style.transform   = 'translateX(-50%) translateY(0)';
-  el.style.borderColor = 'rgba(0,255,136,0.45)';
+  if (!_toastEl) {
+    _toastEl = document.createElement('div');
+    _toastEl.style.cssText = [
+      'position:fixed',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'background:rgba(0,0,0,0.72)',
+      'border:1px solid rgba(0,255,136,0.45)',
+      'border-radius:24px',
+      'padding:10px 22px',
+      'font-size:0.95rem',
+      'font-weight:600',
+      'pointer-events:none',
+      'z-index:15',
+      'backdrop-filter:blur(8px)',
+      '-webkit-backdrop-filter:blur(8px)',
+      'text-align:center',
+      'max-width:88vw',
+      'white-space:pre-wrap',
+      'display:none',
+      'transition:opacity 0.4s,transform 0.4s',
+    ].join(';');
+    document.body.appendChild(_toastEl);
+  }
+  _toastEl.style.bottom   = isSplitScreen ? 'calc(50% + 56px)' : '120px';
+  _toastEl.innerHTML      = html;
+  _toastEl.style.display  = '';
+  _toastEl.style.opacity  = '1';
+  _toastEl.style.transform = 'translateX(-50%) translateY(0)';
+
   if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => {
-    el.style.opacity   = '0';
-    el.style.transform = 'translateX(-50%) translateY(-20px)';
-    setTimeout(() => { el.style.display = 'none'; }, 420);
+  _toastTimer = setTimeout(function() {
+    _toastEl.style.opacity   = '0';
+    _toastEl.style.transform = 'translateX(-50%) translateY(-20px)';
+    setTimeout(function() { _toastEl.style.display = 'none'; }, 420);
   }, durationMs);
 }
 
-function showClueToast(num, text) {
-  showToast(`🗝️ <strong>Clue ${num} collected!</strong><br><small style="color:#ccc">${text}</small>`, 6000);
-}
-
-/* ─── Pop-out collection animation (reused for treasure) ─────────────────── */
-function animateCollection(mesh) {
-  const start      = performance.now();
-  const dur        = 420;
-  const startScale = mesh.scale.x;
-  mesh.material.transparent = true;
-
-  (function tick() {
-    const t    = Math.min((performance.now() - start) / dur, 1);
-    const rise = Math.sin(t * Math.PI);
-    mesh.scale.setScalar(startScale * (1 + rise * 0.7));
-    mesh.material.opacity = 1 - t;
-    if (t < 1) {
-      requestAnimationFrame(tick);
-    } else {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    }
-  }());
-}
-
-/* ─── Haversine distance (metres) ────────────────────────────────────────── */
+/* ===========================================================================
+ * HAVERSINE / GPS MATH
+ * =========================================================================== */
 function haversineM(lat1, lng1, lat2, lng2) {
-  const R    = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a    = Math.sin(dLat / 2) ** 2 +
-               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-               Math.sin(dLng / 2) ** 2;
+  var R    = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a    = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+             Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/* ─── Compass bearing (degrees, 0=N 90=E …) ─────────────────────────────── */
-function bearingDeg(lat1, lng1, lat2, lng2) {
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const la1  = lat1 * Math.PI / 180;
-  const la2  = lat2 * Math.PI / 180;
-  const y    = Math.sin(dLng) * Math.cos(la2);
-  const x    = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-}
-
-/* ─── GPS delta → local XZ metres ───────────────────────────────────────── */
+/* ---------------------------------------------------------------------------
+ * GPS delta -> local XZ metres
+ *   mx > 0 = East of origin
+ *   mx < 0 = West of origin
+ *   mz > 0 = South of origin  (latitude decreasing)
+ *   mz < 0 = North of origin  (latitude increasing)
+ * --------------------------------------------------------------------------- */
 function gpsToLocal(originLat, originLng, lat, lng) {
-  const mx = haversineM(originLat, originLng, originLat, lng) * (lng >= originLng ? 1 : -1);
-  const mz = haversineM(originLat, originLng, lat, originLng) * (lat >= originLat ? -1 : 1);
-  return { mx, mz };
+  var mx = haversineM(originLat, originLng, originLat, lng) * (lng >= originLng ? 1 : -1);
+  var mz = haversineM(originLat, originLng, lat, originLng) * (lat >= originLat ? -1 : 1);
+  return { mx: mx, mz: mz };
 }
 
-/* ─── Local XZ metres → GPS coordinates ─────────────────────────────────── */
-/* Inverse of gpsToLocal() — linear approximation valid for < ~500 m offsets */
-/* Round-trip error is typically < 1 m at 500 m, < 0.1 m at 50 m.           */
-const METERS_PER_DEG_LAT = 111111; // metres per degree of latitude (Earth equatorial approx)
+/* Local XZ metres -> GPS coordinates (inverse of gpsToLocal) */
+const METERS_PER_DEG_LAT = 111111;
 function localToGPS(originLat, originLng, mx, mz) {
-  const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos(originLat * Math.PI / 180);
+  var metersPerDegLng = METERS_PER_DEG_LAT * Math.cos(originLat * Math.PI / 180);
   return {
     lat: originLat - mz / METERS_PER_DEG_LAT,
     lng: originLng + mx / metersPerDegLng,
   };
-}
-
-/* ─── Re-anchor all AR game objects to their stored GPS positions ─────────── */
-/* Called on every real GPS update so XR tracking drift is continuously        */
-/* corrected: each object's Three.js X/Z is recomputed from its GPS anchor.   */
-function resyncARObjectsToGPS() {
-  if (!GAME.gpsReady || GAME.gpsPath.length === 0) return;
-  const origin = GAME.gpsPath[0];
-
-  /* AR clue gems */
-  for (const clue of GAME.arClues) {
-    if (clue.gpsLat == null || clue.gpsLng == null) continue;
-    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, clue.gpsLat, clue.gpsLng);
-    clue.mesh.position.x = mx;
-    clue.mesh.position.z = mz;
-    clue.mx = mx;
-    clue.mz = mz;
-    if (clue.light) {
-      clue.light.position.x = mx;
-      clue.light.position.z = mz;
-    }
-  }
-
-  /* Trail pillar footprints */
-  for (const fp of GAME.footprints) {
-    if (fp.gpsLat == null || fp.gpsLng == null) continue;
-    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, fp.gpsLat, fp.gpsLng);
-    fp.mesh.position.x = mx;
-    fp.mesh.position.z = mz;
-    if (fp.light) {
-      fp.light.position.x = mx;
-      fp.light.position.z = mz;
-    }
-  }
-
-  /* Treasure chest — re-anchor to the exact GPS treasure spot */
-  if (GAME.treasureEntry && GAME.treasureGPS) {
-    const { mx, mz } = gpsToLocal(origin.lat, origin.lng, GAME.treasureGPS.lat, GAME.treasureGPS.lng);
-    GAME.treasureEntry.mesh.position.x = mx;
-    GAME.treasureEntry.mesh.position.z = mz;
-    /* Y bob animation and light sync are handled by tickGame() */
-  }
 }
