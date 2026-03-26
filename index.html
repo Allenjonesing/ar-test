@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>AR Test — Experiments</title>
+  <title>GPS Test — Experiments</title>
   <link rel="icon" href="favicon.ico">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -66,11 +66,11 @@
     .cards {
       display: flex; gap: 20px; flex-wrap: wrap;
       justify-content: center;
-      max-width: 400px;
+      max-width: 760px;
     }
 
     .card {
-      flex: 1 1 280px; max-width: 340px;
+      flex: 1 1 220px; max-width: 300px;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px; padding: 28px 24px 24px;
@@ -108,7 +108,19 @@
       padding: 3px 10px; border-radius: 12px;
     }
 
-    .tag-ar   { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .tag-ar      { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .tag-gps     { background: rgba(0,180,255,0.15); color: #00ccff; }
+    .tag-sensor  { background: rgba(255,200,0,0.15); color: #ffcc00; }
+    .tag-nav     { background: rgba(180,100,255,0.15); color: #cc88ff; }
+    .tag-monitor { background: rgba(255,140,0,0.15); color: #ff9933; }
+    .tag-fence   { background: rgba(255,80,80,0.15); color: #ff6b6b; }
+
+    .card .status-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+    .dot-ready  { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.6); }
+    .dot-issue  { background: #ff6b6b; box-shadow: 0 0 6px rgba(255,80,80,0.4); }
 
     footer {
       position: fixed; bottom: 16px; left: 0; right: 0;
@@ -124,27 +136,74 @@
 <canvas id="canvas-bg"></canvas>
 
 <div id="landing">
-  <span class="badge">Alpha v0.1</span>
-  <h1>AR Test</h1>
+  <span class="badge">Alpha v0.2</span>
+  <h1>GPS Test Suite</h1>
   <p class="subtitle">
-    An augmented reality adventure using WebXR and Three.js — explore
-    real-world spaces, detect surfaces, and hunt for virtual treasures
-    hidden all around you.
+    Six standalone GPS &amp; sensor demos — each tests a different aspect of
+    device positioning so you can pinpoint exactly what's working.
   </p>
 
   <div class="cards">
+
     <a class="card" href="ar.html">
       <div class="card-icon">🗺️</div>
-      <h2>Trail Treasure Hunt</h2>
-      <p>A GPS-powered AR adventure! Walk to collect directional clues, trace your
-         real-world path on the mini-map, then use the AR compass to hunt down the
-         buried treasure and tap the glowing chest!</p>
+      <h2>GPS AR Trail</h2>
+      <p>Walk a real-world path, drop AR waypoint pillars anchored to GPS
+         coordinates, and watch your trail grow on the split-screen mini-map.</p>
       <span class="tag tag-ar">WebXR · Three.js</span>
+      &nbsp;<span class="tag tag-issue" style="background:rgba(255,80,80,0.12);color:#ff6b6b;display:inline-block;margin-top:8px;font-size:0.7rem;padding:3px 10px;border-radius:12px;">
+        <span class="status-dot dot-issue"></span>GPS↔waypoint sync WIP
+      </span>
     </a>
+
+    <a class="card" href="gps-map.html">
+      <div class="card-icon">📍</div>
+      <h2>2D GPS Map Tracker</h2>
+      <p>Records your GPS path on a 2D canvas map — no AR required. Use this to
+         verify that raw GPS updates are arriving and the path plots correctly.</p>
+      <span class="tag tag-gps">GPS · Canvas</span>
+    </a>
+
+    <a class="card" href="gps-compass.html">
+      <div class="card-icon">🧭</div>
+      <h2>Compass &amp; Heading Test</h2>
+      <p>Compares the device orientation sensor heading against the bearing
+         derived from GPS movement — great for diagnosing heading calibration
+         drift that causes waypoint misalignment.</p>
+      <span class="tag tag-sensor">DeviceOrientation · GPS</span>
+    </a>
+
+    <a class="card" href="gps-waypoint.html">
+      <div class="card-icon">🎯</div>
+      <h2>Waypoint Navigator</h2>
+      <p>Set a destination by coordinates (or drop one at your current position)
+         and navigate to it with a live bearing arrow and distance readout.
+         Directly tests the GPS-to-waypoint sync pipeline.</p>
+      <span class="tag tag-nav">GPS · Bearing</span>
+    </a>
+
+    <a class="card" href="gps-raw.html">
+      <div class="card-icon">📡</div>
+      <h2>GPS Raw Monitor</h2>
+      <p>Displays every raw GPS field — latitude, longitude, accuracy, altitude,
+         speed, heading, and fix age — with a signal-quality bar and a live fix
+         history log to diagnose poor satellite reception.</p>
+      <span class="tag tag-monitor">GPS · Diagnostics</span>
+    </a>
+
+    <a class="card" href="gps-geofence.html">
+      <div class="card-icon">🔵</div>
+      <h2>Geofence Zone Test</h2>
+      <p>Draw a circular zone around any GPS coordinate, then walk in and out.
+         Logs every entry and exit event — useful for testing proximity
+         detection accuracy and GPS drift at fence boundaries.</p>
+      <span class="tag tag-fence">GPS · Geofence</span>
+    </a>
+
   </div>
 </div>
 
-<footer>© 2025 AR Test — Open experiment</footer>
+<footer>© 2025 GPS Test Suite — Open experiment</footer>
 
 <script>
   /* Subtle animated star-field on the background canvas */

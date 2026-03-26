@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>GPS Geofence Test</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #0a0f1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff; display: flex; flex-direction: column; align-items: center; }
+
+    #header {
+      width: 100%; flex-shrink: 0; padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0,0,0,0.6);
+    }
+    #header h1 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #00ff88; }
+    #back-link { font-size: 0.78rem; color: rgba(255,255,255,0.35); text-decoration: none; }
+    #back-link:hover { color: #00ff88; }
+
+    #main {
+      flex: 1; overflow-y: auto; width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 14px; padding: 14px;
+    }
+
+    /* Map canvas */
+    #map-wrap {
+      width: 100%; aspect-ratio: 1 / 1; flex-shrink: 0;
+      border-radius: 18px; overflow: hidden;
+      border: 1px solid rgba(0,255,136,0.2);
+      background: #0a0f1a;
+    }
+    #fence-canvas { display: block; width: 100%; height: 100%; }
+
+    /* State badge */
+    #state-badge {
+      font-size: 1.05rem; font-weight: 800;
+      padding: 10px 28px; border-radius: 24px; text-align: center;
+      transition: background 0.4s, color 0.4s, box-shadow 0.4s;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.5);
+    }
+    #state-badge.inside {
+      background: rgba(0,255,136,0.15); border-color: rgba(0,255,136,0.5);
+      color: #00ff88; box-shadow: 0 0 24px rgba(0,255,136,0.2);
+    }
+    #state-badge.outside {
+      background: rgba(255,80,80,0.1); border-color: rgba(255,80,80,0.35);
+      color: #ff6b6b;
+    }
+
+    /* Stats */
+    .stats-row { display: flex; gap: 10px; width: 100%; }
+    .stat-card {
+      flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,136,0.14);
+      border-radius: 10px; padding: 10px 8px; text-align: center;
+    }
+    .stat-label { font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.35); }
+    .stat-value { font-size: 0.95rem; font-weight: 800; color: #00ff88;
+      font-variant-numeric: tabular-nums; }
+
+    /* Config */
+    #config-section {
+      width: 100%;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,136,0.15);
+      border-radius: 14px; padding: 14px;
+    }
+    #config-section h3 { margin: 0 0 10px; font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.12em; color: rgba(255,255,255,0.38); }
+    .cfg-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .cfg-row label { font-size: 0.8rem; color: rgba(255,255,255,0.5); min-width: 80px; }
+    .cfg-row input {
+      flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(0,255,136,0.22);
+      border-radius: 8px; padding: 8px 10px; color: #fff; font-size: 0.88rem; outline: none;
+    }
+    .cfg-row input:focus { border-color: #00ff88; background: rgba(0,255,136,0.06); }
+
+    /* Status */
+    #status-text {
+      font-size: 0.78rem; color: rgba(255,255,255,0.5);
+      background: rgba(0,0,0,0.45); padding: 5px 14px; border-radius: 6px;
+      text-align: center; width: 100%;
+    }
+
+    /* Event log */
+    #event-log-section {
+      width: 100%;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(0,255,136,0.1);
+      border-radius: 12px; padding: 12px;
+    }
+    #event-log-section h3 { margin: 0 0 8px; font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.12em; color: rgba(255,255,255,0.32); }
+    #event-log {
+      max-height: 120px; overflow-y: auto;
+      font-size: 0.68rem; font-family: 'SF Mono', 'Fira Code', monospace;
+      color: rgba(0,255,136,0.7); line-height: 1.7;
+    }
+
+    /* Controls */
+    #controls { display: flex; gap: 10px; width: 100%; }
+    button {
+      flex: 1; padding: 11px 14px; border: 2px solid #00ff88; border-radius: 24px;
+      background: rgba(0,0,0,0.55); color: #00ff88; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; backdrop-filter: blur(6px);
+      transition: background 0.2s, transform 0.15s;
+    }
+    button:hover  { background: rgba(0,255,136,0.12); transform: scale(1.03); }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    #set-center-btn {
+      border-color: rgba(0,180,255,0.5); color: #00ccff; background: rgba(0,180,255,0.06);
+    }
+    #set-center-btn:hover { background: rgba(0,180,255,0.12); }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🔵 Geofence Test</h1>
+  <a id="back-link" href="index.html">← Home</a>
+</div>
+
+<div id="main">
+
+  <div id="map-wrap">
+    <canvas id="fence-canvas"></canvas>
+  </div>
+
+  <div id="state-badge">Waiting for GPS…</div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Distance to Center</div>
+      <div class="stat-value" id="stat-dist">— m</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Entries</div>
+      <div class="stat-value" id="stat-entries">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Exits</div>
+      <div class="stat-value" id="stat-exits">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Accuracy</div>
+      <div class="stat-value" id="stat-acc">—</div>
+    </div>
+  </div>
+
+  <div id="config-section">
+    <h3>Fence Configuration</h3>
+    <div class="cfg-row">
+      <label>Radius (m)</label>
+      <input id="cfg-radius" type="number" value="25" min="5" max="5000" step="5" />
+    </div>
+    <div class="cfg-row">
+      <label>Center Lat</label>
+      <input id="cfg-lat" type="number" step="0.00001" placeholder="auto from GPS" />
+    </div>
+    <div class="cfg-row">
+      <label>Center Lng</label>
+      <input id="cfg-lng" type="number" step="0.00001" placeholder="auto from GPS" />
+    </div>
+  </div>
+
+  <div id="status-text">Configure fence then tap Start.</div>
+
+  <div id="event-log-section">
+    <h3>Events</h3>
+    <div id="event-log"><em style="color:rgba(255,255,255,0.2)">No events yet.</em></div>
+  </div>
+
+  <div id="controls">
+    <button id="set-center-btn" disabled>📌 Set Center Here</button>
+    <button id="start-btn">▶ Start</button>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+const METERS_PER_DEG_LAT = 111111;
+
+let watchId   = null;
+let running   = false;
+let myPos     = null;
+let fenceCenter = null;
+let fenceRadius = 25;
+let insideFence = null;   // null = unknown, true/false
+let entryCount = 0;
+let exitCount  = 0;
+const events   = [];
+
+/* ── Elements ─────────────────────────────────────────────────────────────── */
+const canvas      = document.getElementById('fence-canvas');
+const stateBadge  = document.getElementById('state-badge');
+const statDist    = document.getElementById('stat-dist');
+const statEntries = document.getElementById('stat-entries');
+const statExits   = document.getElementById('stat-exits');
+const statAcc     = document.getElementById('stat-acc');
+const statusText  = document.getElementById('status-text');
+const eventLogEl  = document.getElementById('event-log');
+const setCenterBtn= document.getElementById('set-center-btn');
+const startBtn    = document.getElementById('start-btn');
+const cfgRadius   = document.getElementById('cfg-radius');
+const cfgLat      = document.getElementById('cfg-lat');
+const cfgLng      = document.getElementById('cfg-lng');
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+function haversineM(la1, lo1, la2, lo2) {
+  const R = 6371000, dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180;
+  const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function fmtDist(m) {
+  return m >= 1000 ? (m/1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+}
+
+function logEvent(msg) {
+  const t = new Date().toLocaleTimeString();
+  events.unshift(`${t}  ${msg}`);
+  if (events.length > 30) events.pop();
+  eventLogEl.innerHTML = events.map(e => `<div>${escHtml(e)}</div>`).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Map drawing ─────────────────────────────────────────────────────────── */
+const dpr = window.devicePixelRatio || 1;
+
+function resizeCanvas() {
+  const sz = canvas.parentElement.clientWidth;
+  canvas.width  = sz * dpr;
+  canvas.height = sz * dpr;
+  drawMap();
+}
+
+function drawMap() {
+  const sz = canvas.width;
+  const ctx = canvas.getContext('2d');
+  const cx = sz/2, cy = sz/2;
+  ctx.clearRect(0, 0, sz, sz);
+
+  /* Background */
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(0, 0, sz, sz);
+
+  /* Grid */
+  ctx.strokeStyle = 'rgba(0,255,136,0.05)';
+  ctx.lineWidth = 1;
+  const gs = sz / 8;
+  for (let x = 0; x < sz; x += gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,sz); ctx.stroke(); }
+  for (let y = 0; y < sz; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(sz,y); ctx.stroke(); }
+
+  const radius = parseFloat(cfgRadius.value) || 25;
+
+  /* Determine view scale: the fence radius should fill ~45% of the canvas */
+  const viewM = radius * 2.5;   /* metres that fill the canvas half-width */
+  const scale  = (sz * 0.45) / radius;
+
+  /* Reference point: fence center if set, else myPos */
+  const ref = fenceCenter || myPos;
+
+  /* Fence circle */
+  if (fenceCenter) {
+    let fcx = cx, fcy = cy;
+    if (myPos) {
+      const cosLat = Math.cos(fenceCenter.lat * Math.PI / 180);
+      const dx = (fenceCenter.lng - fenceCenter.lng) * METERS_PER_DEG_LAT * cosLat;
+      const dy = (fenceCenter.lat - fenceCenter.lat) * METERS_PER_DEG_LAT;
+      fcx = cx + dx * scale;
+      fcy = cy - dy * scale;
+    }
+    const isInside = insideFence === true;
+    ctx.beginPath();
+    ctx.arc(fcx, fcy, radius * scale, 0, Math.PI*2);
+    ctx.strokeStyle = isInside ? 'rgba(0,255,136,0.6)' : 'rgba(255,80,80,0.45)';
+    ctx.lineWidth = 2 * dpr;
+    ctx.setLineDash([6*dpr, 4*dpr]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = isInside ? 'rgba(0,255,136,0.07)' : 'rgba(255,80,80,0.06)';
+    ctx.fill();
+
+    /* Center cross */
+    ctx.strokeStyle = 'rgba(0,255,136,0.5)';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath(); ctx.moveTo(fcx-8*dpr, fcy); ctx.lineTo(fcx+8*dpr, fcy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fcx, fcy-8*dpr); ctx.lineTo(fcx, fcy+8*dpr); ctx.stroke();
+  } else {
+    /* Instructions */
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = `${12*dpr}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Set fence center to see map', cx, cy);
+  }
+
+  /* Player dot */
+  if (myPos && fenceCenter) {
+    const cosLat = Math.cos(fenceCenter.lat * Math.PI / 180);
+    const dx = (myPos.lng - fenceCenter.lng) * METERS_PER_DEG_LAT * cosLat;
+    const dy = (fenceCenter.lat - myPos.lat) * METERS_PER_DEG_LAT;
+    const px = cx + dx * scale;
+    const py = cy + dy * scale;
+
+    ctx.beginPath(); ctx.arc(px, py, 7*dpr, 0, Math.PI*2);
+    ctx.fillStyle = '#00ff88';
+    ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 12*dpr;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+  }
+
+  /* Scale bar */
+  const barM   = Math.pow(10, Math.floor(Math.log10(radius * 0.5)));
+  const barPx  = barM * scale;
+  if (barPx > 20 * dpr) {
+    const bx = 14*dpr, by = sz - 20*dpr;
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 2*dpr;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + barPx, by); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = `${9*dpr}px sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(barM >= 1000 ? (barM/1000)+'km' : barM+'m', bx, by - 2*dpr);
+  }
+}
+
+/* ── GPS ─────────────────────────────────────────────────────────────────── */
+function onGPS(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  myPos = { lat, lng };
+  statAcc.textContent = '±' + Math.round(accuracy) + 'm';
+
+  /* Auto-set fence center on first fix if not manually set */
+  if (!fenceCenter) {
+    const cfgLat_ = parseFloat(cfgLat.value);
+    const cfgLng_ = parseFloat(cfgLng.value);
+    if (!isNaN(cfgLat_) && !isNaN(cfgLng_)) {
+      fenceCenter = { lat: cfgLat_, lng: cfgLng_ };
+    }
+  }
+
+  fenceRadius = parseFloat(cfgRadius.value) || 25;
+
+  if (fenceCenter) {
+    const dist = haversineM(lat, lng, fenceCenter.lat, fenceCenter.lng);
+    statDist.textContent = fmtDist(dist);
+
+    const nowInside = dist <= fenceRadius;
+    if (insideFence === null) {
+      insideFence = nowInside;
+      logEvent(nowInside ? '📍 Started inside fence' : '📍 Started outside fence');
+    } else if (nowInside && !insideFence) {
+      insideFence = true;
+      entryCount++;
+      statEntries.textContent = entryCount;
+      logEvent('🟢 ENTERED fence (dist=' + fmtDist(dist) + ')');
+    } else if (!nowInside && insideFence) {
+      insideFence = false;
+      exitCount++;
+      statExits.textContent = exitCount;
+      logEvent('🔴 EXITED fence (dist=' + fmtDist(dist) + ')');
+    }
+
+    if (insideFence) {
+      stateBadge.textContent = '✅ Inside Fence';
+      stateBadge.className = 'inside';
+    } else {
+      stateBadge.textContent = `🔴 Outside Fence (${fmtDist(dist)} away)`;
+      stateBadge.className = 'outside';
+    }
+  }
+
+  statusText.textContent = `GPS ±${Math.round(accuracy)} m · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  drawMap();
+}
+
+function onGPSError(err) {
+  statusText.textContent = 'GPS error: ' + err.message;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+setCenterBtn.addEventListener('click', () => {
+  if (!myPos) { statusText.textContent = 'No GPS fix yet.'; return; }
+  fenceCenter = { lat: myPos.lat, lng: myPos.lng };
+  cfgLat.value = myPos.lat.toFixed(6);
+  cfgLng.value = myPos.lng.toFixed(6);
+  insideFence = null;
+  logEvent('📌 Fence center set to current position');
+  statusText.textContent = `Fence center set at ${myPos.lat.toFixed(5)}, ${myPos.lng.toFixed(5)}`;
+  drawMap();
+});
+
+startBtn.addEventListener('click', () => {
+  if (!running) {
+    running = true;
+    startBtn.textContent = '⏹ Stop';
+    setCenterBtn.disabled = false;
+    statusText.textContent = 'Acquiring GPS…';
+
+    /* Apply manual config if provided */
+    const cfgLat_ = parseFloat(cfgLat.value);
+    const cfgLng_ = parseFloat(cfgLng.value);
+    if (!isNaN(cfgLat_) && !isNaN(cfgLng_)) {
+      fenceCenter = { lat: cfgLat_, lng: cfgLng_ };
+    }
+
+    if (!navigator.geolocation) {
+      statusText.textContent = 'Geolocation not supported';
+      return;
+    }
+    watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+      enableHighAccuracy: true, maximumAge: 0
+    });
+  } else {
+    running = false;
+    startBtn.textContent = '▶ Start';
+    setCenterBtn.disabled = true;
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    statusText.textContent = `Stopped. ${entryCount} entries, ${exitCount} exits.`;
+  }
+});
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>
