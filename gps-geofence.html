@@ -267,19 +267,9 @@ function drawMap() {
   const viewM = radius * 2.5;   /* metres that fill the canvas half-width */
   const scale  = (sz * 0.45) / radius;
 
-  /* Reference point: fence center if set, else myPos */
-  const ref = fenceCenter || myPos;
-
-  /* Fence circle */
+  /* Fence circle — view is always centred on fenceCenter, so draw at (cx, cy) */
   if (fenceCenter) {
-    let fcx = cx, fcy = cy;
-    if (myPos) {
-      const cosLat = Math.cos(fenceCenter.lat * Math.PI / 180);
-      const dx = (fenceCenter.lng - fenceCenter.lng) * METERS_PER_DEG_LAT * cosLat;
-      const dy = (fenceCenter.lat - fenceCenter.lat) * METERS_PER_DEG_LAT;
-      fcx = cx + dx * scale;
-      fcy = cy - dy * scale;
-    }
+    const fcx = cx, fcy = cy;
     const isInside = insideFence === true;
     ctx.beginPath();
     ctx.arc(fcx, fcy, radius * scale, 0, Math.PI*2);
