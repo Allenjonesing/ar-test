@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>GPS Waypoint Navigator</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #0a0f1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff; display: flex; flex-direction: column; align-items: center; }
+
+    #header {
+      width: 100%; padding: 10px 16px; flex-shrink: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0,0,0,0.6);
+    }
+    #header h1 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #00ff88; }
+    #back-link { font-size: 0.78rem; color: rgba(255,255,255,0.35); text-decoration: none; }
+    #back-link:hover { color: #00ff88; }
+
+    #main {
+      flex: 1; width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 16px; padding: 16px; overflow-y: auto;
+    }
+
+    /* Arrow indicator */
+    #arrow-wrap {
+      position: relative; width: min(220px, 60vw); height: min(220px, 60vw);
+      flex-shrink: 0;
+    }
+    #arrow-canvas { display: block; width: 100%; height: 100%; }
+
+    /* Distance pill */
+    #dist-pill {
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 24px; padding: 8px 24px; text-align: center;
+      font-size: 1.8rem; font-weight: 800; color: #00ff88;
+      text-shadow: 0 0 16px rgba(0,255,136,0.5);
+    }
+    #dist-pill small { display: block; font-size: 0.65rem; font-weight: 400;
+      color: rgba(255,255,255,0.4); letter-spacing: 0.1em; text-transform: uppercase; }
+
+    /* Status */
+    #status-text {
+      font-size: 0.8rem; color: rgba(255,255,255,0.55);
+      background: rgba(0,0,0,0.45); padding: 5px 14px; border-radius: 6px;
+      text-align: center; width: 100%;
+    }
+
+    /* Set waypoint form */
+    #waypoint-form {
+      width: 100%;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,136,0.18);
+      border-radius: 14px; padding: 14px;
+    }
+    #waypoint-form h3 {
+      margin: 0 0 10px; font-size: 0.75rem; text-transform: uppercase;
+      letter-spacing: 0.12em; color: rgba(255,255,255,0.4);
+    }
+    .input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .input-row label { font-size: 0.8rem; color: rgba(255,255,255,0.55); width: 36px; }
+    .input-row input {
+      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 8px; padding: 8px 10px; color: #fff; font-size: 0.9rem;
+      outline: none;
+    }
+    .input-row input:focus { border-color: #00ff88; background: rgba(0,255,136,0.06); }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 4px; }
+    button {
+      flex: 1; padding: 10px 16px; border: 2px solid #00ff88; border-radius: 24px;
+      background: rgba(0,0,0,0.55); color: #00ff88; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; backdrop-filter: blur(6px);
+      transition: background 0.2s, transform 0.15s;
+    }
+    button:hover  { background: rgba(0,255,136,0.12); transform: scale(1.03); }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    #use-current-btn {
+      border-color: rgba(0,180,255,0.5); color: #00ccff; background: rgba(0,180,255,0.06);
+    }
+    #use-current-btn:hover { background: rgba(0,180,255,0.12); }
+
+    /* Stats row */
+    .stats-row {
+      display: flex; gap: 10px; width: 100%;
+    }
+    .stat-card {
+      flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,136,0.15);
+      border-radius: 10px; padding: 10px 8px; text-align: center;
+    }
+    .stat-label { font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.38); }
+    .stat-value { font-size: 1.0rem; font-weight: 800; color: #00ff88;
+      font-variant-numeric: tabular-nums; }
+
+    #arrived-banner {
+      display: none; width: 100%; text-align: center;
+      background: rgba(0,255,136,0.12); border: 1px solid rgba(0,255,136,0.4);
+      border-radius: 14px; padding: 18px;
+      font-size: 1.2rem; font-weight: 700; color: #00ff88;
+      animation: pulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes pulse { from { box-shadow: 0 0 0 0 rgba(0,255,136,0.25); }
+                       to   { box-shadow: 0 0 0 16px rgba(0,255,136,0); } }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>📍 Waypoint Navigator</h1>
+  <a id="back-link" href="index.html">← Home</a>
+</div>
+
+<div id="main">
+  <div id="arrow-wrap">
+    <canvas id="arrow-canvas"></canvas>
+  </div>
+
+  <div id="dist-pill">
+    <small>Distance to Waypoint</small>
+    — m
+  </div>
+
+  <div id="arrived-banner">🎯 You've arrived!</div>
+
+  <div id="status-text">Set a waypoint below, then tap Start.</div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">My Lat</div>
+      <div class="stat-value" id="my-lat">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">My Lng</div>
+      <div class="stat-value" id="my-lng">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Bearing</div>
+      <div class="stat-value" id="nav-bearing">—°</div>
+    </div>
+  </div>
+
+  <div id="waypoint-form">
+    <h3>Destination Waypoint</h3>
+    <div class="input-row">
+      <label>Lat</label>
+      <input id="wp-lat" type="number" step="0.00001" placeholder="e.g. 37.77490" />
+    </div>
+    <div class="input-row">
+      <label>Lng</label>
+      <input id="wp-lng" type="number" step="0.00001" placeholder="e.g. -122.41940" />
+    </div>
+    <div class="btn-row">
+      <button id="use-current-btn">📌 Use My Location</button>
+      <button id="start-btn">▶ Navigate</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const ARRIVE_DIST_M = 10;   // metres — "arrived" threshold
+const METERS_PER_DEG_LAT = 111111;
+
+let watchId = null;
+let running = false;
+let waypoint = null;   // { lat, lng }
+let myPos    = null;   // { lat, lng }
+let sensorHeading = null;
+
+/* ── Elements ─────────────────────────────────────────────────────────────── */
+const arrowCanvas   = document.getElementById('arrow-canvas');
+const distPill      = document.getElementById('dist-pill');
+const statusText    = document.getElementById('status-text');
+const arrivedBanner = document.getElementById('arrived-banner');
+const myLatEl       = document.getElementById('my-lat');
+const myLngEl       = document.getElementById('my-lng');
+const navBearingEl  = document.getElementById('nav-bearing');
+const wpLatInput    = document.getElementById('wp-lat');
+const wpLngInput    = document.getElementById('wp-lng');
+const startBtn      = document.getElementById('start-btn');
+const useCurrentBtn = document.getElementById('use-current-btn');
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+function haversineM(la1, lo1, la2, lo2) {
+  const R = 6371000, dLa = (la2-la1)*Math.PI/180, dLo = (lo2-lo1)*Math.PI/180;
+  const a = Math.sin(dLa/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function bearingDeg(la1, lo1, la2, lo2) {
+  const dLo = (lo2-lo1)*Math.PI/180;
+  const y = Math.sin(dLo)*Math.cos(la2*Math.PI/180);
+  const x = Math.cos(la1*Math.PI/180)*Math.sin(la2*Math.PI/180) -
+            Math.sin(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.cos(dLo);
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+
+function fmtDist(m) {
+  return m >= 1000 ? (m/1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+}
+
+/* ── Draw arrow ──────────────────────────────────────────────────────────── */
+const dpr = window.devicePixelRatio || 1;
+
+function resizeCanvas() {
+  const sz = arrowCanvas.parentElement.clientWidth;
+  arrowCanvas.width  = sz * dpr;
+  arrowCanvas.height = sz * dpr;
+  drawArrow();
+}
+
+function drawArrow() {
+  const ctx = arrowCanvas.getContext('2d');
+  const sz  = arrowCanvas.width;
+  const cx = sz/2, cy = sz/2, R = sz/2 - 8*dpr;
+  ctx.clearRect(0, 0, sz, sz);
+
+  /* Ring */
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(0,255,136,0.2)'; ctx.lineWidth = 2*dpr; ctx.stroke();
+
+  if (!waypoint || !myPos) {
+    ctx.font = `${13*dpr}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Waiting…', cx, cy);
+    return;
+  }
+
+  const bearing = bearingDeg(myPos.lat, myPos.lng, waypoint.lat, waypoint.lng);
+  /* Adjust by compass heading so arrow points relative to device orientation */
+  const relAngle = sensorHeading !== null
+    ? ((bearing - sensorHeading + 360) % 360)
+    : bearing;
+  const rad = (relAngle - 90) * Math.PI/180;
+
+  /* Arrow body */
+  const tipX   = cx + Math.cos(rad) * R * 0.7;
+  const tipY   = cy + Math.sin(rad) * R * 0.7;
+  const baseX  = cx - Math.cos(rad) * R * 0.35;
+  const baseY  = cy - Math.sin(rad) * R * 0.35;
+  const perpX  = -Math.sin(rad) * R * 0.18;
+  const perpY  =  Math.cos(rad) * R * 0.18;
+
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(baseX + perpX, baseY + perpY);
+  ctx.lineTo(baseX - perpX, baseY - perpY);
+  ctx.closePath();
+  ctx.fillStyle = '#00ff88';
+  ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 18*dpr;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  /* Centre dot */
+  ctx.beginPath(); ctx.arc(cx, cy, 5*dpr, 0, Math.PI*2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+/* ── GPS ─────────────────────────────────────────────────────────────────── */
+function onGPS(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  myPos = { lat, lng };
+  myLatEl.textContent = lat.toFixed(5);
+  myLngEl.textContent = lng.toFixed(5);
+
+  if (!waypoint) {
+    statusText.textContent = `GPS fix (±${Math.round(accuracy)} m). Set a waypoint to navigate.`;
+    drawArrow();
+    return;
+  }
+
+  const dist    = haversineM(lat, lng, waypoint.lat, waypoint.lng);
+  const bearing = bearingDeg(lat, lng, waypoint.lat, waypoint.lng);
+  navBearingEl.textContent = Math.round(bearing) + '°';
+
+  distPill.innerHTML = `<small>Distance to Waypoint</small>${fmtDist(dist)}`;
+
+  if (dist <= ARRIVE_DIST_M) {
+    arrivedBanner.style.display = 'block';
+    statusText.textContent = `Arrived! Within ${Math.round(dist)} m of waypoint.`;
+  } else {
+    arrivedBanner.style.display = 'none';
+    statusText.textContent = `GPS ±${Math.round(accuracy)} m · Heading to waypoint…`;
+  }
+  drawArrow();
+}
+
+function onGPSError(err) {
+  statusText.textContent = 'GPS error: ' + err.message;
+}
+
+/* ── Orientation ─────────────────────────────────────────────────────────── */
+function handleOrientation(evt) {
+  if (evt.webkitCompassHeading != null) {
+    sensorHeading = evt.webkitCompassHeading;
+  } else if (evt.alpha != null) {
+    sensorHeading = (360 - evt.alpha) % 360;
+  }
+  drawArrow();
+}
+
+/* ── Controls ────────────────────────────────────────────────────────────── */
+useCurrentBtn.addEventListener('click', () => {
+  if (!myPos) {
+    statusText.textContent = 'No GPS fix yet. Start navigating first.';
+    return;
+  }
+  wpLatInput.value = myPos.lat.toFixed(6);
+  wpLngInput.value = myPos.lng.toFixed(6);
+  statusText.textContent = 'Current position set as waypoint. Move around to test!';
+  waypoint = { lat: myPos.lat, lng: myPos.lng };
+  drawArrow();
+});
+
+startBtn.addEventListener('click', async () => {
+  if (!running) {
+    const lat = parseFloat(wpLatInput.value);
+    const lng = parseFloat(wpLngInput.value);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      waypoint = { lat, lng };
+    }
+
+    running = true;
+    startBtn.textContent = '⏹ Stop';
+    statusText.textContent = 'Acquiring GPS…';
+
+    /* Orientation permission (iOS) */
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm === 'granted') {
+          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+          window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+      } catch(e) { /* ignore */ }
+    } else {
+      window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+
+    if (!navigator.geolocation) {
+      statusText.textContent = 'Geolocation not supported';
+      return;
+    }
+    watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+      enableHighAccuracy: true, maximumAge: 0
+    });
+  } else {
+    running = false;
+    startBtn.textContent = '▶ Navigate';
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.removeEventListener('deviceorientation', handleOrientation, true);
+    statusText.textContent = 'Stopped.';
+  }
+});
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>
