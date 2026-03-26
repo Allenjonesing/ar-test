@@ -32,9 +32,11 @@
 /* ===========================================================================
  * TRAIL CONSTANTS
  * =========================================================================== */
-const WAYPOINT_DIST_M    = 4;      // metres walked between automatic waypoint drops
-const WAYPOINT_LIFE_S    = 600;    // seconds before a waypoint fades (10 min)
-const MAX_WAYPOINTS      = 120;    // max waypoints kept in scene simultaneously
+const WAYPOINT_DIST_M        = 4;     // metres walked between automatic waypoint drops
+const WAYPOINT_LIFE_S        = 3600;  // seconds before a waypoint fades (1 hour)
+const MAX_WAYPOINTS          = 300;   // max waypoints kept in scene simultaneously
+const MIN_GPS_CALIB_DIST_M   = 5;     // min GPS travel (m) before motion-based heading calibration
+const MIN_XR_CALIB_DIST_M    = 0.5;   // min XR camera travel (m) required for calibration
 const MAX_GPS_PTS        = 2000;   // max GPS path points stored
 const GPS_MIN_MOVE_M     = 2;      // minimum GPS movement (m) to register (filters jitter)
 const SIM_MOVEMENT_SCALE = 15;     // sim-mode: multiply camera metres to virtual metres
@@ -90,6 +92,17 @@ const GAME = {
      correct physical location even if the player moved between AR session start
      and the first GPS fix.                                                    */
   gpsOriginXR:    null,
+
+  /* XR camera position (x, z) captured at the same moment as the first GPS
+     fix.  Together with gpsOriginXR it forms the "before" sample used by the
+     motion-based heading calibration below.                                  */
+  xrPosAtFirstGPS:  null,
+
+  /* True once the GPS→XR rotation angle has been auto-calibrated from real
+     movement.  Before calibration the device compass heading is used; after
+     ≥5 m of GPS movement the heading is recomputed from the GPS+XR delta
+     vectors and used for all subsequent transforms and re-sync operations.   */
+  headingCalibrated: false,
 };
 
 let lastReticlePos = null;  // world-space reticle position, updated each frame
@@ -941,6 +954,7 @@ function updateGPSDebugDisplay() {
   el.textContent =
     'compassHeading: ' + GAME.compassHeading.toFixed(1) + '\u00b0\n' +
     'compassLocked:  ' + GAME.compassLocked + '\n' +
+    'headingCalib:   ' + GAME.headingCalibrated + '\n' +
     'gpsReady:       ' + GAME.gpsReady + '\n' +
     'totalDistM:     ' + GAME.totalDistM.toFixed(1) + 'm\n' +
     'waypoints:      ' + GAME.waypoints.length + '\n' +
@@ -980,6 +994,8 @@ function startTracking() {
   GAME._simLastCamPos = null;
   GAME.waypoints      = [];
   GAME.gpsOriginXR    = null;
+  GAME.xrPosAtFirstGPS  = null;
+  GAME.headingCalibrated = false;
 
   document.getElementById('status-bar').style.display = 'none';
   document.getElementById('trail-hud').style.display  = '';
@@ -1040,9 +1056,16 @@ function onGPSUpdate(pos) {
        moved between AR session start and the first GPS fix.                */
     const _camOrigin = new THREE.Vector3();
     camera.getWorldPosition(_camOrigin);
-    GAME.gpsOriginXR = { x: _camOrigin.x, z: _camOrigin.z };
+    GAME.gpsOriginXR     = { x: _camOrigin.x, z: _camOrigin.z };
+    GAME.xrPosAtFirstGPS = { x: _camOrigin.x, z: _camOrigin.z };
 
     GAME.gpsPath.push({ lat: lat, lng: lng, mx: 0, mz: 0 });
+
+    /* Drop an origin waypoint exactly at the player's current XR position.
+       This anchors the trail start and serves as the reference for all
+       subsequent waypoint offsets.                                         */
+    placeWaypoint(lat, lng);
+
     showToast('\ud83d\udee0\ufe0f GPS locked! Walk to place waypoints.', 3000);
     drawMap();
     updateGPSDebugDisplay();
@@ -1066,6 +1089,50 @@ function onGPSUpdate(pos) {
   if (GAME.waypointAccumM >= WAYPOINT_DIST_M) {
     GAME.waypointAccumM = 0;
     placeWaypoint(lat, lng);
+  }
+
+  /* -----------------------------------------------------------------------
+   * Motion-based heading auto-calibration.
+   *
+   * The compass snapshot taken at session start can be unreliable (magnetic
+   * interference, slow sensor, wrong axis on some devices).  Once the player
+   * has walked at least 5 m from the GPS origin we can derive the correct
+   * GPS→XR rotation directly from comparing the GPS travel vector with the
+   * XR camera travel vector.  That angle is more trustworthy than any
+   * compass reading and is used for all subsequent transforms.
+   *
+   * Only applies during a real WebXR AR session (isARActive) where the XR
+   * camera position tracks the player's physical movement.
+   * ----------------------------------------------------------------------- */
+  if (!GAME.headingCalibrated && GAME.xrPosAtFirstGPS && isARActive) {
+    var gpsOrigin = GAME.gpsPath[0];
+    var gpsMove = gpsToLocal(gpsOrigin.lat, gpsOrigin.lng, lat, lng);
+    var gpsDist = Math.sqrt(gpsMove.mx * gpsMove.mx + gpsMove.mz * gpsMove.mz);
+
+    if (gpsDist >= MIN_GPS_CALIB_DIST_M) {
+      /* Current XR camera position */
+      var camNow = new THREE.Vector3();
+      camera.getWorldPosition(camNow);
+      var xrDx   = camNow.x - GAME.xrPosAtFirstGPS.x;
+      var xrDz   = camNow.z - GAME.xrPosAtFirstGPS.z;
+      var xrDist = Math.sqrt(xrDx * xrDx + xrDz * xrDz);
+
+      /* Require the XR camera to have actually moved (rules out drift/noise) */
+      if (xrDist >= MIN_XR_CALIB_DIST_M) {
+        /* Bearing of GPS travel vector (degrees CW from North) */
+        var gpsBear = Math.atan2(gpsMove.mx, -gpsMove.mz) * 180 / Math.PI;
+        /* Bearing of XR camera travel vector (degrees CW from XR -Z axis) */
+        var xrBear  = Math.atan2(xrDx, -xrDz) * 180 / Math.PI;
+        /* Heading H such that rotating GPS local coords by H gives XR coords.
+           Adding 360 before the modulo ensures the result is always positive
+           when (gpsBear - xrBear) is negative.                               */
+        GAME.compassHeading    = ((gpsBear - xrBear) + 360) % 360;
+        GAME.headingCalibrated = true;
+        /* Re-position all existing waypoints using the calibrated heading */
+        resyncWaypointsToGPS();
+        showToast('\ud83e\uddad Heading auto-calibrated from movement', 2500);
+      }
+    }
   }
 
   /* Re-anchor all AR waypoints to their GPS positions */
