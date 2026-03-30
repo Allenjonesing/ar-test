@@ -5,26 +5,34 @@
  *   - Stream the real-world camera as the scene background (top half)
  *   - Place waypoint pillars anchored to GPS coordinates in XR space
  *   - Show an accurate GPS map in the bottom half
- *   - Continuously re-sync XR object positions to their GPS anchors
  *
- * Compass heading is captured at session start and used to rotate GPS local
- * coordinates (East=+X, South=+Z) into the XR world coordinate frame so that
- * waypoints appear in the correct direction regardless of which way the device
- * was facing when the AR session began.
+ * GPS PLACEMENT VS HEADING ALIGNMENT — kept strictly separate
+ * ─────────────────────────────────────────────────────────────
+ * The previous approach baked the compass heading into each waypoint's
+ * world-space position via gpsLocalToXR().  When the heading estimate changed
+ * (e.g. after motion-based calibration) every waypoint had to be recomputed
+ * via resyncWaypointsToGPS(), causing the trail to jump or drift in the wrong
+ * cardinal direction.
  *
- * GPS-to-XR rotation:
- *   The WebXR "local" reference space sets its -Z axis to the device forward
- *   direction at session start.  If the device compass heading is H degrees
- *   (0=North, clockwise), then to map GPS local metres (mx=East, mz=South)
- *   to XR world (x, z) we rotate by -H around the Y axis:
+ * The fix (v0.5):
+ *   1. GPS PLACEMENT  (gpsToLocal + placeWaypoint)
+ *      Each GPS fix is converted to heading-independent local metres (mx=East,
+ *      mz=South relative to the session origin) and the resulting position is
+ *      placed directly in waypointRoot.  These positions never change.
  *
- *       x  =  mx * cos(H) + mz * sin(H)
- *       z  = -mx * sin(H) + mz * cos(H)
+ *   2. HEADING ALIGNMENT  (setupCompass / motion calibration)
+ *      Only xrRoot.rotation.y is updated.  Because waypointRoot is a child of
+ *      xrRoot, all waypoints rotate together — no individual waypoint is
+ *      repositioned.  resyncWaypointsToGPS() is therefore a no-op.
  *
- *   Verification:
- *     H=0  (pointing North): (1,0) -> (1,0)  East stays +X ✓
- *     H=90 (pointing East):  (1,0) -> (0,-1) East maps to XR -Z (forward) ✓
- *     H=90 (pointing East):  (0,-1)-> (-1,0) North maps to XR -X (left)   ✓
+ * Coordinate convention (East=+X, South=+Z in GPS local / xrRoot local):
+ *   xrRoot.rotation.y = compassHeading * π/180
+ *
+ *   Verification (camera initially looks at −Z = geographic North):
+ *     H=0  (North): rot=0,   South (0,0,+1) stays +Z (behind);
+ *                            North (0,0,−1) stays −Z (forward)         ✓
+ *     H=90 (East):  rot=π/2, East  (+1,0,0)  →  (0,0,−1) = forward    ✓
+ *                            North (0,0,−1)  → (−1,0,0) = camera-left  ✓
  */
 
 'use strict';
@@ -130,6 +138,12 @@ let renderer, scene, camera, clock;
 let axesHelper, gridHelper, shadowPlane;
 let reticle, reticleRing;
 
+/* xrRoot: rotated around Y for heading alignment (heading = compassHeading).
+ * waypointRoot: child of xrRoot; all waypoint meshes and lights live here.
+ * Rotating xrRoot re-aligns the entire GPS trail without touching individual
+ * waypoints — this is what prevents cardinal-direction drift.             */
+let xrRoot = null, waypointRoot = null;
+
 /* ===========================================================================
  * WEBXR STATE
  * =========================================================================== */
@@ -189,9 +203,12 @@ async function init() {
  * COMPASS HEADING
  *
  * We listen for deviceorientationabsolute (Android) and deviceorientation
- * (iOS).  The heading is locked at the moment the AR session starts and stays
- * fixed for the session lifetime so all GPS-to-XR conversions use the same
- * rotation throughout.
+ * (iOS).  The heading is stored in GAME.compassHeading and immediately applied
+ * to xrRoot.rotation.y so the GPS trail stays aligned with geographic North.
+ *
+ * During tracking the heading is still updated — because heading only rotates
+ * xrRoot (it is no longer baked into individual waypoint positions), updating
+ * it at any time is safe and does not cause waypoints to jump.
  * ===========================================================================  */
 function setupCompass() {
   function handleOrientation(e) {
@@ -211,13 +228,13 @@ function setupCompass() {
       /* Always keep the live heading up-to-date for HUD display. */
       GAME.liveHeading = heading;
 
-      /* Only update heading when NOT actively tracking — once tracking starts
-         the heading is frozen so all GPS→XR conversions use the same rotation
-         throughout the entire session (the XR local frame is fixed from
-         session start).                                                        */
-      if (GAME.phase !== 'tracking') {
-        GAME.compassHeading = heading;
-      }
+      /* Update compassHeading and apply it to xrRoot.
+         Unlike the previous approach (heading frozen at tracking start),
+         continuous updates are now safe because heading only rotates xrRoot —
+         individual waypoint positions in waypointRoot are never changed.      */
+      GAME.compassHeading = heading;
+      if (xrRoot) xrRoot.rotation.y = heading * Math.PI / 180;
+
       if (!GAME.compassLocked) {
         GAME.compassLocked = true;
         updateGPSDebugDisplay();
@@ -247,15 +264,14 @@ async function requestOrientationPermission() {
 }
 
 /* ---------------------------------------------------------------------------
- * Convert GPS local metres (East=+mx, South=+mz) to XR world (x, z).
- * Rotates the GPS local frame by the compass heading so that geographic
- * North aligns with the XR world's North regardless of device orientation at
- * session start.
+ * gpsLocalToXR — retained for reference / legacy callers only.
+ *
+ * In v0.5 this function is no longer used for placing waypoints.  Waypoints
+ * are placed directly at (mx, y, mz) in waypointRoot (child of xrRoot) and
+ * the compass rotation is applied by xrRoot.rotation.y = compassHeading*π/180.
  * --------------------------------------------------------------------------- */
 function gpsLocalToXR(mx, mz) {
   const H  = GAME.compassHeading * Math.PI / 180;
-  /* Offset to align GPS origin (first fix) with XR camera position at that
-     moment — corrects for any movement between AR session start and first fix */
   const ox = GAME.gpsOriginXR ? GAME.gpsOriginXR.x : 0;
   const oz = GAME.gpsOriginXR ? GAME.gpsOriginXR.z : 0;
   return {
@@ -315,6 +331,15 @@ function setupThreeJS() {
   shadowPlane.receiveShadow = true;
   shadowPlane.visible = false;
   scene.add(shadowPlane);
+
+  /* xrRoot / waypointRoot — GPS world hierarchy.
+   * xrRoot.rotation.y = compassHeading * π/180 keeps the GPS local frame
+   * (East=+X, South=+Z) aligned with the XR world frame at all times.
+   * waypointRoot is a child of xrRoot so all waypoints rotate in sync.    */
+  xrRoot      = new THREE.Object3D();
+  waypointRoot = new THREE.Object3D();
+  xrRoot.add(waypointRoot);
+  scene.add(xrRoot);
 
   /* Reticle ring */
   const reticleGeo = new THREE.RingGeometry(0.06, 0.10, 36).rotateX(-Math.PI / 2);
@@ -997,6 +1022,13 @@ function startTracking() {
   GAME.xrPosAtFirstGPS  = null;
   GAME.headingCalibrated = false;
 
+  /* Reset the GPS world root so the new session starts at the XR origin.
+     The position will be re-anchored to the first GPS fix in onGPSUpdate.   */
+  if (xrRoot) {
+    xrRoot.position.set(0, 0, 0);
+    xrRoot.rotation.y = GAME.compassHeading * Math.PI / 180;
+  }
+
   document.getElementById('status-bar').style.display = 'none';
   document.getElementById('trail-hud').style.display  = '';
 
@@ -1039,31 +1071,33 @@ function onGPSUpdate(pos) {
   var lat = pos.coords.latitude;
   var lng = pos.coords.longitude;
 
-  /* Use GPS heading to lock compass if not yet locked from device orientation */
+  /* Use GPS heading to bootstrap compass if device orientation not yet locked */
   if (!GAME.compassLocked &&
       pos.coords.heading != null && !isNaN(pos.coords.heading)) {
     GAME.compassHeading = pos.coords.heading;
     GAME.compassLocked  = true;
+    if (xrRoot) xrRoot.rotation.y = GAME.compassHeading * Math.PI / 180;
   }
 
-  /* First fix: set origin */
+  /* First fix: anchor the GPS world root to the player's current XR position */
   if (!GAME.gpsReady) {
     GAME.gpsReady = true;
     GAME.lastGPS  = { lat: lat, lng: lng };
 
-    /* Capture the XR camera position at this moment so that the GPS origin
-       aligns with the correct spot in XR world space, even if the player
-       moved between AR session start and the first GPS fix.                */
+    /* Move xrRoot so that the GPS local origin (0,0,0) coincides with the XR
+       camera position.  This corrects for any player movement between AR
+       session start and the first GPS fix.                                    */
     const _camOrigin = new THREE.Vector3();
     camera.getWorldPosition(_camOrigin);
+    if (xrRoot) xrRoot.position.set(_camOrigin.x, 0, _camOrigin.z);
+
+    /* Keep gpsOriginXR for legacy/debug display purposes only. */
     GAME.gpsOriginXR     = { x: _camOrigin.x, z: _camOrigin.z };
     GAME.xrPosAtFirstGPS = { x: _camOrigin.x, z: _camOrigin.z };
 
     GAME.gpsPath.push({ lat: lat, lng: lng, mx: 0, mz: 0 });
 
-    /* Drop an origin waypoint exactly at the player's current XR position.
-       This anchors the trail start and serves as the reference for all
-       subsequent waypoint offsets.                                         */
+    /* Drop an origin waypoint exactly at the player's current position.     */
     placeWaypoint(lat, lng);
 
     showToast('\ud83d\udee0\ufe0f GPS locked! Walk to place waypoints.', 3000);
@@ -1094,15 +1128,15 @@ function onGPSUpdate(pos) {
   /* -----------------------------------------------------------------------
    * Motion-based heading auto-calibration.
    *
-   * The compass snapshot taken at session start can be unreliable (magnetic
-   * interference, slow sensor, wrong axis on some devices).  Once the player
-   * has walked at least 5 m from the GPS origin we can derive the correct
-   * GPS→XR rotation directly from comparing the GPS travel vector with the
-   * XR camera travel vector.  That angle is more trustworthy than any
-   * compass reading and is used for all subsequent transforms.
+   * Once the player has walked ≥5 m from the GPS origin we derive the correct
+   * compass heading by comparing the GPS travel vector with the XR camera
+   * travel vector.  In the new architecture this only updates xrRoot.rotation.y
+   * — waypoint positions in waypointRoot are NOT recomputed (they are already
+   * at stable GPS local coords).  This eliminates the cardinal-drift that
+   * occurred when resyncWaypointsToGPS() was called with the new heading.
    *
-   * Only applies during a real WebXR AR session (isARActive) where the XR
-   * camera position tracks the player's physical movement.
+   * Only applies during a real WebXR AR session (isARActive) where XR camera
+   * position tracks the player's physical movement.
    * ----------------------------------------------------------------------- */
   if (!GAME.headingCalibrated && GAME.xrPosAtFirstGPS && isARActive) {
     var gpsOrigin = GAME.gpsPath[0];
@@ -1110,33 +1144,29 @@ function onGPSUpdate(pos) {
     var gpsDist = Math.sqrt(gpsMove.mx * gpsMove.mx + gpsMove.mz * gpsMove.mz);
 
     if (gpsDist >= MIN_GPS_CALIB_DIST_M) {
-      /* Current XR camera position */
       var camNow = new THREE.Vector3();
       camera.getWorldPosition(camNow);
       var xrDx   = camNow.x - GAME.xrPosAtFirstGPS.x;
       var xrDz   = camNow.z - GAME.xrPosAtFirstGPS.z;
       var xrDist = Math.sqrt(xrDx * xrDx + xrDz * xrDz);
 
-      /* Require the XR camera to have actually moved (rules out drift/noise) */
       if (xrDist >= MIN_XR_CALIB_DIST_M) {
-        /* Bearing of GPS travel vector (degrees CW from North) */
         var gpsBear = Math.atan2(gpsMove.mx, -gpsMove.mz) * 180 / Math.PI;
-        /* Bearing of XR camera travel vector (degrees CW from XR -Z axis) */
         var xrBear  = Math.atan2(xrDx, -xrDz) * 180 / Math.PI;
-        /* Heading H such that rotating GPS local coords by H gives XR coords.
-           Adding 360 before the modulo ensures the result is always positive
-           when (gpsBear - xrBear) is negative.                               */
-        GAME.compassHeading    = ((gpsBear - xrBear) + 360) % 360;
+        var calibrated = ((gpsBear - xrBear) + 360) % 360;
+
+        GAME.compassHeading    = calibrated;
         GAME.headingCalibrated = true;
-        /* Re-position all existing waypoints using the calibrated heading */
-        resyncWaypointsToGPS();
+
+        /* Apply the calibrated heading to xrRoot only — individual waypoints
+           are at stable GPS local coords and do NOT need to be repositioned. */
+        if (xrRoot) xrRoot.rotation.y = calibrated * Math.PI / 180;
+
         showToast('\ud83e\uddad Heading auto-calibrated from movement', 2500);
+        updateGPSDebugDisplay();
       }
     }
   }
-
-  /* Re-anchor all AR waypoints to their GPS positions */
-  resyncWaypointsToGPS();
 
   updateTrailHUD();
   updatePlacedCount();
@@ -1166,13 +1196,15 @@ function onGPSError(err) {
 var WAYPOINT_HEIGHT = 1.5;   /* metres tall */
 
 function placeWaypoint(gpsLat, gpsLng) {
+  if (!waypointRoot) return;  // guard: setupThreeJS not yet called
+
   /* Evict oldest if at capacity */
   if (GAME.waypoints.length >= MAX_WAYPOINTS) {
     var old = GAME.waypoints.shift();
-    scene.remove(old.mesh);
+    waypointRoot.remove(old.mesh);
     old.mesh.geometry.dispose();
     old.mesh.material.dispose();
-    if (old.light) scene.remove(old.light);
+    if (old.light) waypointRoot.remove(old.light);
   }
 
   /* Current hue for this waypoint */
@@ -1190,27 +1222,44 @@ function placeWaypoint(gpsLat, gpsLng) {
   });
   var mesh = new THREE.Mesh(geo, mat);
 
-  /* Determine initial XR position from GPS immediately (no drift on first frame) */
+  /* Place the waypoint at GPS-local metres inside waypointRoot.
+   *
+   * GPS placement and heading alignment are SEPARATE concerns:
+   *   - position.set(mx, y, mz) uses the raw GPS local offset (East=+mx,
+   *     South=+mz relative to session origin).  Heading is NOT applied here.
+   *   - xrRoot.rotation.y = compassHeading * π/180 aligns the whole trail.
+   *
+   * Because heading is never baked into individual waypoint positions, a
+   * later change to compassHeading (e.g. motion calibration) only needs to
+   * update xrRoot.rotation.y — no waypoint recomputation is required.       */
   var groundY = lastReticlePos ? lastReticlePos.y : 0;
   if (gpsLat !== null && GAME.gpsPath.length > 0) {
     var origin = GAME.gpsPath[0];
     var lc     = gpsToLocal(origin.lat, origin.lng, gpsLat, gpsLng);
-    var xr     = gpsLocalToXR(lc.mx, lc.mz);
-    mesh.position.set(xr.x, groundY + WAYPOINT_HEIGHT / 2, xr.z);
+    /* lc.mx = East metres, lc.mz = South metres (South=+mz convention).
+       These are placed directly — xrRoot handles the heading rotation.      */
+    mesh.position.set(lc.mx, groundY + WAYPOINT_HEIGHT / 2, lc.mz);
   } else {
-    /* Sim / no-GPS fallback: place at camera */
-    var cam = new THREE.Vector3();
-    camera.getWorldPosition(cam);
-    mesh.position.set(cam.x, groundY + WAYPOINT_HEIGHT / 2, cam.z);
+    /* Sim / no-GPS fallback: place at camera position in xrRoot local space */
+    var camWorld = new THREE.Vector3();
+    camera.getWorldPosition(camWorld);
+    /* Convert camera world position to xrRoot local space */
+    var camLocal = xrRoot ? xrRoot.worldToLocal(camWorld.clone()) : camWorld;
+    mesh.position.set(camLocal.x, groundY + WAYPOINT_HEIGHT / 2, camLocal.z);
   }
 
   mesh.castShadow = false;
-  scene.add(mesh);
+  waypointRoot.add(mesh);
 
-  /* Point light at top of pillar */
+  /* Point light at top of pillar — added to waypointRoot so it rotates with
+     xrRoot and always stays above the pillar it belongs to.                 */
   var light = new THREE.PointLight(colHex, 2.5, 5.0);
-  light.position.set(mesh.position.x, groundY + WAYPOINT_HEIGHT + 0.15, mesh.position.z);
-  scene.add(light);
+  light.position.set(
+    mesh.position.x,
+    groundY + WAYPOINT_HEIGHT + 0.15,
+    mesh.position.z
+  );
+  waypointRoot.add(light);
 
   GAME.waypoints.push({
     mesh: mesh, light: light,
@@ -1222,6 +1271,7 @@ function placeWaypoint(gpsLat, gpsLng) {
 }
 
 function tickWaypoints(delta) {
+  if (!waypointRoot) return;
   for (var i = GAME.waypoints.length - 1; i >= 0; i--) {
     var wp = GAME.waypoints[i];
     wp.age += delta;
@@ -1230,51 +1280,38 @@ function tickWaypoints(delta) {
     if (wp.light) wp.light.intensity = opacity * 2.5;
 
     if (wp.age >= WAYPOINT_LIFE_S) {
-      scene.remove(wp.mesh);
+      waypointRoot.remove(wp.mesh);
       wp.mesh.geometry.dispose();
       wp.mesh.material.dispose();
-      if (wp.light) scene.remove(wp.light);
+      if (wp.light) waypointRoot.remove(wp.light);
       GAME.waypoints.splice(i, 1);
     }
   }
 }
 
 function clearWaypoints() {
-  for (var i = 0; i < GAME.waypoints.length; i++) {
-    var wp = GAME.waypoints[i];
-    scene.remove(wp.mesh);
-    wp.mesh.geometry.dispose();
-    wp.mesh.material.dispose();
-    if (wp.light) scene.remove(wp.light);
+  if (waypointRoot) {
+    for (var i = 0; i < GAME.waypoints.length; i++) {
+      var wp = GAME.waypoints[i];
+      waypointRoot.remove(wp.mesh);
+      wp.mesh.geometry.dispose();
+      wp.mesh.material.dispose();
+      if (wp.light) waypointRoot.remove(wp.light);
+    }
   }
   GAME.waypoints = [];
 }
 
 /* ---------------------------------------------------------------------------
- * Re-anchor all waypoints to their GPS positions.
+ * resyncWaypointsToGPS — no longer repositions individual waypoints.
  *
- * Called on every real GPS update.  XR tracking (SLAM) can accumulate drift
- * between GPS fixes.  By recomputing each waypoint's Three.js X/Z from its
- * stored GPS latitude/longitude (transformed by the compass heading rotation)
- * we ensure every waypoint stays at the exact real-world location where it
- * was dropped - even after minutes of walking.
+ * In v0.5 waypoints are placed at stable GPS local coords in waypointRoot.
+ * Heading changes are reflected by updating xrRoot.rotation.y only.
+ * This function is retained so existing call-sites compile; the actual
+ * xrRoot rotation update is handled in setupCompass / onGPSUpdate.
  * --------------------------------------------------------------------------- */
 function resyncWaypointsToGPS() {
-  if (!GAME.gpsReady || GAME.gpsPath.length === 0) return;
-  var origin = GAME.gpsPath[0];
-
-  for (var i = 0; i < GAME.waypoints.length; i++) {
-    var wp = GAME.waypoints[i];
-    if (wp.gpsLat == null || wp.gpsLng == null) continue;
-    var lc = gpsToLocal(origin.lat, origin.lng, wp.gpsLat, wp.gpsLng);
-    var xr = gpsLocalToXR(lc.mx, lc.mz);
-    wp.mesh.position.x = xr.x;
-    wp.mesh.position.z = xr.z;
-    if (wp.light) {
-      wp.light.position.x = xr.x;
-      wp.light.position.z = xr.z;
-    }
-  }
+  /* Intentionally empty — xrRoot.rotation.y keeps the trail aligned. */
 }
 
 /* ===========================================================================
