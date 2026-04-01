@@ -13,8 +13,10 @@
 
     html, body {
       margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      overflow: hidden;
+      width: 100%;
+      min-height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
       background: #000;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
       color: #fff;
@@ -27,10 +29,12 @@
     }
 
     #landing {
-      position: fixed; inset: 0;
+      position: relative;
+      min-height: 100vh;
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      z-index: 10; padding: 24px;
+      align-items: center; justify-content: flex-start;
+      z-index: 10;
+      padding: 48px 20px 60px;
       text-align: center;
     }
 
@@ -64,13 +68,15 @@
     }
 
     .cards {
-      display: flex; gap: 20px; flex-wrap: wrap;
-      justify-content: center;
-      max-width: 760px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 860px;
+      margin-bottom: 20px;
     }
 
     .card {
-      flex: 1 1 220px; max-width: 300px;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px; padding: 28px 24px 24px;
@@ -124,7 +130,8 @@
     .dot-issue  { background: #ff6b6b; box-shadow: 0 0 6px rgba(255,80,80,0.4); }
 
     footer {
-      position: fixed; bottom: 16px; left: 0; right: 0;
+      position: relative;
+      padding: 20px 0 32px;
       text-align: center;
       font-size: 0.72rem;
       color: rgba(255,255,255,0.2);
@@ -137,68 +144,62 @@
 <canvas id="canvas-bg"></canvas>
 
 <div id="landing">
-  <span class="badge">Alpha v0.2</span>
-  <h1>GPS Test Suite</h1>
+  <span class="badge">Alpha v0.5</span>
+  <h1>AR Trail Adventure</h1>
   <p class="subtitle">
-    Six standalone GPS &amp; sensor demos — each tests a different aspect of
-    device positioning so you can pinpoint exactly what's working.
+    Six experimental approaches to GPS-anchored AR waypoint trails — each uses a
+    different heading strategy so you can find which one stays locked for your device.
   </p>
 
   <div class="cards">
 
     <a class="card" href="ar.html">
       <div class="card-icon">🗺️</div>
-      <h2>GPS AR Trail</h2>
-      <p>Walk a real-world path, drop AR waypoint pillars anchored to GPS
-         coordinates, and watch your trail grow on the split-screen mini-map.</p>
-      <span class="tag tag-ar">WebXR · Three.js</span>
-      &nbsp;<span class="tag tag-wip">
-        <span class="status-dot dot-issue"></span>GPS↔waypoint sync WIP
-      </span>
+      <h2>v1 — Live Compass</h2>
+      <p>Continuously applies the device orientation compass to the AR world root.
+         Best accuracy when the device reports a stable, tilt-corrected heading.</p>
+      <span class="tag tag-ar">Live Compass</span>
     </a>
 
-    <a class="card" href="gps-map.html">
-      <div class="card-icon">📍</div>
-      <h2>2D GPS Map Tracker</h2>
-      <p>Records your GPS path on a 2D canvas map — no AR required. Use this to
-         verify that raw GPS updates are arriving and the path plots correctly.</p>
-      <span class="tag tag-gps">GPS · Canvas</span>
+    <a class="card" href="ar.html?mode=v2">
+      <div class="card-icon">🧲</div>
+      <h2>v2 — Locked Compass</h2>
+      <p>Captures the compass heading the moment tracking starts and never updates it
+         again. Waypoints can't drift from phone tilt during a session.</p>
+      <span class="tag tag-sensor">Locked at Start</span>
     </a>
 
-    <a class="card" href="gps-compass.html">
-      <div class="card-icon">🧭</div>
-      <h2>Compass &amp; Heading Test</h2>
-      <p>Compares the device orientation sensor heading against the bearing
-         derived from GPS movement — great for diagnosing heading calibration
-         drift that causes waypoint misalignment.</p>
-      <span class="tag tag-sensor">DeviceOrientation · GPS</span>
-    </a>
-
-    <a class="card" href="gps-waypoint.html">
-      <div class="card-icon">🎯</div>
-      <h2>Waypoint Navigator</h2>
-      <p>Set a destination by coordinates (or drop one at your current position)
-         and navigate to it with a live bearing arrow and distance readout.
-         Directly tests the GPS-to-waypoint sync pipeline.</p>
-      <span class="tag tag-nav">GPS · Bearing</span>
-    </a>
-
-    <a class="card" href="gps-raw.html">
+    <a class="card" href="ar.html?mode=v3">
       <div class="card-icon">📡</div>
-      <h2>GPS Raw Monitor</h2>
-      <p>Displays every raw GPS field — latitude, longitude, accuracy, altitude,
-         speed, heading, and fix age — with a signal-quality bar and a live fix
-         history log to diagnose poor satellite reception.</p>
-      <span class="tag tag-monitor">GPS · Diagnostics</span>
+      <h2>v3 — GPS Bearing</h2>
+      <p>Ignores the device compass entirely. Derives heading from the GPS movement
+         vector after you walk 5 m — zero compass drift possible.</p>
+      <span class="tag tag-gps">GPS Only</span>
     </a>
 
-    <a class="card" href="gps-geofence.html">
-      <div class="card-icon">🔵</div>
-      <h2>Geofence Zone Test</h2>
-      <p>Draw a circular zone around any GPS coordinate, then walk in and out.
-         Logs every entry and exit event — useful for testing proximity
-         detection accuracy and GPS drift at fence boundaries.</p>
-      <span class="tag tag-fence">GPS · Geofence</span>
+    <a class="card" href="ar.html?mode=v4">
+      <div class="card-icon">📍</div>
+      <h2>v4 — Camera Anchored</h2>
+      <p>Places every waypoint at the XR camera's current world position — no
+         GPS-to-XR coordinate transform, no heading needed.  Most accurate for
+         relative position; heading calibration irrelevant.</p>
+      <span class="tag tag-nav">Camera Position</span>
+    </a>
+
+    <a class="card" href="ar.html?mode=v5">
+      <div class="card-icon">〰️</div>
+      <h2>v5 — Smoothed Heading</h2>
+      <p>LERPs compass updates at a slow rate instead of snapping. Reduces sudden
+         jumps when the phone tilts up to look at AR content.</p>
+      <span class="tag tag-sensor">Smoothed</span>
+    </a>
+
+    <a class="card" href="ar.html?mode=v6">
+      <div class="card-icon">🧭</div>
+      <h2>v6 — No Heading</h2>
+      <p>Sets XR world rotation to zero always — raw GPS local coordinates with no
+         compass influence. Accurate only if you begin the session facing north.</p>
+      <span class="tag tag-monitor">No Heading</span>
     </a>
 
   </div>
