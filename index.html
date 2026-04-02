@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>GPS Trail — Experiments</title>
+  <title>3D GPS AR/VR Lab</title>
   <link rel="icon" href="favicon.ico">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -22,7 +22,6 @@
       color: #fff;
     }
 
-    /* Animated star-field background */
     #canvas-bg {
       position: fixed; inset: 0;
       display: block; width: 100%; height: 100%;
@@ -60,7 +59,7 @@
     }
 
     .subtitle {
-      max-width: 520px;
+      max-width: 560px;
       font-size: clamp(0.9rem, 2.5vw, 1.1rem);
       color: rgba(255,255,255,0.55);
       line-height: 1.6;
@@ -69,10 +68,10 @@
 
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
       gap: 16px;
       width: 100%;
-      max-width: 860px;
+      max-width: 900px;
       margin-bottom: 20px;
     }
 
@@ -91,9 +90,7 @@
       background: rgba(0,255,136,0.07);
     }
 
-    .card-icon {
-      font-size: 2.4rem; margin-bottom: 14px;
-    }
+    .card-icon { font-size: 2.4rem; margin-bottom: 14px; }
 
     .card h2 {
       margin: 0 0 8px;
@@ -114,20 +111,11 @@
       padding: 3px 10px; border-radius: 12px;
     }
 
-    .tag-ar      { background: rgba(0,255,136,0.15); color: #00ff88; }
-    .tag-map     { background: rgba(0,180,255,0.15); color: #00ccff; }
-    .tag-sensor  { background: rgba(255,200,0,0.15); color: #ffcc00; }
-    .tag-3d      { background: rgba(180,100,255,0.15); color: #cc88ff; }
-    .tag-world   { background: rgba(255,140,0,0.15); color: #ff9933; }
-    .tag-nav     { background: rgba(255,80,80,0.15); color: #ff6b6b; }
-    .tag-webxr   { background: rgba(0,204,255,0.15); color: #00ccff; }
-
-    .card .status-dot {
-      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-      margin-right: 6px; vertical-align: middle;
-    }
-    .dot-ready  { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.6); }
-    .dot-issue  { background: #ff6b6b; box-shadow: 0 0 6px rgba(255,80,80,0.4); }
+    .tag-ar     { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .tag-3d     { background: rgba(180,100,255,0.15); color: #cc88ff; }
+    .tag-webxr  { background: rgba(0,204,255,0.15); color: #00ccff; }
+    .tag-vr     { background: rgba(255,140,0,0.15); color: #ff9933; }
+    .tag-world  { background: rgba(255,80,200,0.15); color: #ff55cc; }
 
     footer {
       position: relative;
@@ -144,86 +132,67 @@
 <canvas id="canvas-bg"></canvas>
 
 <div id="landing">
-  <span class="badge">Fresh Start</span>
-  <h1>GPS Trail Lab</h1>
+  <span class="badge">3D + GPS Experiments</span>
+  <h1>3D GPS AR/VR Lab</h1>
   <p class="subtitle">
-    Six brand-new approaches to GPS path recording and navigation —
-    no WebXR, no XR coordinate drift. Each experiment uses a completely different
-    toolkit or technique so you can find what actually works for your device.
+    A suite of experiments mixing <strong>real GPS tracking</strong> with
+    <strong>3D rendering</strong> — from location-anchored AR markers to
+    building an entire VR world from your real walk. Every demo is GPS + 3D.
   </p>
 
   <div class="cards">
 
-    <a class="card" href="gps-trail.html">
-      <div class="card-icon">📍</div>
-      <h2>GPS Canvas Trail</h2>
-      <p>Pure vanilla JS + Canvas 2D. Records your GPS path and draws it in real-time
-         as you walk. No frameworks, no drift — just raw GPS on a canvas.
-         Stores your trail in localStorage and exports GeoJSON.</p>
-      <span class="tag tag-ar">Vanilla JS</span>
+    <a class="card" href="world-walk.html">
+      <div class="card-icon">🌍</div>
+      <h2>GPS World Walker</h2>
+      <p><strong>Two-phase flagship demo.</strong> Phase 1: walk around recording
+         your GPS trail on a live map. Phase 2: enter a first-person 3D corridor
+         world generated from your exact GPS path. Your real walk becomes your virtual world.</p>
+      <span class="tag tag-world">GPS · Three.js · First-Person</span>
     </a>
 
-    <a class="card" href="live-map.html">
-      <div class="card-icon">🗺️</div>
-      <h2>Live Map Trail</h2>
-      <p>Your GPS trail drawn on a real OpenStreetMap using Leaflet.js. See exactly
-         where you've been on a proper map. Auto-follows you as you walk.
-         Export your route as GeoJSON.</p>
-      <span class="tag tag-map">Leaflet.js</span>
+    <a class="card" href="aframe-vr-world.html">
+      <div class="card-icon">🥽</div>
+      <h2>A-Frame GPS VR World</h2>
+      <p>Record your GPS trail, then immerse yourself in a full VR scene built from
+         it using A-Frame. Glowing pillar markers, corridor floor panels, and a
+         gyroscope-driven look-around — your walk becomes a VR level.</p>
+      <span class="tag tag-vr">A-Frame · VR · GPS</span>
     </a>
 
     <a class="card" href="ar-gps.html">
       <div class="card-icon">🌐</div>
-      <h2>A-Frame GPS AR</h2>
-      <p>Location-based AR using A-Frame + AR.js. Coloured spheres appear at your
-         previous GPS positions in camera view. Completely different from WebXR —
-         anchored to GPS coordinates directly, no XR tracking system.</p>
-      <span class="tag tag-ar">A-Frame + AR.js</span>
-    </a>
-
-    <a class="card" href="path-3d.html">
-      <div class="card-icon">🌐</div>
-      <h2>3D Path Viewer</h2>
-      <p>Three.js 3D scene (no WebXR) showing your GPS trail from above.
-         Orbit, zoom and rotate freely. Path builds in real-time as you walk.
-         Zero coordinate drift — no AR session involved.</p>
-      <span class="tag tag-3d">Three.js · No AR</span>
-    </a>
-
-    <a class="card" href="world-builder.html">
-      <div class="card-icon">🌍</div>
-      <h2>GPS World Builder</h2>
-      <p>Drop named, emoji-tagged place markers anywhere you go. Your personal world
-         map builds up as you explore. Record a walking trail too. Everything
-         persists in localStorage and exports as GeoJSON.</p>
-      <span class="tag tag-world">World Builder</span>
-    </a>
-
-    <a class="card" href="nav-compass.html">
-      <div class="card-icon">🧭</div>
-      <h2>Compass Navigator</h2>
-      <p>Visual compass dial that points toward saved GPS waypoints. Shows distance
-         and bearing to each target in real-time. Add waypoints manually, from GPS,
-         or import from World Builder. Works completely offline.</p>
-      <span class="tag tag-nav">GPS Nav</span>
+      <h2>A-Frame GPS AR Trail</h2>
+      <p>Location-based AR via A-Frame + AR.js. Coloured 3D sphere markers appear
+         in the live camera view anchored to exact GPS coordinates as you walk.
+         Watch your trail build in augmented reality.</p>
+      <span class="tag tag-ar">A-Frame · AR.js · GPS</span>
     </a>
 
     <a class="card" href="webxr-gps.html">
-      <div class="card-icon">🥽</div>
+      <div class="card-icon">📡</div>
       <h2>WebXR GPS Anchor AR</h2>
-      <p>Native WebXR augmented reality: glowing 3D pillar markers anchored to real
-         GPS coordinates, overlaid on the live camera feed. Compass + motion
-         calibration aligns GPS north with the XR world. Falls back to 3D preview.</p>
-      <span class="tag tag-webxr">WebXR · Three.js</span>
+      <p>Native WebXR AR session with GPS-anchored 3D pillar markers overlaid on
+         the camera feed. Compass + motion-derived heading calibration keeps objects
+         locked to GPS positions. Falls back to a 3D preview if WebXR unavailable.</p>
+      <span class="tag tag-webxr">WebXR · Three.js · GPS</span>
+    </a>
+
+    <a class="card" href="path-3d.html">
+      <div class="card-icon">🔭</div>
+      <h2>3D GPS Path Viewer</h2>
+      <p>Three.js 3D bird's-eye visualisation of your GPS trail as you walk.
+         Orbit, zoom, and rotate freely around your path. Real-time GPS updates
+         with waypoint markers — no AR, pure 3D GPS mapping.</p>
+      <span class="tag tag-3d">Three.js · GPS · 3D Map</span>
     </a>
 
   </div>
 </div>
 
-<footer>© 2025 GPS Trail Lab — Open experiment</footer>
+<footer>© 2025 3D GPS AR/VR Lab — Open experiments</footer>
 
 <script>
-  /* Subtle animated star-field on the background canvas */
   (function () {
     const canvas = document.getElementById('canvas-bg');
     const ctx = canvas.getContext('2d');
