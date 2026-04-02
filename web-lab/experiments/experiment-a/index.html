@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Experiment A — Browser Baseline World Tracking | AR Lab</title>
+  <link rel="icon" href="../../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0a0f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    /* ── Overlay UI ────────────────────────────────────────────────────────── */
+    #ui-overlay {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #ui-overlay > * { pointer-events: auto; }
+
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    #top-bar {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(0,255,136,0.15);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    #back-link {
+      color: #00ff88; text-decoration: none;
+      font-size: 0.8rem; letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    #back-link:hover { text-decoration: underline; }
+
+    #experiment-title {
+      font-size: clamp(0.8rem, 2.5vw, 1rem);
+      font-weight: 700; color: #fff;
+      text-align: center; flex: 1;
+    }
+
+    /* ── Session tag ─────────────────────────────────────────────────────── */
+    #session-tag {
+      width: 100%;
+      text-align: center;
+      padding: 6px 16px;
+      background: rgba(255, 68, 0, 0.18);
+      border-bottom: 1px solid rgba(255,100,0,0.3);
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: #ff9944;
+      pointer-events: none;
+    }
+
+    /* ── Drift warning banner ────────────────────────────────────────────── */
+    #drift-banner {
+      display: none;
+      width: 100%;
+      text-align: center;
+      padding: 8px 16px;
+      background: rgba(255,40,40,0.25);
+      border-bottom: 1px solid rgba(255,60,60,0.4);
+      font-size: 0.75rem; font-weight: 600;
+      color: #ff6666;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
+
+    /* ── 3D canvas ───────────────────────────────────────────────────────── */
+    #three-canvas {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* ── Start screen ────────────────────────────────────────────────────── */
+    #start-screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200;
+      background: rgba(5,5,15,0.9);
+      padding: 24px;
+      text-align: center;
+    }
+
+    #start-screen h1 {
+      font-size: clamp(1.4rem, 5vw, 2rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #00ff88 60%, #00ccff 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    #start-screen .scope-label {
+      display: inline-block;
+      background: rgba(255,100,0,0.18);
+      border: 1px solid rgba(255,120,0,0.4);
+      color: #ff9944;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    #start-screen p {
+      max-width: 400px;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.9rem; line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    #start-screen .warning-box {
+      background: rgba(255,200,0,0.08);
+      border: 1px solid rgba(255,200,0,0.25);
+      border-radius: 10px;
+      padding: 12px 18px;
+      max-width: 400px;
+      font-size: 0.8rem; color: rgba(255,220,100,0.85);
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 28px;
+      border-radius: 50px;
+      border: none; cursor: pointer;
+      font-size: 0.95rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,255,136,0.25); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00cc6a, #00ff88);
+      color: #000;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-danger {
+      background: rgba(255,60,60,0.15);
+      color: #ff8888;
+      border: 1px solid rgba(255,60,60,0.3);
+      font-size: 0.8rem; padding: 8px 18px;
+    }
+
+    #fallback-message {
+      display: none;
+      max-width: 400px;
+      padding: 16px;
+      background: rgba(255,60,60,0.1);
+      border: 1px solid rgba(255,80,80,0.3);
+      border-radius: 10px;
+      color: #ff9999;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-top: 16px;
+    }
+
+    /* ── Bottom controls ─────────────────────────────────────────────────── */
+    #bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: none;
+      justify-content: center; gap: 12px;
+      padding: 14px 16px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      z-index: 100;
+    }
+
+    /* ── Tap hint ────────────────────────────────────────────────────────── */
+    #tap-hint {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 20px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 20px;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.7);
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+
+    /* ── Anchor count badge ──────────────────────────────────────────────── */
+    #anchor-badge {
+      position: fixed;
+      top: 90px; left: 16px;
+      padding: 6px 14px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(0,255,136,0.2);
+      border-radius: 20px;
+      font-size: 0.75rem; font-family: monospace;
+      color: #00ff88;
+      z-index: 100;
+      display: none;
+    }
+
+    /* ── Inline Debug HUD ────────────────────────────────────────────────── */
+    #debug-hud {
+      position: fixed;
+      top: 90px; right: 12px;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      min-width: 200px;
+      font-family: monospace; font-size: 11px;
+      color: #ccffdd; line-height: 1.7;
+      z-index: 100;
+      display: none;
+      pointer-events: none;
+    }
+    #debug-hud .hud-title {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #00ff88; margin-bottom: 5px;
+      border-bottom: 1px solid rgba(0,255,136,0.2);
+      padding-bottom: 3px;
+    }
+    #debug-hud .hud-row {
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    #debug-hud .hud-label { color: rgba(180,255,210,0.5); white-space: nowrap; }
+    #debug-hud .hud-val   { color: #fff; text-align: right; }
+
+    /* ── Accuracy note ───────────────────────────────────────────────────── */
+    #accuracy-note {
+      display: none;
+      position: fixed;
+      bottom: 72px; left: 0; right: 0;
+      text-align: center;
+      pointer-events: none;
+      z-index: 100;
+    }
+    #accuracy-note span {
+      display: inline-block;
+      background: rgba(0,0,0,0.65);
+      border: 1px solid rgba(255,180,0,0.3);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.72rem;
+      color: rgba(255,220,100,0.85);
+      max-width: 380px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 3D canvas (Three.js renders here in fallback / preview mode) ──────── -->
+<canvas id="three-canvas"></canvas>
+
+<!-- ── Start screen ──────────────────────────────────────────────────────── -->
+<div id="start-screen">
+  <h1>Browser Baseline<br>World Tracking</h1>
+  <span class="scope-label">LOCAL SESSION ONLY — Room / Sidewalk Scale</span>
+
+  <p>Tap anywhere in AR to place a coloured sphere anchor. Anchors are relative
+     to the session origin and <strong>will drift</strong> — this is
+     intentional for baseline measurement.</p>
+
+  <div class="warning-box">
+    ⚠️ This demo is <strong>NOT</strong> geospatially anchored. Objects will
+    drift. Small area / local session only. Session resets clear all anchors.
+  </div>
+
+  <button class="btn btn-primary" id="start-ar-btn">▶ Start AR</button>
+
+  <div id="fallback-message">
+    <strong>WebXR immersive-AR not available</strong> on this browser or device.<br><br>
+    Showing a 3D preview instead. For full AR, use Chrome on an ARCore-supported
+    Android device over HTTPS.
+  </div>
+</div>
+
+<!-- ── Persistent overlay UI (shown after session starts) ─────────────────── -->
+<div id="ui-overlay" style="display:none;">
+  <div id="top-bar">
+    <a id="back-link" href="../../../index.html">← Back to Lab</a>
+    <span id="experiment-title">Browser Baseline World Tracking</span>
+    <button class="btn btn-danger" id="reset-btn">Reset Session</button>
+  </div>
+  <div id="session-tag">LOCAL SESSION ONLY — Room/Sidewalk Scale</div>
+  <div id="drift-banner">⚠ Drift detected after 60 s — anchors may have shifted from their placed positions</div>
+</div>
+
+<div id="anchor-badge">Anchors: <span id="anchor-count">0</span> / 10</div>
+<div id="tap-hint">Tap anywhere to place an anchor</div>
+
+<div id="accuracy-note">
+  <span>⚠️ NOT geospatially anchored — objects will drift — local session only</span>
+</div>
+
+<!-- ── Bottom control bar ─────────────────────────────────────────────────── -->
+<div id="bottom-bar">
+  <button class="btn btn-secondary" id="clear-btn">🗑 Clear Anchors</button>
+</div>
+
+<!-- ── Inline Debug HUD ────────────────────────────────────────────────────── -->
+<div id="debug-hud">
+  <div class="hud-title">◈ Debug HUD</div>
+  <div class="hud-row"><span class="hud-label">Tracking:</span><span class="hud-val" id="hud-tracking">—</span></div>
+  <div class="hud-row"><span class="hud-label">Mode:</span><span class="hud-val" id="hud-mode">—</span></div>
+  <div class="hud-row"><span class="hud-label">Anchors:</span><span class="hud-val" id="hud-anchors">0</span></div>
+  <div class="hud-row"><span class="hud-label">Session (s):</span><span class="hud-val" id="hud-time">0</span></div>
+  <div class="hud-row"><span class="hud-label">Drift:</span><span class="hud-val" id="hud-drift" style="color:#00ff88">false</span></div>
+  <div class="hud-row"><span class="hud-label">FPS:</span><span class="hud-val" id="hud-fps">—</span></div>
+</div>
+
+<!-- ── Three.js from CDN ─────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.min.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Config ────────────────────────────────────────────────────────────────
+  var MAX_ANCHORS = 10;
+  var DRIFT_WARNING_AFTER_S = 60;
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var xrSession = null;
+  var xrRefSpace = null;
+  var renderer, scene, camera;
+  var anchors = [];
+  var sessionStartTime = null;
+  var driftShown = false;
+  var animFrameId = null;
+  var lastFpsTime = performance.now();
+  var frameCount = 0;
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  var startScreen  = document.getElementById('start-screen');
+  var uiOverlay    = document.getElementById('ui-overlay');
+  var startArBtn   = document.getElementById('start-ar-btn');
+  var fallbackMsg  = document.getElementById('fallback-message');
+  var clearBtn     = document.getElementById('clear-btn');
+  var resetBtn     = document.getElementById('reset-btn');
+  var bottomBar    = document.getElementById('bottom-bar');
+  var anchorBadge  = document.getElementById('anchor-badge');
+  var anchorCount  = document.getElementById('anchor-count');
+  var tapHint      = document.getElementById('tap-hint');
+  var driftBanner  = document.getElementById('drift-banner');
+  var accuracyNote = document.getElementById('accuracy-note');
+  var debugHud     = document.getElementById('debug-hud');
+
+  // HUD fields
+  var hudTracking  = document.getElementById('hud-tracking');
+  var hudMode      = document.getElementById('hud-mode');
+  var hudAnchors   = document.getElementById('hud-anchors');
+  var hudTime      = document.getElementById('hud-time');
+  var hudDrift     = document.getElementById('hud-drift');
+  var hudFps       = document.getElementById('hud-fps');
+
+  // ── Three.js scene setup ──────────────────────────────────────────────────
+  function initThree(canvas, forAR) {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    if (forAR) {
+      renderer.xr.enabled = true;
+    }
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+
+    // Ambient + directional light
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    var dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(1, 2, 1);
+    scene.add(dir);
+
+    // Session origin axes
+    var axes = new THREE.AxesHelper(0.3);
+    axes.name = 'axes-origin';
+    scene.add(axes);
+
+    // Origin ring
+    var ringGeo = new THREE.RingGeometry(0.08, 0.10, 32);
+    var ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide });
+    var ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.name = 'origin-ring';
+    scene.add(ring);
+
+    window.addEventListener('resize', function () {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      if (!xrSession) renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  }
+
+  // ── Place anchor sphere ───────────────────────────────────────────────────
+  var ANCHOR_COLORS = [0x00ff88, 0x00ccff, 0xff55cc, 0xffaa00, 0x8844ff,
+                       0xff4455, 0x44ffcc, 0xffff44, 0xff8844, 0xaaffaa];
+
+  function placeAnchor(pose) {
+    if (anchors.length >= MAX_ANCHORS) return;
+
+    var color = ANCHOR_COLORS[anchors.length % ANCHOR_COLORS.length];
+    var geo = new THREE.SphereGeometry(0.05, 16, 16);
+    var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
+    var sphere = new THREE.Mesh(geo, mat);
+
+    sphere.position.set(
+      pose.transform.position.x,
+      pose.transform.position.y,
+      pose.transform.position.z
+    );
+
+    // Small label ring below sphere
+    var ringGeo2 = new THREE.RingGeometry(0.035, 0.045, 20);
+    var ringMat2 = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
+    var ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+    ring2.position.y = -0.06;
+    ring2.rotation.x = -Math.PI / 2;
+    sphere.add(ring2);
+
+    scene.add(sphere);
+    anchors.push(sphere);
+    updateAnchorUI();
+    tapHint.style.display = 'none';
+  }
+
+  function placeAnchorPreview(x, y, z) {
+    if (anchors.length >= MAX_ANCHORS) return;
+    var color = ANCHOR_COLORS[anchors.length % ANCHOR_COLORS.length];
+    var geo = new THREE.SphereGeometry(0.05, 16, 16);
+    var mat = new THREE.MeshStandardMaterial({ color: color });
+    var sphere = new THREE.Mesh(geo, mat);
+    sphere.position.set(x, y, z);
+    scene.add(sphere);
+    anchors.push(sphere);
+    updateAnchorUI();
+  }
+
+  function clearAnchors() {
+    anchors.forEach(function (a) { scene.remove(a); });
+    anchors = [];
+    updateAnchorUI();
+    tapHint.style.display = '';
+  }
+
+  function updateAnchorUI() {
+    anchorCount.textContent = anchors.length;
+    hudAnchors.textContent = anchors.length + ' / ' + MAX_ANCHORS;
+  }
+
+  // ── WebXR AR session ───────────────────────────────────────────────────────
+  function startAR() {
+    if (!navigator.xr) { startFallback('No WebXR support (navigator.xr missing)'); return; }
+
+    navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
+      if (!supported) { startFallback('immersive-ar not supported on this device'); return; }
+
+      navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'light-estimation']
+      }).then(onARSessionStarted).catch(function (err) {
+        startFallback('Session request failed: ' + err.message);
+      });
+    }).catch(function (err) {
+      startFallback('isSessionSupported failed: ' + err.message);
+    });
+  }
+
+  function onARSessionStarted(session) {
+    xrSession = session;
+    var canvas = document.getElementById('three-canvas');
+    initThree(canvas, true);
+
+    renderer.xr.setReferenceSpaceType('local');
+    renderer.xr.setSession(session);
+
+    session.requestReferenceSpace('viewer').then(function (viewerSpace) {
+      session.requestHitTestSource({ space: viewerSpace }).then(function (hitSource) {
+        showSessionUI();
+        sessionStartTime = performance.now();
+
+        // Reticle for hit-test feedback
+        var reticleGeo = new THREE.RingGeometry(0.04, 0.05, 32);
+        var reticleMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide });
+        var reticle = new THREE.Mesh(reticleGeo, reticleMat);
+        reticle.rotation.x = -Math.PI / 2;
+        reticle.visible = false;
+        scene.add(reticle);
+
+        // Tap to place
+        session.addEventListener('select', function () {
+          if (reticle.visible) placeAnchor({ transform: { position: reticle.position } });
+        });
+
+        renderer.setAnimationLoop(function (timestamp, frame) {
+          if (!frame) return;
+          updateHUD(timestamp);
+
+          var hits = frame.getHitTestResults(hitSource);
+          if (hits.length > 0) {
+            var pose = hits[0].getPose(renderer.xr.getReferenceSpace());
+            if (pose) {
+              reticle.visible = true;
+              reticle.position.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+            }
+          } else {
+            reticle.visible = false;
+          }
+          renderer.render(scene, camera);
+        });
+      });
+    });
+
+    session.addEventListener('end', function () { xrSession = null; resetToStart(); });
+  }
+
+  // ── Fallback 3D preview (non-AR) ──────────────────────────────────────────
+  function startFallback(reason) {
+    fallbackMsg.style.display = '';
+    fallbackMsg.innerHTML = '<strong>WebXR AR not available.</strong><br><br>' + reason +
+      '<br><br>Showing 3D preview mode. Tap anywhere to place spheres in 3D space.';
+    startArBtn.textContent = '▶ Preview Mode';
+
+    // Switch to preview
+    startArBtn.addEventListener('click', launchPreview, { once: true });
+  }
+
+  function launchPreview() {
+    var canvas = document.getElementById('three-canvas');
+    initThree(canvas, false);
+
+    // Orbit-style camera
+    camera.position.set(0, 0.5, 1.5);
+    camera.lookAt(0, 0, 0);
+
+    // Subtle background grid
+    var grid = new THREE.GridHelper(4, 20, 0x223322, 0x112211);
+    scene.add(grid);
+
+    showSessionUI();
+    sessionStartTime = performance.now();
+
+    // Click-to-place in preview
+    canvas.addEventListener('click', function (e) {
+      var x = (e.clientX / window.innerWidth) * 2 - 1;
+      var y = -(e.clientY / window.innerHeight) * 2 + 1;
+      placeAnchorPreview(x * 0.8, 0, -0.5 + y * 0.5);
+    });
+
+    animFrameId = requestAnimationFrame(function loop(ts) {
+      updateHUD(ts);
+      renderer.render(scene, camera);
+      animFrameId = requestAnimationFrame(loop);
+    });
+  }
+
+  // ── Session lifecycle UI ──────────────────────────────────────────────────
+  function showSessionUI() {
+    startScreen.style.display = 'none';
+    uiOverlay.style.display = '';
+    bottomBar.style.display = 'flex';
+    anchorBadge.style.display = '';
+    tapHint.style.display = '';
+    accuracyNote.style.display = '';
+    debugHud.style.display = '';
+    updateHUDLabels('tracking', 'local-world');
+  }
+
+  function resetToStart() {
+    if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+    clearAnchors();
+    driftShown = false;
+    driftBanner.style.display = 'none';
+    startScreen.style.display = '';
+    uiOverlay.style.display = 'none';
+    bottomBar.style.display = 'none';
+    anchorBadge.style.display = 'none';
+    tapHint.style.display = 'none';
+    accuracyNote.style.display = 'none';
+    debugHud.style.display = 'none';
+    fallbackMsg.style.display = 'none';
+    startArBtn.textContent = '▶ Start AR';
+  }
+
+  // ── HUD helpers ───────────────────────────────────────────────────────────
+  function updateHUDLabels(tracking, mode) {
+    hudTracking.textContent = tracking;
+    hudTracking.style.color = tracking === 'tracking' ? '#00ff88' : '#ffaa00';
+    hudMode.textContent = mode;
+  }
+
+  function updateHUD(timestamp) {
+    if (!sessionStartTime) return;
+    var elapsed = (timestamp - sessionStartTime) / 1000;
+    hudTime.textContent = elapsed.toFixed(1);
+
+    // FPS
+    frameCount++;
+    var now = performance.now();
+    if (now - lastFpsTime >= 1000) {
+      hudFps.textContent = frameCount;
+      frameCount = 0;
+      lastFpsTime = now;
+    }
+
+    // Drift warning
+    if (!driftShown && elapsed > DRIFT_WARNING_AFTER_S) {
+      driftShown = true;
+      driftBanner.style.display = '';
+      hudDrift.textContent = 'true';
+      hudDrift.style.color = '#ff4455';
+    }
+  }
+
+  // ── Button handlers ───────────────────────────────────────────────────────
+  startArBtn.addEventListener('click', function () {
+    startArBtn.disabled = true;
+    startArBtn.textContent = 'Starting…';
+    startAR();
+  });
+
+  clearBtn.addEventListener('click', clearAnchors);
+
+  resetBtn.addEventListener('click', function () {
+    if (xrSession) { xrSession.end(); } else { resetToStart(); }
+  });
+
+}());
+</script>
+</body>
+</html>
