@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>GPS Canvas Trail</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #0a0f1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+    }
+
+    #trail-canvas {
+      position: fixed; inset: 0;
+      display: block; width: 100%; height: 100%;
+      touch-action: none;
+    }
+
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+    }
+    #header h1 {
+      margin: 0; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+      text-shadow: 0 0 12px rgba(0,255,136,0.4);
+    }
+    #back-link {
+      font-size: 0.78rem; color: rgba(255,255,255,0.35); text-decoration: none;
+    }
+    #back-link:hover { color: #00ff88; }
+
+    #status-bar {
+      position: fixed; top: 44px; left: 0; right: 0; z-index: 20;
+      padding: 6px 14px;
+      display: flex; justify-content: space-between; gap: 8px;
+      pointer-events: none;
+    }
+    .status-pill {
+      font-size: 0.78rem; color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #hud {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; pointer-events: none; z-index: 20;
+    }
+    .hud-block {
+      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 10px 18px; text-align: center; min-width: 80px;
+    }
+    .hud-label {
+      display: block; font-size: 0.6rem; letter-spacing: 0.12em;
+      text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 4px;
+    }
+    .hud-value {
+      display: block; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+    }
+
+    #controls {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 20;
+    }
+    button {
+      padding: 12px 24px; border: none; border-radius: 24px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all 0.2s;
+    }
+    #start-btn {
+      background: #00ff88; color: #000;
+    }
+    #start-btn:hover { background: #00cc6f; }
+    #start-btn:disabled { background: #555; color: #999; cursor: not-allowed; }
+    #clear-btn {
+      background: rgba(255,255,255,0.08); color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    #clear-btn:hover { background: rgba(255,80,80,0.2); border-color: #ff6b6b; color: #ff6b6b; }
+    #export-btn {
+      background: rgba(0,180,255,0.15); color: #00ccff;
+      border: 1px solid rgba(0,180,255,0.3);
+    }
+    #export-btn:hover { background: rgba(0,180,255,0.25); }
+
+    #compass-ring {
+      position: fixed; top: 50%; right: 18px; transform: translateY(-50%);
+      width: 70px; height: 70px; z-index: 20; pointer-events: none;
+    }
+    #compass-ring svg { width: 100%; height: 100%; }
+
+    #info-toast {
+      position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px;
+      border-radius: 10px; font-size: 0.85rem; z-index: 30;
+      opacity: 0; transition: opacity 0.4s; pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="trail-canvas"></canvas>
+
+<div id="header">
+  <h1>📍 GPS Canvas Trail</h1>
+  <a id="back-link" href="index.html">← Home</a>
+</div>
+
+<div id="status-bar">
+  <span class="status-pill" id="status-text">Awaiting GPS…</span>
+  <span class="status-pill" id="acc-text">Acc: —</span>
+</div>
+
+<div id="hud">
+  <div class="hud-block">
+    <span class="hud-label">Distance</span>
+    <span class="hud-value" id="hud-dist">0 m</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Points</span>
+    <span class="hud-value" id="hud-pts">0</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Heading</span>
+    <span class="hud-value" id="hud-heading">—°</span>
+  </div>
+</div>
+
+<div id="compass-ring">
+  <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="35" cy="35" r="32" fill="rgba(0,0,0,0.55)"
+            stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <text x="35" y="12" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.4)"
+          font-family="sans-serif">N</text>
+    <g id="compass-needle" transform="rotate(0,35,35)">
+      <polygon points="35,8 31,35 35,30 39,35" fill="#ff4444"/>
+      <polygon points="35,62 31,35 35,40 39,35" fill="rgba(255,255,255,0.4)"/>
+    </g>
+  </svg>
+</div>
+
+<div id="controls">
+  <button id="start-btn" disabled>Start Tracking</button>
+  <button id="clear-btn">Clear</button>
+  <button id="export-btn">Export GeoJSON</button>
+</div>
+
+<div id="info-toast"></div>
+
+<script>
+'use strict';
+
+/* ── State ─────────────────────────────────────────────────────────────── */
+const STATE = {
+  tracking: false,
+  watchId: null,
+  path: [],          // [{lat, lng, ts, acc}]
+  origin: null,      // {lat, lng} – first fix
+  totalDistM: 0,
+  heading: 0,        // degrees, true north = 0
+  zoom: 6,           // pixels per metre
+  panX: 0, panY: 0,  // canvas pan offset (metres)
+};
+
+/* load any saved path from localStorage */
+(function loadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('gps-trail-path') || '[]');
+    if (saved.length > 0) {
+      STATE.path = saved;
+      STATE.origin = { lat: saved[0].lat, lng: saved[0].lng };
+      recalcTotalDist();
+      toast(`Loaded ${saved.length} saved points`);
+    }
+  } catch (e) { /* ignore */ }
+}());
+
+/* ── Canvas setup ──────────────────────────────────────────────────────── */
+const canvas = document.getElementById('trail-canvas');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ── Coordinate maths ──────────────────────────────────────────────────── */
+const METERS_PER_DEG_LAT = 111111;
+
+function geoToMeters(lat, lng, originLat, originLng) {
+  const cosLat = Math.cos(originLat * Math.PI / 180);
+  return {
+    x:  (lng - originLng) * METERS_PER_DEG_LAT * cosLat,   // East  = +X
+    y: -(lat - originLat) * METERS_PER_DEG_LAT,             // North = −Y (canvas Y flipped)
+  };
+}
+
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function recalcTotalDist() {
+  let d = 0;
+  for (let i = 1; i < STATE.path.length; i++) {
+    d += haversineM(STATE.path[i-1].lat, STATE.path[i-1].lng,
+                    STATE.path[i].lat,   STATE.path[i].lng);
+  }
+  STATE.totalDistM = d;
+}
+
+/* ── Draw ──────────────────────────────────────────────────────────────── */
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  /* dark map background */
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(0, 0, W, H);
+
+  if (STATE.path.length === 0) {
+    /* empty state instructions */
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press "Start Tracking" to begin recording your GPS path', W/2, H/2);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillText('Your trail will be drawn here in real-time as you walk', W/2, H/2 + 28);
+    return;
+  }
+
+  const origin = STATE.origin;
+  const cx = W / 2 + STATE.panX;
+  const cy = H / 2 + STATE.panY;
+  const z  = STATE.zoom;
+
+  /* draw grid lines (every 10 m) */
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 0.5;
+  const gridStep = 10 * z;
+  for (let gx = cx % gridStep - gridStep; gx < W + gridStep; gx += gridStep) {
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+  }
+  for (let gy = cy % gridStep - gridStep; gy < H + gridStep; gy += gridStep) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+  }
+
+  /* convert path to canvas pixels */
+  const pts = STATE.path.map(p => {
+    const m = geoToMeters(p.lat, p.lng, origin.lat, origin.lng);
+    return { sx: cx + m.x * z, sy: cy + m.y * z, acc: p.acc };
+  });
+
+  /* draw accuracy circles (faint) */
+  for (const p of pts) {
+    const r = Math.max(2, (p.acc || 10) * z * 0.25);
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,200,255,0.04)';
+    ctx.fill();
+  }
+
+  /* trail line with gradient colour */
+  for (let i = 1; i < pts.length; i++) {
+    const t = i / pts.length;
+    const hue = Math.round(t * 220);   // blue → green
+    ctx.beginPath();
+    ctx.moveTo(pts[i-1].sx, pts[i-1].sy);
+    ctx.lineTo(pts[i].sx, pts[i].sy);
+    ctx.strokeStyle = `hsl(${140 + hue * 0.5},90%,55%)`;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  /* waypoint dots */
+  for (let i = 0; i < pts.length; i++) {
+    const t = i / Math.max(1, pts.length - 1);
+    const hue = 140 + Math.round(t * 110);
+    ctx.beginPath();
+    ctx.arc(pts[i].sx, pts[i].sy, 4, 0, Math.PI*2);
+    ctx.fillStyle = `hsl(${hue},90%,65%)`;
+    ctx.fill();
+  }
+
+  /* origin dot (first fix) */
+  if (pts.length > 0) {
+    ctx.beginPath();
+    ctx.arc(pts[0].sx, pts[0].sy, 7, 0, Math.PI*2);
+    ctx.fillStyle = '#ffcc00';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  /* current position dot */
+  const last = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.sx, last.sy, 10, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,255,136,0.25)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(last.sx, last.sy, 6, 0, Math.PI*2);
+  ctx.fillStyle = '#00ff88';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  /* heading arrow from current position */
+  const hw = STATE.heading * Math.PI / 180;
+  ctx.save();
+  ctx.translate(last.sx, last.sy);
+  ctx.rotate(hw);
+  ctx.beginPath();
+  ctx.moveTo(0, -24); ctx.lineTo(6, -10); ctx.lineTo(-6, -10);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,255,136,0.7)';
+  ctx.fill();
+  ctx.restore();
+
+  /* origin label */
+  ctx.fillStyle = 'rgba(255,200,0,0.8)';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('START', pts[0].sx + 10, pts[0].sy + 4);
+}
+
+/* ── GPS ───────────────────────────────────────────────────────────────── */
+const MIN_MOVE_M = 2;
+
+function onGPSSuccess(pos) {
+  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+
+  document.getElementById('acc-text').textContent =
+    `Acc: ±${Math.round(acc)}m`;
+
+  if (!STATE.origin) {
+    STATE.origin = { lat, lng };
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('status-text').textContent = 'GPS ready — tap Start';
+  }
+
+  if (!STATE.tracking) return;
+
+  /* filter near-duplicates */
+  if (STATE.path.length > 0) {
+    const last = STATE.path[STATE.path.length - 1];
+    const dist = haversineM(last.lat, last.lng, lat, lng);
+    if (dist < MIN_MOVE_M) return;
+    STATE.totalDistM += dist;
+  }
+
+  STATE.path.push({ lat, lng, ts: Date.now(), acc });
+  saveToStorage();
+  updateHUD();
+  centerOnCurrent();
+  draw();
+}
+
+function onGPSError(err) {
+  document.getElementById('status-text').textContent =
+    `GPS error: ${err.message}`;
+}
+
+function startGPS() {
+  if (STATE.watchId !== null) return;
+  STATE.watchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 15000,
+  });
+  document.getElementById('status-text').textContent = 'Acquiring GPS…';
+}
+
+/* ── Heading (compass) ─────────────────────────────────────────────────── */
+function onOrientation(evt) {
+  let heading = null;
+  if (evt.webkitCompassHeading != null) {
+    heading = evt.webkitCompassHeading;
+  } else if (evt.absolute && evt.alpha != null) {
+    heading = (360 - evt.alpha) % 360;
+  }
+  if (heading == null) return;
+  STATE.heading = heading;
+  document.getElementById('hud-heading').textContent = Math.round(heading) + '°';
+
+  /* rotate compass needle SVG */
+  const needle = document.getElementById('compass-needle');
+  if (needle) needle.setAttribute('transform', `rotate(${heading},35,35)`);
+}
+
+/* iOS 13+ requires permission for DeviceOrientationEvent */
+function setupCompass() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(state => {
+        if (state === 'granted') {
+          window.addEventListener('deviceorientation', onOrientation, true);
+        }
+      })
+      .catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (!STATE.tracking) {
+    STATE.tracking = true;
+    document.getElementById('start-btn').textContent = 'Stop Tracking';
+    document.getElementById('start-btn').style.background = '#ff6b6b';
+    document.getElementById('start-btn').style.color = '#fff';
+    document.getElementById('status-text').textContent = 'Tracking…';
+    setupCompass();
+  } else {
+    STATE.tracking = false;
+    document.getElementById('start-btn').textContent = 'Resume Tracking';
+    document.getElementById('start-btn').style.background = '#00ff88';
+    document.getElementById('start-btn').style.color = '#000';
+    document.getElementById('status-text').textContent = 'Paused';
+  }
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  if (!confirm('Clear the entire trail?')) return;
+  STATE.path = [];
+  STATE.origin = null;
+  STATE.totalDistM = 0;
+  STATE.tracking = false;
+  document.getElementById('start-btn').textContent = 'Start Tracking';
+  document.getElementById('start-btn').style.background = '#00ff88';
+  document.getElementById('start-btn').style.color = '#000';
+  document.getElementById('start-btn').disabled = true;
+  document.getElementById('status-text').textContent = 'Cleared — awaiting GPS…';
+  localStorage.removeItem('gps-trail-path');
+  updateHUD();
+  draw();
+});
+
+document.getElementById('export-btn').addEventListener('click', exportGeoJSON);
+
+/* ── Touch pan ─────────────────────────────────────────────────────────── */
+let lastTouch = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && lastTouch) {
+    STATE.panX += e.touches[0].clientX - lastTouch.x;
+    STATE.panY += e.touches[0].clientY - lastTouch.y;
+    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    draw();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { lastTouch = null; });
+
+/* Mouse pan (desktop) */
+let mouseDrag = null;
+canvas.addEventListener('mousedown', e => { mouseDrag = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('mousemove', e => {
+  if (mouseDrag) {
+    STATE.panX += e.clientX - mouseDrag.x;
+    STATE.panY += e.clientY - mouseDrag.y;
+    mouseDrag = { x: e.clientX, y: e.clientY };
+    draw();
+  }
+});
+canvas.addEventListener('mouseup', () => { mouseDrag = null; });
+
+/* Zoom (pinch or scroll) */
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 0.87;
+  STATE.zoom = Math.max(1, Math.min(200, STATE.zoom * factor));
+  draw();
+}, { passive: false });
+
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+function centerOnCurrent() {
+  if (STATE.path.length === 0 || !STATE.origin) return;
+  const last = STATE.path[STATE.path.length - 1];
+  const m = geoToMeters(last.lat, last.lng, STATE.origin.lat, STATE.origin.lng);
+  STATE.panX = -(m.x * STATE.zoom);
+  STATE.panY = -(m.y * STATE.zoom);
+}
+
+function updateHUD() {
+  const dist = STATE.totalDistM;
+  document.getElementById('hud-dist').textContent =
+    dist >= 1000 ? (dist/1000).toFixed(2) + ' km' : Math.round(dist) + ' m';
+  document.getElementById('hud-pts').textContent = STATE.path.length;
+}
+
+function saveToStorage() {
+  try {
+    localStorage.setItem('gps-trail-path', JSON.stringify(STATE.path.slice(-2000)));
+  } catch (e) { /* quota */ }
+}
+
+function exportGeoJSON() {
+  if (STATE.path.length === 0) { toast('No path to export'); return; }
+  const geojson = {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: STATE.path.map(p => [p.lng, p.lat]),
+      },
+      properties: {
+        totalDistanceM: Math.round(STATE.totalDistM),
+        points: STATE.path.length,
+        startTime: new Date(STATE.path[0].ts).toISOString(),
+      },
+    }],
+  };
+  const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'gps-trail.geojson'; a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported!');
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('info-toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+}
+
+/* ── Boot ──────────────────────────────────────────────────────────────── */
+if (!navigator.geolocation) {
+  document.getElementById('status-text').textContent = 'Geolocation not supported';
+} else {
+  startGPS();
+}
+
+/* center view on saved path */
+if (STATE.path.length > 0) {
+  centerOnCurrent();
+  updateHUD();
+}
+
+draw();
+</script>
+</body>
+</html>

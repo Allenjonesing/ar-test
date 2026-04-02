@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>GPS Test — Experiments</title>
+  <title>GPS Trail — Experiments</title>
   <link rel="icon" href="favicon.ico">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -115,12 +115,11 @@
     }
 
     .tag-ar      { background: rgba(0,255,136,0.15); color: #00ff88; }
-    .tag-gps     { background: rgba(0,180,255,0.15); color: #00ccff; }
+    .tag-map     { background: rgba(0,180,255,0.15); color: #00ccff; }
     .tag-sensor  { background: rgba(255,200,0,0.15); color: #ffcc00; }
-    .tag-nav     { background: rgba(180,100,255,0.15); color: #cc88ff; }
-    .tag-monitor { background: rgba(255,140,0,0.15); color: #ff9933; }
-    .tag-fence   { background: rgba(255,80,80,0.15); color: #ff6b6b; }
-    .tag-wip     { background: rgba(255,80,80,0.12); color: #ff6b6b; }
+    .tag-3d      { background: rgba(180,100,255,0.15); color: #cc88ff; }
+    .tag-world   { background: rgba(255,140,0,0.15); color: #ff9933; }
+    .tag-nav     { background: rgba(255,80,80,0.15); color: #ff6b6b; }
 
     .card .status-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -144,68 +143,74 @@
 <canvas id="canvas-bg"></canvas>
 
 <div id="landing">
-  <span class="badge">Alpha v0.5</span>
-  <h1>AR Trail Adventure</h1>
+  <span class="badge">Fresh Start</span>
+  <h1>GPS Trail Lab</h1>
   <p class="subtitle">
-    Six experimental approaches to GPS-anchored AR waypoint trails — each uses a
-    different heading strategy so you can find which one stays locked for your device.
+    Six brand-new approaches to GPS path recording and navigation —
+    no WebXR, no XR coordinate drift. Each experiment uses a completely different
+    toolkit or technique so you can find what actually works for your device.
   </p>
 
   <div class="cards">
 
-    <a class="card" href="ar.html">
-      <div class="card-icon">🗺️</div>
-      <h2>v1 — Live Compass</h2>
-      <p>Continuously applies the device orientation compass to the AR world root.
-         Best accuracy when the device reports a stable, tilt-corrected heading.</p>
-      <span class="tag tag-ar">Live Compass</span>
-    </a>
-
-    <a class="card" href="ar.html?mode=v2">
-      <div class="card-icon">🧲</div>
-      <h2>v2 — Locked Compass</h2>
-      <p>Captures the compass heading the moment tracking starts and never updates it
-         again. Waypoints can't drift from phone tilt during a session.</p>
-      <span class="tag tag-sensor">Locked at Start</span>
-    </a>
-
-    <a class="card" href="ar.html?mode=v3">
-      <div class="card-icon">📡</div>
-      <h2>v3 — GPS Bearing</h2>
-      <p>Ignores the device compass entirely. Derives heading from the GPS movement
-         vector after you walk 5 m — zero compass drift possible.</p>
-      <span class="tag tag-gps">GPS Only</span>
-    </a>
-
-    <a class="card" href="ar.html?mode=v4">
+    <a class="card" href="gps-trail.html">
       <div class="card-icon">📍</div>
-      <h2>v4 — Camera Anchored</h2>
-      <p>Places every waypoint at the XR camera's current world position — no
-         GPS-to-XR coordinate transform, no heading needed.  Most accurate for
-         relative position; heading calibration irrelevant.</p>
-      <span class="tag tag-nav">Camera Position</span>
+      <h2>GPS Canvas Trail</h2>
+      <p>Pure vanilla JS + Canvas 2D. Records your GPS path and draws it in real-time
+         as you walk. No frameworks, no drift — just raw GPS on a canvas.
+         Stores your trail in localStorage and exports GeoJSON.</p>
+      <span class="tag tag-ar">Vanilla JS</span>
     </a>
 
-    <a class="card" href="ar.html?mode=v5">
-      <div class="card-icon">〰️</div>
-      <h2>v5 — Smoothed Heading</h2>
-      <p>LERPs compass updates at a slow rate instead of snapping. Reduces sudden
-         jumps when the phone tilts up to look at AR content.</p>
-      <span class="tag tag-sensor">Smoothed</span>
+    <a class="card" href="live-map.html">
+      <div class="card-icon">🗺️</div>
+      <h2>Live Map Trail</h2>
+      <p>Your GPS trail drawn on a real OpenStreetMap using Leaflet.js. See exactly
+         where you've been on a proper map. Auto-follows you as you walk.
+         Export your route as GeoJSON.</p>
+      <span class="tag tag-map">Leaflet.js</span>
     </a>
 
-    <a class="card" href="ar.html?mode=v6">
+    <a class="card" href="ar-gps.html">
+      <div class="card-icon">🌐</div>
+      <h2>A-Frame GPS AR</h2>
+      <p>Location-based AR using A-Frame + AR.js. Coloured spheres appear at your
+         previous GPS positions in camera view. Completely different from WebXR —
+         anchored to GPS coordinates directly, no XR tracking system.</p>
+      <span class="tag tag-ar">A-Frame + AR.js</span>
+    </a>
+
+    <a class="card" href="path-3d.html">
+      <div class="card-icon">🌐</div>
+      <h2>3D Path Viewer</h2>
+      <p>Three.js 3D scene (no WebXR) showing your GPS trail from above.
+         Orbit, zoom and rotate freely. Path builds in real-time as you walk.
+         Zero coordinate drift — no AR session involved.</p>
+      <span class="tag tag-3d">Three.js · No AR</span>
+    </a>
+
+    <a class="card" href="world-builder.html">
+      <div class="card-icon">🌍</div>
+      <h2>GPS World Builder</h2>
+      <p>Drop named, emoji-tagged place markers anywhere you go. Your personal world
+         map builds up as you explore. Record a walking trail too. Everything
+         persists in localStorage and exports as GeoJSON.</p>
+      <span class="tag tag-world">World Builder</span>
+    </a>
+
+    <a class="card" href="nav-compass.html">
       <div class="card-icon">🧭</div>
-      <h2>v6 — No Heading</h2>
-      <p>Sets XR world rotation to zero always — raw GPS local coordinates with no
-         compass influence. Accurate only if you begin the session facing north.</p>
-      <span class="tag tag-monitor">No Heading</span>
+      <h2>Compass Navigator</h2>
+      <p>Visual compass dial that points toward saved GPS waypoints. Shows distance
+         and bearing to each target in real-time. Add waypoints manually, from GPS,
+         or import from World Builder. Works completely offline.</p>
+      <span class="tag tag-nav">GPS Nav</span>
     </a>
 
   </div>
 </div>
 
-<footer>© 2025 GPS Test Suite — Open experiment</footer>
+<footer>© 2025 GPS Trail Lab — Open experiment</footer>
 
 <script>
   /* Subtle animated star-field on the background canvas */
