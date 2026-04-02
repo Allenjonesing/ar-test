@@ -171,7 +171,7 @@
         "Complex coordinate transformation setup"
       ],
       "bestUseCase": "AEC / engineering AR overlay on surveyed sites; utility mapping",
-      "deviceRequirements": ["High-precision GNSS or RTK GPS", "Android/iOS native build", "Survey control data"],
+      "deviceRequirements": ["High-precision GNSS receiver or RTK GPS", "Android/iOS native build", "Survey control data"],
       "status": "coming-soon",
       "labPath": null
     }
