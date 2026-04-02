@@ -349,6 +349,12 @@ function totalDistance() {
   return d;
 }
 
+/* Shared colour helper — maps trail index 0..n-1 to a hue value (140→300).
+   Used in both the 2D mini-map and the Three.js 3D world. */
+function trailHue(i, total) {
+  return (i / Math.max(total - 1, 1)) * 160 + 140;
+}
+
 // ══════════════════════════════════════════
 //  PHASE 1 — RECORD
 // ══════════════════════════════════════════
@@ -647,11 +653,6 @@ function buildThreeWorld(gpsTrail) {
   dirLight.position.set(10, 20, 10);
   scene.add(dirLight);
 
-  // ── Shared colour helper: maps index 0..n-1 → hsl string (green→cyan range) ──
-function trailHue(i, total) {
-  // hue 140 (green-cyan) → 300 (purple-magenta) for visual variety across trail
-  return (i / Math.max(total - 1, 1)) * 160 + 140;
-}
   const origin = gpsTrail[0];
   const pts = gpsTrail.map(p => geoToLocal(p.lat, p.lng, origin.lat, origin.lng));
 
