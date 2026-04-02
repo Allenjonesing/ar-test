@@ -120,6 +120,7 @@
     .tag-3d      { background: rgba(180,100,255,0.15); color: #cc88ff; }
     .tag-world   { background: rgba(255,140,0,0.15); color: #ff9933; }
     .tag-nav     { background: rgba(255,80,80,0.15); color: #ff6b6b; }
+    .tag-webxr   { background: rgba(0,204,255,0.15); color: #00ccff; }
 
     .card .status-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -205,6 +206,15 @@
          and bearing to each target in real-time. Add waypoints manually, from GPS,
          or import from World Builder. Works completely offline.</p>
       <span class="tag tag-nav">GPS Nav</span>
+    </a>
+
+    <a class="card" href="webxr-gps.html">
+      <div class="card-icon">🥽</div>
+      <h2>WebXR GPS Anchor AR</h2>
+      <p>Native WebXR augmented reality: glowing 3D pillar markers anchored to real
+         GPS coordinates, overlaid on the live camera feed. Compass + motion
+         calibration aligns GPS north with the XR world. Falls back to 3D preview.</p>
+      <span class="tag tag-webxr">WebXR · Three.js</span>
     </a>
 
   </div>
