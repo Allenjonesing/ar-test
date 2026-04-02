@@ -41,7 +41,7 @@
       "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
       "expectedAccuracy": "5–15 m GPS horizontal (consumer device)",
       "driftRisk": "low",
-      "driftNote": "GPS signal degrades in urban canyons or indoors.",
+      "driftNote": "GPS signal can degrade in urban canyons or indoors.",
       "starterScene": "web-lab/experiments/experiment-b/index.html",
       "configOptions": {
         "gpsPollingIntervalMs": 2000,
