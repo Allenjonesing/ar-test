@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>3D GPS Path Viewer</title>
+  <link rel="icon" href="favicon.ico">
+  <!-- Three.js — NO WebXR, no AR. Pure 3D bird's-eye visualisation. -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #0a0f1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+    }
+
+    #three-canvas { position: fixed; inset: 0; display: block; }
+
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    #header h1 {
+      margin: 0; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+      text-shadow: 0 0 12px rgba(0,255,136,0.4);
+    }
+    #back-link {
+      font-size: 0.78rem; color: rgba(255,255,255,0.6); text-decoration: none;
+      pointer-events: all;
+    }
+    #back-link:hover { color: #00ff88; }
+
+    #status-bar {
+      position: fixed; top: 44px; left: 0; right: 0; z-index: 20;
+      padding: 6px 14px;
+      display: flex; justify-content: space-between; gap: 8px;
+      pointer-events: none;
+    }
+    .status-pill {
+      font-size: 0.78rem; color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #hud {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; pointer-events: none; z-index: 20;
+    }
+    .hud-block {
+      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 10px 18px; text-align: center; min-width: 80px;
+    }
+    .hud-label {
+      display: block; font-size: 0.6rem; letter-spacing: 0.12em;
+      text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 4px;
+    }
+    .hud-value {
+      display: block; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+    }
+
+    #controls {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 20;
+    }
+    button {
+      padding: 12px 24px; border: none; border-radius: 24px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all 0.2s;
+    }
+    #start-btn { background: #00ff88; color: #000; }
+    #start-btn:hover { background: #00cc6f; }
+    #start-btn:disabled { background: #555; color: #999; cursor: not-allowed; }
+    #view-btn {
+      background: rgba(0,180,255,0.15); color: #00ccff;
+      border: 1px solid rgba(0,180,255,0.3);
+    }
+    #view-btn:hover { background: rgba(0,180,255,0.25); }
+    #clear-btn {
+      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #clear-btn:hover { background: rgba(255,80,80,0.15); color: #ff6b6b; border-color: #ff6b6b; }
+
+    #hint {
+      position: fixed; top: 90px; right: 14px;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 10px 14px; font-size: 0.72rem;
+      color: rgba(255,255,255,0.4); z-index: 20; pointer-events: none;
+      line-height: 1.8;
+    }
+
+    #info-toast {
+      position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); color: #fff; padding: 10px 20px;
+      border-radius: 10px; font-size: 0.85rem; z-index: 30;
+      opacity: 0; transition: opacity 0.4s; pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="three-canvas"></canvas>
+
+<div id="header">
+  <h1>🌐 3D Path Viewer</h1>
+  <a id="back-link" href="index.html">← Home</a>
+</div>
+
+<div id="status-bar">
+  <span class="status-pill" id="status-text">Awaiting GPS…</span>
+  <span class="status-pill" id="acc-text">Acc: —</span>
+</div>
+
+<div id="hud">
+  <div class="hud-block">
+    <span class="hud-label">Distance</span>
+    <span class="hud-value" id="hud-dist">0 m</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Points</span>
+    <span class="hud-value" id="hud-pts">0</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Heading</span>
+    <span class="hud-value" id="hud-heading">—°</span>
+  </div>
+</div>
+
+<div id="hint">
+  Drag to orbit<br>
+  Scroll to zoom<br>
+  2-finger pan
+</div>
+
+<div id="controls">
+  <button id="start-btn" disabled>Start Tracking</button>
+  <button id="view-btn">↺ Top View</button>
+  <button id="clear-btn">Clear</button>
+</div>
+
+<div id="info-toast"></div>
+
+<script>
+'use strict';
+
+/* ── Three.js scene (NO WebXR) ─────────────────────────────────────────── */
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x0a0f1a, 1);
+
+const scene = new THREE.Scene();
+
+/* Camera — perspective, bird's-eye to start */
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 10000);
+camera.position.set(0, 80, 0);
+camera.lookAt(0, 0, 0);
+
+/* Lights */
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 20, 5);
+scene.add(dirLight);
+
+/* Ground grid */
+const gridHelper = new THREE.GridHelper(500, 50, 0x1a2a1a, 0x1a2a1a);
+scene.add(gridHelper);
+
+/* Origin marker */
+const originGeo = new THREE.CylinderGeometry(0.3, 0.3, 3, 8);
+const originMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+const originMesh = new THREE.Mesh(originGeo, originMat);
+originMesh.position.set(0, 1.5, 0);
+originMesh.visible = false;
+scene.add(originMesh);
+
+/* Tube path line (rebuilt each time) */
+let pathLine = null;
+const pathPoints = [];   // THREE.Vector3[]
+
+/* Current position sphere */
+const posSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.7, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0x00ff88 })
+);
+posSphere.visible = false;
+scene.add(posSphere);
+
+/* Pulse ring around current position */
+const pulseRingGeo = new THREE.RingGeometry(1.0, 1.4, 32);
+const pulseRingMat = new THREE.MeshBasicMaterial({
+  color: 0x00ff88, side: THREE.DoubleSide, transparent: true, opacity: 0.5,
+});
+const pulseRing = new THREE.Mesh(pulseRingGeo, pulseRingMat);
+pulseRing.rotation.x = -Math.PI / 2;
+pulseRing.visible = false;
+scene.add(pulseRing);
+
+/* Waypoint spheres */
+const waypointMeshes = [];
+
+function addWaypointMesh(x, z, color) {
+  const geo = new THREE.SphereGeometry(0.4, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, 0.4, z);
+  scene.add(mesh);
+  waypointMeshes.push(mesh);
+}
+
+function rebuildPathLine() {
+  if (pathLine) { scene.remove(pathLine); pathLine.geometry.dispose(); }
+  if (pathPoints.length < 2) return;
+
+  const geo = new THREE.BufferGeometry().setFromPoints(pathPoints);
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
+  pathLine = new THREE.Line(geo, mat);
+  scene.add(pathLine);
+}
+
+/* ── Orbit controls (manual implementation, no import needed) ──────────── */
+let isDragging = false, lastMouse = { x: 0, y: 0 };
+let spherical = { radius: 80, theta: 0, phi: Math.PI * 0.4 };  // (distance, azimuth, polar)
+let target = new THREE.Vector3(0, 0, 0);
+
+function updateCamera() {
+  const { radius, theta, phi } = spherical;
+  camera.position.set(
+    target.x + radius * Math.sin(phi) * Math.sin(theta),
+    target.y + radius * Math.cos(phi),
+    target.z + radius * Math.sin(phi) * Math.cos(theta)
+  );
+  camera.lookAt(target);
+}
+updateCamera();
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - lastMouse.x;
+  const dy = e.clientY - lastMouse.y;
+  lastMouse = { x: e.clientX, y: e.clientY };
+  spherical.theta -= dx * 0.01;
+  spherical.phi = Math.max(0.1, Math.min(Math.PI / 2.1, spherical.phi + dy * 0.01));
+  updateCamera();
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  spherical.radius = Math.max(5, Math.min(500, spherical.radius * (e.deltaY < 0 ? 0.9 : 1.1)));
+  updateCamera();
+}, { passive: false });
+
+/* Touch orbit */
+let lastTouches = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) lastTouches = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }];
+  else if (e.touches.length === 2) lastTouches = [
+    { x: e.touches[0].clientX, y: e.touches[0].clientY },
+    { x: e.touches[1].clientX, y: e.touches[1].clientY },
+  ];
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!lastTouches) return;
+  if (e.touches.length === 1 && lastTouches.length === 1) {
+    const dx = e.touches[0].clientX - lastTouches[0].x;
+    const dy = e.touches[0].clientY - lastTouches[0].y;
+    spherical.theta -= dx * 0.01;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI / 2.1, spherical.phi + dy * 0.01));
+    lastTouches = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }];
+    updateCamera();
+  } else if (e.touches.length === 2 && lastTouches.length === 2) {
+    /* pinch zoom */
+    const prevDist = Math.hypot(lastTouches[0].x - lastTouches[1].x, lastTouches[0].y - lastTouches[1].y);
+    const newDist  = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                                e.touches[0].clientY - e.touches[1].clientY);
+    spherical.radius = Math.max(5, Math.min(500, spherical.radius * (prevDist / newDist)));
+    lastTouches = [
+      { x: e.touches[0].clientX, y: e.touches[0].clientY },
+      { x: e.touches[1].clientX, y: e.touches[1].clientY },
+    ];
+    updateCamera();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { lastTouches = null; });
+
+/* ── Coordinate maths ──────────────────────────────────────────────────── */
+const METERS_PER_DEG_LAT = 111111;
+let GPS_ORIGIN = null;
+
+function geoToLocal(lat, lng) {
+  const cosLat = Math.cos(GPS_ORIGIN.lat * Math.PI / 180);
+  return {
+    x:  (lng - GPS_ORIGIN.lng) * METERS_PER_DEG_LAT * cosLat,
+    z:  (lat - GPS_ORIGIN.lat) * METERS_PER_DEG_LAT,         // north = +Z
+  };
+}
+
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+/* ── GPS state ─────────────────────────────────────────────────────────── */
+const STATE = {
+  tracking: false,
+  watchId: null,
+  gpsPath: [],      // [{lat, lng}]
+  totalDistM: 0,
+  heading: 0,
+  waypointAccum: 0,
+};
+const WAYPOINT_DIST_M = 4;
+const MIN_MOVE_M = 2;
+
+/* Load saved */
+(function loadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('path3d-gps') || '[]');
+    if (saved.length === 0) return;
+    STATE.gpsPath = saved;
+    GPS_ORIGIN = { lat: saved[0].lat, lng: saved[0].lng };
+    originMesh.visible = true;
+    recalcDistAndRebuild();
+    toast(`Loaded ${saved.length} saved points`);
+  } catch (e) {}
+}());
+
+function recalcDistAndRebuild() {
+  let d = 0;
+  pathPoints.length = 0;
+  waypointMeshes.forEach(m => scene.remove(m));
+  waypointMeshes.length = 0;
+
+  for (let i = 0; i < STATE.gpsPath.length; i++) {
+    const { lat, lng } = STATE.gpsPath[i];
+    const m = geoToLocal(lat, lng);
+    pathPoints.push(new THREE.Vector3(m.x, 0, -m.z));
+
+    if (i > 0) {
+      const prev = STATE.gpsPath[i-1];
+      d += haversineM(prev.lat, prev.lng, lat, lng);
+    }
+
+    /* add waypoint mesh */
+    const t = i / Math.max(1, STATE.gpsPath.length - 1);
+    const hue = Math.round(140 + t * 200);
+    addWaypointMesh(m.x, -m.z, new THREE.Color(`hsl(${hue}, 90%, 60%)`));
+  }
+  STATE.totalDistM = d;
+  rebuildPathLine();
+  updateHUD();
+}
+
+/* ── GPS watch ─────────────────────────────────────────────────────────── */
+function onGPSSuccess(pos) {
+  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+  document.getElementById('acc-text').textContent = `Acc: ±${Math.round(acc)}m`;
+
+  if (!GPS_ORIGIN) {
+    GPS_ORIGIN = { lat, lng };
+    originMesh.visible = true;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('status-text').textContent = 'GPS ready — tap Start';
+  }
+
+  if (!STATE.tracking) return;
+
+  /* filter near-duplicates */
+  if (STATE.gpsPath.length > 0) {
+    const last = STATE.gpsPath[STATE.gpsPath.length - 1];
+    const d = haversineM(last.lat, last.lng, lat, lng);
+    if (d < MIN_MOVE_M) return;
+    STATE.totalDistM += d;
+    STATE.waypointAccum += d;
+  }
+
+  STATE.gpsPath.push({ lat, lng });
+
+  const m = geoToLocal(lat, lng);
+  const p3 = new THREE.Vector3(m.x, 0, -m.z);
+  pathPoints.push(p3);
+  rebuildPathLine();
+
+  /* add waypoint mesh every WAYPOINT_DIST_M */
+  if (STATE.waypointAccum >= WAYPOINT_DIST_M || STATE.gpsPath.length === 1) {
+    STATE.waypointAccum = 0;
+    const t = STATE.gpsPath.length / 300;
+    const hue = Math.round(140 + (t % 1) * 200);
+    addWaypointMesh(m.x, -m.z, new THREE.Color(`hsl(${hue}, 90%, 60%)`));
+  }
+
+  /* update position sphere */
+  posSphere.position.set(m.x, 0.7, -m.z);
+  posSphere.visible = true;
+  pulseRing.position.set(m.x, 0.05, -m.z);
+  pulseRing.visible = true;
+
+  /* auto-follow in bird's-eye mode */
+  target.set(m.x, 0, -m.z);
+  updateCamera();
+
+  saveToStorage();
+  updateHUD();
+  document.getElementById('status-text').textContent =
+    `Tracking… ${STATE.gpsPath.length} pts`;
+}
+
+function onGPSError(err) {
+  document.getElementById('status-text').textContent = `GPS error: ${err.message}`;
+}
+
+/* ── Heading ───────────────────────────────────────────────────────────── */
+function onOrientation(evt) {
+  let h = null;
+  if (evt.webkitCompassHeading != null) h = evt.webkitCompassHeading;
+  else if (evt.absolute && evt.alpha != null) h = (360 - evt.alpha) % 360;
+  if (h == null) return;
+  STATE.heading = h;
+  document.getElementById('hud-heading').textContent = Math.round(h) + '°';
+}
+
+function setupCompass() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation, true); })
+      .catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (!STATE.tracking) {
+    STATE.tracking = true;
+    document.getElementById('start-btn').textContent = 'Stop Tracking';
+    document.getElementById('start-btn').style.background = '#ff6b6b';
+    document.getElementById('start-btn').style.color = '#fff';
+    setupCompass();
+    if (!STATE.watchId) {
+      STATE.watchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+        enableHighAccuracy: true, maximumAge: 0, timeout: 15000,
+      });
+    }
+  } else {
+    STATE.tracking = false;
+    document.getElementById('start-btn').textContent = 'Resume Tracking';
+    document.getElementById('start-btn').style.background = '#00ff88';
+    document.getElementById('start-btn').style.color = '#000';
+    document.getElementById('status-text').textContent = 'Paused';
+  }
+});
+
+document.getElementById('view-btn').addEventListener('click', () => {
+  spherical.phi = 0.15;
+  spherical.radius = 80;
+  updateCamera();
+  toast('Top-down view');
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  if (!confirm('Clear path?')) return;
+  STATE.gpsPath = [];
+  STATE.totalDistM = 0;
+  STATE.waypointAccum = 0;
+  GPS_ORIGIN = null;
+  pathPoints.length = 0;
+  waypointMeshes.forEach(m => scene.remove(m));
+  waypointMeshes.length = 0;
+  rebuildPathLine();
+  posSphere.visible = false;
+  pulseRing.visible = false;
+  originMesh.visible = false;
+  STATE.tracking = false;
+  document.getElementById('start-btn').textContent = 'Start Tracking';
+  document.getElementById('start-btn').style.background = '#00ff88';
+  document.getElementById('start-btn').style.color = '#000';
+  document.getElementById('start-btn').disabled = true;
+  document.getElementById('status-text').textContent = 'Cleared';
+  localStorage.removeItem('path3d-gps');
+  target.set(0, 0, 0);
+  spherical.radius = 80;
+  updateCamera();
+  updateHUD();
+});
+
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+function updateHUD() {
+  const d = STATE.totalDistM;
+  document.getElementById('hud-dist').textContent =
+    d >= 1000 ? (d/1000).toFixed(2) + ' km' : Math.round(d) + ' m';
+  document.getElementById('hud-pts').textContent = STATE.gpsPath.length;
+}
+
+function saveToStorage() {
+  try {
+    localStorage.setItem('path3d-gps', JSON.stringify(STATE.gpsPath.slice(-2000)));
+  } catch (e) {}
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('info-toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+}
+
+/* ── Resize ────────────────────────────────────────────────────────────── */
+function resize() {
+  const W = window.innerWidth, H = window.innerHeight;
+  renderer.setSize(W, H);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ── Render loop ───────────────────────────────────────────────────────── */
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.02;
+  pulseRing.scale.setScalar(1.0 + 0.3 * Math.sin(t));
+  pulseRingMat.opacity = 0.3 + 0.2 * Math.sin(t);
+  renderer.render(scene, camera);
+}
+animate();
+
+/* ── Boot ──────────────────────────────────────────────────────────────── */
+if (!navigator.geolocation) {
+  document.getElementById('status-text').textContent = 'Geolocation not supported';
+} else {
+  STATE.watchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+    enableHighAccuracy: true, maximumAge: 0, timeout: 15000,
+  });
+}
+</script>
+</body>
+</html>

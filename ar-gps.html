@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>GPS AR — A-Frame Location</title>
+  <link rel="icon" href="favicon.ico">
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- AR.js for A-Frame (location-based) -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000; color: #fff;
+      overflow: hidden;
+    }
+
+    /* Hide the A-Frame stats dot */
+    .a-enter-vr-button { display: none !important; }
+
+    #overlay {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      pointer-events: none; z-index: 1001;
+    }
+    #header h1 {
+      margin: 0; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+      text-shadow: 0 0 12px rgba(0,255,136,0.4);
+    }
+    #back-link {
+      font-size: 0.78rem; color: rgba(255,255,255,0.6); text-decoration: none;
+      pointer-events: all;
+    }
+    #back-link:hover { color: #00ff88; }
+
+    #status-bar {
+      position: fixed; top: 44px; left: 0; right: 0;
+      padding: 6px 14px;
+      display: flex; justify-content: space-between; gap: 8px;
+      pointer-events: none; z-index: 1001;
+    }
+    .status-pill {
+      font-size: 0.78rem; color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.75); padding: 4px 10px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    #hud {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; pointer-events: none; z-index: 1001;
+    }
+    .hud-block {
+      background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 10px 18px; text-align: center; min-width: 80px;
+    }
+    .hud-label {
+      display: block; font-size: 0.6rem; letter-spacing: 0.12em;
+      text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 4px;
+    }
+    .hud-value {
+      display: block; font-size: 1.1rem; font-weight: 700; color: #00ff88;
+    }
+
+    #controls {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 1001; pointer-events: all;
+    }
+    button {
+      padding: 12px 24px; border: none; border-radius: 24px; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all 0.2s;
+    }
+    #start-btn { background: #00ff88; color: #000; }
+    #start-btn:hover { background: #00cc6f; }
+    #start-btn:disabled { background: #555; color: #999; cursor: not-allowed; }
+    #clear-btn {
+      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #clear-btn:hover { background: rgba(255,80,80,0.15); color: #ff6b6b; border-color: #ff6b6b; }
+
+    #info-toast {
+      position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); color: #fff; padding: 10px 20px;
+      border-radius: 10px; font-size: 0.85rem; z-index: 1002;
+      opacity: 0; transition: opacity 0.4s; pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* Explain panel shown before starting */
+    #explain {
+      position: fixed; inset: 0; z-index: 2000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.9); padding: 30px;
+      text-align: center;
+    }
+    #explain h2 { color: #00ff88; margin: 0 0 16px; font-size: 1.4rem; }
+    #explain p { color: rgba(255,255,255,0.65); line-height: 1.6; max-width: 340px; margin: 0 0 24px; }
+    #explain ul { text-align: left; color: rgba(255,255,255,0.5); font-size: 0.85rem; line-height: 2; max-width: 300px; margin: 0 0 24px; padding-left: 20px; }
+    #explain-btn { background: #00ff88; color: #000; padding: 14px 32px; border: none; border-radius: 24px; font-size: 1rem; font-weight: 700; cursor: pointer; }
+    #explain-btn:hover { background: #00cc6f; }
+  </style>
+</head>
+<body>
+
+<!-- Explain overlay -->
+<div id="explain">
+  <h2>🌐 A-Frame GPS AR</h2>
+  <p>This experiment uses <strong>AR.js location-based AR</strong> — a completely
+  different approach from WebXR. Objects are anchored directly to GPS coordinates,
+  not the device's XR tracking coordinate system.</p>
+  <ul>
+    <li>Spheres appear at your previous GPS positions</li>
+    <li>AR.js uses your camera + GPS + compass</li>
+    <li>No WebXR coordinate drift</li>
+    <li>Grant camera + location permissions</li>
+  </ul>
+  <button id="explain-btn">Start AR Experience</button>
+</div>
+
+<div id="header">
+  <h1>🌐 A-Frame GPS AR</h1>
+  <a id="back-link" href="index.html">← Home</a>
+</div>
+
+<div id="status-bar">
+  <span class="status-pill" id="status-text">Awaiting GPS…</span>
+  <span class="status-pill" id="acc-text">Acc: —</span>
+</div>
+
+<div id="hud">
+  <div class="hud-block">
+    <span class="hud-label">Distance</span>
+    <span class="hud-value" id="hud-dist">0 m</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Waypoints</span>
+    <span class="hud-value" id="hud-pts">0</span>
+  </div>
+  <div class="hud-block">
+    <span class="hud-label">Heading</span>
+    <span class="hud-value" id="hud-heading">—°</span>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="start-btn" disabled>Start Tracking</button>
+  <button id="clear-btn">Clear Waypoints</button>
+</div>
+
+<div id="info-toast"></div>
+
+<!-- A-Frame scene (hidden until explain is dismissed) -->
+<a-scene
+  id="ar-scene"
+  style="display:none;"
+  vr-mode-ui="enabled: false"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
+
+  <a-camera
+    id="ar-camera"
+    gps-camera
+    rotation-reader>
+  </a-camera>
+
+  <!-- Waypoint entities will be added here dynamically -->
+  <a-entity id="waypoint-root"></a-entity>
+
+</a-scene>
+
+<script>
+'use strict';
+
+/* ── State ─────────────────────────────────────────────────────────────── */
+const STATE = {
+  tracking: false,
+  watchId: null,
+  waypoints: [],    // [{lat, lng, el}]
+  lastGPS: null,
+  totalDistM: 0,
+  heading: 0,
+};
+
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function updateHUD() {
+  const d = STATE.totalDistM;
+  document.getElementById('hud-dist').textContent =
+    d >= 1000 ? (d/1000).toFixed(2) + ' km' : Math.round(d) + ' m';
+  document.getElementById('hud-pts').textContent = STATE.waypoints.length;
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('info-toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+/* ── Waypoint creation ─────────────────────────────────────────────────── */
+const WAYPOINT_DIST_M = 5;
+const MAX_WAYPOINTS   = 100;
+
+function addWaypoint(lat, lng) {
+  const root = document.getElementById('waypoint-root');
+
+  /* hue cycles based on waypoint index */
+  const t = (STATE.waypoints.length % MAX_WAYPOINTS) / MAX_WAYPOINTS;
+  const hue = Math.round(140 + t * 200);
+  const color = `hsl(${hue}, 90%, 60%)`;
+
+  /* Create A-Frame entity with gps-entity-place component */
+  const el = document.createElement('a-sphere');
+  el.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lng}`);
+  el.setAttribute('color', color);
+  el.setAttribute('radius', '1.5');
+  el.setAttribute('opacity', '0.85');
+  el.setAttribute('material', `color: ${color}; emissive: ${color}; emissiveIntensity: 0.3`);
+
+  /* distance label */
+  const dist = STATE.totalDistM;
+  const label = document.createElement('a-text');
+  label.setAttribute('value', dist >= 1000 ? (dist/1000).toFixed(1) + 'km' : Math.round(dist) + 'm');
+  label.setAttribute('align', 'center');
+  label.setAttribute('position', '0 2.2 0');
+  label.setAttribute('color', '#fff');
+  label.setAttribute('scale', '4 4 4');
+  el.appendChild(label);
+
+  root.appendChild(el);
+  STATE.waypoints.push({ lat, lng, el });
+
+  /* remove oldest if over limit */
+  if (STATE.waypoints.length > MAX_WAYPOINTS) {
+    const old = STATE.waypoints.shift();
+    root.removeChild(old.el);
+  }
+
+  updateHUD();
+}
+
+/* ── GPS ───────────────────────────────────────────────────────────────── */
+function onGPSSuccess(pos) {
+  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+  document.getElementById('acc-text').textContent = `Acc: ±${Math.round(acc)}m`;
+
+  if (!STATE.tracking) {
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('status-text').textContent = 'GPS ready — tap Start';
+    STATE.lastGPS = { lat, lng };
+    return;
+  }
+
+  if (STATE.lastGPS) {
+    const d = haversineM(STATE.lastGPS.lat, STATE.lastGPS.lng, lat, lng);
+    if (d >= WAYPOINT_DIST_M) {
+      STATE.totalDistM += d;
+      addWaypoint(lat, lng);
+      STATE.lastGPS = { lat, lng };
+      document.getElementById('status-text').textContent =
+        `Tracking… ${STATE.waypoints.length} waypoints`;
+    }
+  } else {
+    STATE.lastGPS = { lat, lng };
+    addWaypoint(lat, lng);
+    document.getElementById('status-text').textContent = 'Tracking…';
+  }
+}
+
+function onGPSError(err) {
+  document.getElementById('status-text').textContent = `GPS: ${err.message}`;
+}
+
+/* ── Heading ───────────────────────────────────────────────────────────── */
+function onOrientation(evt) {
+  let h = null;
+  if (evt.webkitCompassHeading != null) h = evt.webkitCompassHeading;
+  else if (evt.absolute && evt.alpha != null) h = (360 - evt.alpha) % 360;
+  if (h == null) return;
+  STATE.heading = h;
+  document.getElementById('hud-heading').textContent = Math.round(h) + '°';
+}
+
+function setupCompass() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation, true); })
+      .catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (!STATE.tracking) {
+    STATE.tracking = true;
+    document.getElementById('start-btn').textContent = 'Stop Tracking';
+    document.getElementById('start-btn').style.background = '#ff6b6b';
+    document.getElementById('start-btn').style.color = '#fff';
+    document.getElementById('status-text').textContent = 'Tracking…';
+    setupCompass();
+  } else {
+    STATE.tracking = false;
+    document.getElementById('start-btn').textContent = 'Resume Tracking';
+    document.getElementById('start-btn').style.background = '#00ff88';
+    document.getElementById('start-btn').style.color = '#000';
+    document.getElementById('status-text').textContent = 'Paused';
+  }
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  const root = document.getElementById('waypoint-root');
+  STATE.waypoints.forEach(w => { try { root.removeChild(w.el); } catch (e) {} });
+  STATE.waypoints = [];
+  STATE.totalDistM = 0;
+  STATE.lastGPS = null;
+  STATE.tracking = false;
+  document.getElementById('start-btn').textContent = 'Start Tracking';
+  document.getElementById('start-btn').style.background = '#00ff88';
+  document.getElementById('start-btn').style.color = '#000';
+  document.getElementById('status-text').textContent = 'Cleared';
+  updateHUD();
+  toast('Waypoints cleared');
+});
+
+/* ── Explain overlay ───────────────────────────────────────────────────── */
+document.getElementById('explain-btn').addEventListener('click', () => {
+  document.getElementById('explain').style.display = 'none';
+  const scene = document.getElementById('ar-scene');
+  scene.style.display = 'block';
+
+  /* start GPS once scene is visible */
+  if (!navigator.geolocation) {
+    document.getElementById('status-text').textContent = 'Geolocation not supported';
+    return;
+  }
+  STATE.watchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+    enableHighAccuracy: true, maximumAge: 0, timeout: 15000,
+  });
+
+  toast('Walk around — AR spheres will appear at your GPS positions');
+});
+</script>
+</body>
+</html>
