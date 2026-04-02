@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>A-Frame GPS VR World</title>
+  <link rel="icon" href="favicon.ico" />
+
+  <!-- A-Frame 1.5.0 — loaded early so custom components register before scene parses -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <style>
+    /* ── Global reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0f1a;
+      color: #c8ffd4;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ── Phase 1 – Map layout ─────────────────────────────────────── */
+    #map-phase {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding: 12px;
+      gap: 10px;
+    }
+
+    #map-phase header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #map-phase header h1 {
+      font-size: 1.1rem;
+      color: #00ff88;
+      letter-spacing: 0.04em;
+    }
+
+    #map-phase header a {
+      color: #00ccff;
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+    #map-phase header a:hover { text-decoration: underline; }
+
+    /* Status bar */
+    #status-bar {
+      background: #0d1a0d;
+      border: 1px solid #1a3a1a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .stat-label { color: #5a8a5a; font-size: 0.7rem; }
+    .stat-value { color: #00ff88; font-weight: 600; }
+
+    /* Canvas mini-map */
+    #map-wrap {
+      flex: 1;
+      min-height: 0;
+      border: 1px solid #1a3a1a;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #060e06;
+      position: relative;
+    }
+    #trail-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #map-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 0.7rem;
+      color: #2a5a2a;
+      pointer-events: none;
+    }
+
+    /* Control buttons */
+    #controls {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    button {
+      flex: 1;
+      padding: 12px 6px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.96); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    #btn-record  { background: #00ff88; color: #020a04; }
+    #btn-build   { background: #00ccff; color: #020a0f; }
+    #btn-clear   { background: #1a3a1a; color: #00ff88; border: 1px solid #00ff88; }
+
+    /* ── Phase 2 – VR overlay ─────────────────────────────────────── */
+    #vr-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+    }
+
+    /* "Back to Map" sits above the canvas */
+    #btn-back-map {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.65);
+      color: #00ff88;
+      border: 1px solid #00ff88;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: none;
+      backdrop-filter: blur(4px);
+    }
+
+    /* A-Frame scene fills viewport */
+    #vr-scene {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     PHASE 1 – MAP RECORDING
+════════════════════════════════════════════════════════════════════ -->
+<div id="map-phase">
+  <header>
+    <h1>📍 A-Frame GPS VR World</h1>
+    <a href="index.html">← Back</a>
+  </header>
+
+  <!-- Status row -->
+  <div id="status-bar">
+    <div>
+      <div class="stat-label">GPS Accuracy</div>
+      <div class="stat-value" id="stat-accuracy">—</div>
+    </div>
+    <div>
+      <div class="stat-label">Distance</div>
+      <div class="stat-value" id="stat-distance">0 m</div>
+    </div>
+    <div>
+      <div class="stat-label">Points</div>
+      <div class="stat-value" id="stat-points">0</div>
+    </div>
+  </div>
+
+  <!-- Live mini-map -->
+  <div id="map-wrap">
+    <canvas id="trail-canvas"></canvas>
+    <div id="map-hint">Walk around — your path will appear here</div>
+  </div>
+
+  <!-- Action buttons -->
+  <div id="controls">
+    <button id="btn-record" onclick="toggleRecording()">▶ Start Recording</button>
+    <button id="btn-build"  onclick="buildVRWorld()" disabled>🌐 Build VR World</button>
+    <button id="btn-clear"  onclick="clearTrail()">🗑 Clear</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     PHASE 2 – A-FRAME VR SCENE
+     Hidden until buildVRWorld() is called.
+════════════════════════════════════════════════════════════════════ -->
+<button id="btn-back-map" onclick="backToMap()">← Back to Map</button>
+
+<a-scene id="vr-scene"
+  embedded
+  vr-mode-ui="enabled:true"
+  renderer="antialias:true; colorManagement:true"
+  loading-screen="dotsColor:#00ff88; backgroundColor:#0a0f1a">
+
+  <!-- Sky -->
+  <a-sky color="#0a0f1a"></a-sky>
+
+  <!-- Lighting -->
+  <a-entity light="type:ambient; color:#cceeff; intensity:0.3"></a-entity>
+  <a-entity light="type:directional; color:#00ff88; intensity:0.6" position="2 4 2"></a-entity>
+  <a-entity light="type:point; color:#00ccff; intensity:0.4; distance:50" position="0 5 0"></a-entity>
+
+  <!-- Container for all GPS-derived geometry -->
+  <a-entity id="vr-root"></a-entity>
+
+  <!-- Player / camera — position overwritten at build time -->
+  <a-entity id="player" position="0 1.6 0" wasd-controls="acceleration:20">
+    <a-camera look-controls="pointerLockEnabled:false" fov="80"></a-camera>
+  </a-entity>
+
+</a-scene>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ── Constants ─────────────────────────────────────────────────── */
+const LS_KEY          = 'aframe-vr-trail';
+const MIN_MOVE_M      = 3;          // minimum metres between recorded points
+const METERS_PER_DEG  = 111111;     // approximate metres per degree of latitude
+const CORRIDOR_W      = 4;          // floor panel depth (metres)
+const PILLAR_COLORS   = ['#00ff88', '#00ccff', '#88ff00', '#ff88cc', '#ffcc00'];
+const STAR_COUNT      = 200;        // decorative stars in sky
+
+/* ── State ─────────────────────────────────────────────────────── */
+let trail      = [];       // [{lat, lng, ts}]
+let recording  = false;
+let watchId    = null;
+let totalDist  = 0;        // metres
+
+/* ── Restore persisted trail on load ───────────────────────────── */
+(function restoreTrail() {
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) {
+      trail = JSON.parse(saved);
+      if (!Array.isArray(trail)) trail = [];
+    }
+  } catch (_) { trail = []; }
+  refreshUI();
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   HAVERSINE – great-circle distance in metres between two coords
+════════════════════════════════════════════════════════════════ */
+function haversine(lat1, lng1, lat2, lng2) {
+  const R  = 6371000;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  const a  = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GPS RECORDING
+════════════════════════════════════════════════════════════════ */
+function toggleRecording() {
+  recording ? stopRecording() : startRecording();
+}
+
+function startRecording() {
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by this browser.');
+    return;
+  }
+  recording = true;
+  document.getElementById('btn-record').textContent = '⏹ Stop Recording';
+  document.getElementById('btn-record').style.background = '#ff4466';
+  document.getElementById('btn-record').style.color = '#fff';
+
+  watchId = navigator.geolocation.watchPosition(onPosition, onGpsError, {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 15000
+  });
+}
+
+function stopRecording() {
+  recording = false;
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  document.getElementById('btn-record').textContent = '▶ Start Recording';
+  document.getElementById('btn-record').style.background = '#00ff88';
+  document.getElementById('btn-record').style.color = '#020a04';
+}
+
+function onPosition(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  document.getElementById('stat-accuracy').textContent = `±${Math.round(accuracy)} m`;
+
+  // Enforce minimum movement threshold
+  if (trail.length > 0) {
+    const last = trail[trail.length - 1];
+    const d = haversine(last.lat, last.lng, lat, lng);
+    if (d < MIN_MOVE_M) return;
+    totalDist += d;
+  }
+
+  trail.push({ lat, lng, ts: Date.now() });
+  persistTrail();
+  refreshUI();
+}
+
+function onGpsError(err) {
+  document.getElementById('stat-accuracy').textContent = 'Error';
+  console.warn('GPS error:', err.message);
+}
+
+function clearTrail() {
+  if (recording) stopRecording();
+  trail = [];
+  totalDist = 0;
+  localStorage.removeItem(LS_KEY);
+  refreshUI();
+}
+
+function persistTrail() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(trail)); } catch (_) {}
+}
+
+/* ════════════════════════════════════════════════════════════════
+   UI REFRESH – stats + canvas redraw
+════════════════════════════════════════════════════════════════ */
+function refreshUI() {
+  document.getElementById('stat-points').textContent   = trail.length;
+  document.getElementById('stat-distance').textContent =
+    totalDist >= 1000
+      ? (totalDist / 1000).toFixed(2) + ' km'
+      : Math.round(totalDist) + ' m';
+
+  document.getElementById('btn-build').disabled = trail.length < 3;
+  document.getElementById('map-hint').style.display = trail.length ? 'none' : '';
+
+  drawMap();
+}
+
+/* ── 2-D canvas mini-map ──────────────────────────────────────── */
+function drawMap() {
+  const canvas = document.getElementById('trail-canvas');
+  const wrap   = document.getElementById('map-wrap');
+  const W = wrap.clientWidth  || 300;
+  const H = wrap.clientHeight || 300;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  if (trail.length === 0) return;
+
+  // Compute bounding box with padding
+  const lats = trail.map(p => p.lat);
+  const lngs = trail.map(p => p.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const PAD = 30;
+
+  // Aspect-aware scale so trail fills canvas with padding
+  const spanLat = maxLat - minLat || 1e-5;
+  const spanLng = maxLng - minLng || 1e-5;
+  const scaleX  = (W - PAD * 2) / spanLng;
+  const scaleY  = (H - PAD * 2) / spanLat;
+  const scale   = Math.min(scaleX, scaleY);
+
+  const toCanvas = (lat, lng) => ({
+    x: PAD + (lng - minLng) * scale + ((W - PAD * 2) - spanLng * scale) / 2,
+    y: H - PAD - (lat - minLat) * scale - ((H - PAD * 2) - spanLat * scale) / 2
+  });
+
+  // Path line
+  ctx.beginPath();
+  trail.forEach((p, i) => {
+    const { x, y } = toCanvas(p.lat, p.lng);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth   = 2;
+  ctx.lineJoin    = 'round';
+  ctx.stroke();
+
+  // Waypoint dots
+  trail.forEach((p, i) => {
+    const { x, y } = toCanvas(p.lat, p.lng);
+    ctx.beginPath();
+    ctx.arc(x, y, i === 0 ? 5 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#00ff88' : i === trail.length - 1 ? '#00ccff' : '#1a6a1a';
+    ctx.fill();
+  });
+
+  // Compass rose (top-right)
+  const cx = W - 24, cy = 24, r = 12;
+  ctx.font = `${r}px sans-serif`;
+  ctx.fillStyle = '#2a6a2a';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('N', cx, cy - r + 2);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GPS → LOCAL METRES (A-Frame coordinate space)
+   Origin = trail[0]; +X = East, +Z = South (negated for A-Frame)
+════════════════════════════════════════════════════════════════ */
+function geoToLocal(lat, lng, originLat, originLng) {
+  const cosLat = Math.cos(originLat * Math.PI / 180);
+  return {
+    x: (lng - originLng) * METERS_PER_DEG * cosLat,
+    z: -(lat - originLat) * METERS_PER_DEG
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   BUILD VR WORLD
+════════════════════════════════════════════════════════════════ */
+function buildVRWorld() {
+  if (trail.length < 3) return;
+
+  const origin = trail[0];
+  const root   = document.getElementById('vr-root');
+
+  // Clear any previously generated geometry
+  while (root.firstChild) root.removeChild(root.firstChild);
+
+  // Convert all GPS points to local A-Frame coords
+  const pts = trail.map(p => geoToLocal(p.lat, p.lng, origin.lat, origin.lng));
+
+  // ── Ground plane (large, covers the whole area) ──────────────
+  const ground = document.createElement('a-plane');
+  ground.setAttribute('rotation', '-90 0 0');
+  ground.setAttribute('width',  '500');
+  ground.setAttribute('height', '500');
+  ground.setAttribute('color',  '#0d1a0d');
+  ground.setAttribute('material', 'color:#0d1a0d; roughness:0.9; metalness:0.1');
+  root.appendChild(ground);
+
+  // ── Grid overlay on the ground ────────────────────────────────
+  addGrid(root, pts);
+
+  // ── Floor corridor panels along each GPS segment ─────────────
+  for (let i = 0; i < pts.length - 1; i++) {
+    addFloorSegment(root, pts[i], pts[i + 1]);
+  }
+
+  // ── Glowing path line on the floor ───────────────────────────
+  addPathLine(root, pts);
+
+  // ── Pillar markers at each waypoint ──────────────────────────
+  pts.forEach((p, i) => {
+    const color = PILLAR_COLORS[i % PILLAR_COLORS.length];
+    addVRPillar(root, p.x, p.z, color, i === 0 ? 'START' : i === pts.length - 1 ? 'END' : '');
+  });
+
+  // ── Stars ─────────────────────────────────────────────────────
+  addStars(root);
+
+  // ── Position player at first waypoint ────────────────────────
+  document.getElementById('player').setAttribute('position',
+    `${pts[0].x.toFixed(3)} 1.6 ${pts[0].z.toFixed(3)}`);
+
+  // ── Switch to VR phase ────────────────────────────────────────
+  showVR();
+}
+
+/* ── Floor segment between two local coords ─────────────────── */
+function addFloorSegment(root, a, b) {
+  const dx  = b.x - a.x;
+  const dz  = b.z - a.z;
+  const len = Math.sqrt(dx * dx + dz * dz);
+  if (len < 0.01) return;
+
+  const midX = (a.x + b.x) / 2;
+  const midZ = (a.z + b.z) / 2;
+  // A-Frame Y-rotation: atan2 of XZ direction, converted from radians
+  const rotY = Math.atan2(dx, dz) * 180 / Math.PI;
+
+  const box = document.createElement('a-box');
+  box.setAttribute('position', `${midX.toFixed(3)} 0.05 ${midZ.toFixed(3)}`);
+  box.setAttribute('rotation', `0 ${rotY.toFixed(2)} 0`);
+  box.setAttribute('width',    len.toFixed(3));
+  box.setAttribute('height',   '0.1');
+  box.setAttribute('depth',    CORRIDOR_W.toFixed(1));
+  box.setAttribute('material',
+    'color:#0d2a0d; emissive:#002200; emissiveIntensity:0.3; roughness:0.8');
+  root.appendChild(box);
+}
+
+/* ── Glowing pillar + sphere topper ─────────────────────────── */
+function addVRPillar(root, x, z, colorHex, label) {
+  // Cylinder pillar
+  const cyl = document.createElement('a-cylinder');
+  cyl.setAttribute('position', `${x.toFixed(3)} 1.5 ${z.toFixed(3)}`);
+  cyl.setAttribute('radius', '0.1');
+  cyl.setAttribute('height', '3');
+  cyl.setAttribute('material',
+    `color:${colorHex}; emissive:${colorHex}; emissiveIntensity:0.5; roughness:0.3`);
+  root.appendChild(cyl);
+
+  // Sphere on top
+  const sphere = document.createElement('a-sphere');
+  sphere.setAttribute('position', `${x.toFixed(3)} 3.2 ${z.toFixed(3)}`);
+  sphere.setAttribute('radius', '0.3');
+  sphere.setAttribute('material',
+    `color:${colorHex}; emissive:${colorHex}; emissiveIntensity:0.8; roughness:0.2`);
+  root.appendChild(sphere);
+
+  // Point light for glow effect
+  const light = document.createElement('a-entity');
+  light.setAttribute('position', `${x.toFixed(3)} 3.2 ${z.toFixed(3)}`);
+  light.setAttribute('light',
+    `type:point; color:${colorHex}; intensity:0.6; distance:8`);
+  root.appendChild(light);
+
+  // Text label for start / end
+  if (label) {
+    const txt = document.createElement('a-text');
+    txt.setAttribute('value', label);
+    txt.setAttribute('position', `${x.toFixed(3)} 4.0 ${z.toFixed(3)}`);
+    txt.setAttribute('align',  'center');
+    txt.setAttribute('color',  colorHex);
+    txt.setAttribute('scale',  '1.5 1.5 1.5');
+    root.appendChild(txt);
+  }
+}
+
+/* ── Ground grid (procedural XZ lines) ──────────────────────── */
+function addGrid(root, pts) {
+  // Build a grid centred on the trail centroid
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+  const SIZE = 60, STEP = 5;
+
+  for (let i = -SIZE / 2; i <= SIZE / 2; i += STEP) {
+    // Lines parallel to Z axis
+    const lineX = document.createElement('a-entity');
+    lineX.setAttribute('line',
+      `start:${(cx + i).toFixed(1)} 0.06 ${(cz - SIZE / 2).toFixed(1)};` +
+      `end:${(cx + i).toFixed(1)} 0.06 ${(cz + SIZE / 2).toFixed(1)};` +
+      'color:#003300');
+    root.appendChild(lineX);
+
+    // Lines parallel to X axis
+    const lineZ = document.createElement('a-entity');
+    lineZ.setAttribute('line',
+      `start:${(cx - SIZE / 2).toFixed(1)} 0.06 ${(cz + i).toFixed(1)};` +
+      `end:${(cx + SIZE / 2).toFixed(1)} 0.06 ${(cz + i).toFixed(1)};` +
+      'color:#003300');
+    root.appendChild(lineZ);
+  }
+}
+
+/* ── Glowing path line along the trail ──────────────────────── */
+function addPathLine(root, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const seg = document.createElement('a-entity');
+    seg.setAttribute('line',
+      `start:${pts[i].x.toFixed(3)} 0.12 ${pts[i].z.toFixed(3)};` +
+      `end:${pts[i + 1].x.toFixed(3)} 0.12 ${pts[i + 1].z.toFixed(3)};` +
+      'color:#00ff88');
+    root.appendChild(seg);
+  }
+}
+
+/* ── Procedural star field ───────────────────────────────────── */
+function addStars(root) {
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1); // full sphere
+    const r     = 180 + Math.random() * 60;
+
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = Math.abs(r * Math.cos(phi)) + 10; // keep above horizon
+    const z = r * Math.sin(phi) * Math.sin(theta);
+
+    const star = document.createElement('a-sphere');
+    star.setAttribute('position', `${x.toFixed(1)} ${y.toFixed(1)} ${z.toFixed(1)}`);
+    const size = (0.3 + Math.random() * 0.9).toFixed(2);
+    star.setAttribute('radius', size);
+    // Vary star colour: white, pale-blue, pale-yellow
+    const hue  = [0, 200, 50][Math.floor(Math.random() * 3)];
+    const sat  = Math.floor(Math.random() * 40);
+    const lum  = 80 + Math.floor(Math.random() * 20);
+    const col  = `hsl(${hue},${sat}%,${lum}%)`;
+    star.setAttribute('material',
+      `color:${col}; emissive:${col}; emissiveIntensity:1; shader:flat`);
+    root.appendChild(star);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PHASE SWITCHING
+════════════════════════════════════════════════════════════════ */
+function showVR() {
+  document.getElementById('map-phase').style.display   = 'none';
+  document.getElementById('vr-scene').style.display    = 'block';
+  document.getElementById('btn-back-map').style.display = 'block';
+}
+
+function backToMap() {
+  document.getElementById('vr-scene').style.display    = 'none';
+  document.getElementById('btn-back-map').style.display = 'none';
+  document.getElementById('map-phase').style.display   = 'flex';
+
+  // Exit VR mode if active (e.g. headset connected)
+  const scene = document.getElementById('vr-scene');
+  if (scene.is && scene.is('vr-mode')) scene.exitVR();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESIZE HANDLER – redraw canvas when viewport size changes
+════════════════════════════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  if (document.getElementById('map-phase').style.display !== 'none') drawMap();
+});
+</script>
+</body>
+</html>
