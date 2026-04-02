@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>GPS World Walker</title>
+  <link rel="icon" href="favicon.ico" />
+  <style>
+    /* ── Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0f1a;
+      --panel:    #0d1525;
+      --border:   #1a2a4a;
+      --green:    #00ff88;
+      --cyan:     #00ccff;
+      --text:     #c8d8f0;
+      --dim:      #5a7090;
+      --danger:   #ff4466;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    /* ── Phase containers ── */
+    #phase-record, #phase-explore {
+      position: fixed; inset: 0;
+      transition: opacity 0.3s ease;
+    }
+    #phase-record  { display: flex; flex-direction: column; overflow-y: auto; }
+    #phase-explore { display: none; }
+
+    /* ── Header ── */
+    header {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: 1.1rem; font-weight: bold;
+      color: var(--green);
+      text-shadow: 0 0 8px var(--green);
+      letter-spacing: 2px;
+    }
+    .home-link {
+      color: var(--cyan); text-decoration: none;
+      font-size: 0.8rem; letter-spacing: 1px;
+      border: 1px solid var(--cyan);
+      padding: 4px 10px; border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .home-link:hover { background: rgba(0,204,255,0.12); }
+
+    /* ── Status pills ── */
+    #status-bar {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; gap: 8px;
+      padding: 10px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 12px;
+      font-size: 0.72rem; letter-spacing: 0.5px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.3);
+    }
+    .pill .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--dim);
+    }
+    .pill.active .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .pill.warn   .dot { background: #ffaa00;       box-shadow: 0 0 6px #ffaa00; }
+
+    /* ── Mini-map canvas ── */
+    #map-wrap {
+      flex: 1 1 auto;
+      display: flex; justify-content: center; align-items: center;
+      padding: 16px;
+      min-height: 260px;
+    }
+    #minimap {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #050a12;
+      box-shadow: 0 0 20px rgba(0,255,136,0.08);
+      max-width: 100%;
+      max-height: calc(100vw - 32px);
+    }
+
+    /* ── Controls ── */
+    #controls {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; gap: 10px;
+      padding: 14px 16px;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+    }
+    button {
+      font-family: inherit; font-size: 0.82rem; letter-spacing: 1px;
+      cursor: pointer; border-radius: 5px;
+      padding: 8px 16px; border: 1px solid;
+      transition: background 0.2s, box-shadow 0.2s;
+      flex: 1 1 120px;
+    }
+    #btn-record {
+      color: var(--green); border-color: var(--green);
+      background: rgba(0,255,136,0.05);
+    }
+    #btn-record:hover  { background: rgba(0,255,136,0.18); }
+    #btn-record.active {
+      background: rgba(0,255,136,0.2);
+      box-shadow: 0 0 10px rgba(0,255,136,0.4);
+    }
+    #btn-enter {
+      color: var(--cyan); border-color: var(--cyan);
+      background: rgba(0,204,255,0.05);
+    }
+    #btn-enter:hover:not(:disabled) { background: rgba(0,204,255,0.18); }
+    #btn-enter:disabled {
+      opacity: 0.35; cursor: not-allowed;
+      border-color: var(--dim); color: var(--dim);
+    }
+    #btn-clear {
+      color: var(--danger); border-color: var(--danger);
+      background: rgba(255,68,102,0.05);
+      flex: 0 0 auto;
+    }
+    #btn-clear:hover { background: rgba(255,68,102,0.15); }
+
+    /* ── Phase 2: Three.js ── */
+    #three-canvas {
+      position: absolute; inset: 0;
+      display: block;
+    }
+
+    /* ── HUD overlay ── */
+    #hud {
+      position: absolute; top: 12px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none;
+      gap: 8px;
+    }
+    #hud-info {
+      background: rgba(10,15,26,0.75);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.72rem;
+      line-height: 1.7;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      min-width: 160px;
+    }
+    #hud-info span { color: var(--cyan); }
+
+    #btn-back {
+      pointer-events: all;
+      color: var(--green); border-color: var(--green);
+      background: rgba(10,15,26,0.8);
+      backdrop-filter: blur(4px);
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      border-radius: 5px; border: 1px solid var(--green);
+      cursor: pointer; font-family: inherit; letter-spacing: 1px;
+      transition: background 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #btn-back:hover { background: rgba(0,255,136,0.2); }
+
+    /* ── Crosshair ── */
+    #crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
+      pointer-events: none;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(0,255,136,0.6);
+    }
+    #crosshair::before {
+      width: 2px; height: 100%;
+      left: 50%; transform: translateX(-50%);
+    }
+    #crosshair::after {
+      height: 2px; width: 100%;
+      top: 50%; transform: translateY(-50%);
+    }
+
+    /* ── Touch hint ── */
+    #touch-hint {
+      position: absolute; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,15,26,0.7);
+      border: 1px solid var(--border);
+      border-radius: 20px; padding: 6px 16px;
+      font-size: 0.68rem; color: var(--dim);
+      pointer-events: none;
+      transition: opacity 1s;
+    }
+
+    /* ── Gyro permission button (iOS) ── */
+    #btn-gyro {
+      position: absolute; bottom: 60px; left: 50%;
+      transform: translateX(-50%);
+      pointer-events: all;
+      color: var(--cyan); border-color: var(--cyan);
+      background: rgba(10,15,26,0.85);
+      padding: 8px 18px; border-radius: 20px;
+      font-size: 0.78rem; border: 1px solid var(--cyan);
+      cursor: pointer; font-family: inherit; letter-spacing: 1px;
+      display: none;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ PHASE 1: RECORD ═══════════════════════════ -->
+<div id="phase-record">
+  <header>
+    <h1>⌖ GPS WORLD WALKER</h1>
+    <a class="home-link" href="index.html">← Home</a>
+  </header>
+
+  <div id="status-bar">
+    <div class="pill" id="pill-gps">
+      <div class="dot"></div>
+      <span id="lbl-gps">GPS: waiting…</span>
+    </div>
+    <div class="pill" id="pill-acc">
+      <div class="dot"></div>
+      <span id="lbl-acc">Accuracy: —</span>
+    </div>
+    <div class="pill" id="pill-pts">
+      <div class="dot"></div>
+      <span id="lbl-pts">Points: 0</span>
+    </div>
+    <div class="pill" id="pill-dist">
+      <div class="dot"></div>
+      <span id="lbl-dist">Distance: 0 m</span>
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <canvas id="minimap" width="340" height="340"></canvas>
+  </div>
+
+  <div id="controls">
+    <button id="btn-record">▶ Start Recording</button>
+    <button id="btn-enter" disabled>⬡ Enter 3D World</button>
+    <button id="btn-clear">✕ Clear</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ PHASE 2: EXPLORE ═══════════════════════════ -->
+<div id="phase-explore">
+  <canvas id="three-canvas"></canvas>
+
+  <div id="hud">
+    <div id="hud-info">
+      <div>DIST: <span id="hud-dist">0 m</span></div>
+      <div>POS: <span id="hud-pos">0, 0</span></div>
+      <div>WAYPOINTS: <span id="hud-wpts">0</span></div>
+      <div style="color:var(--dim);margin-top:4px;font-size:0.65rem">WASD / ↑↓←→ move<br>Drag to look</div>
+    </div>
+    <button id="btn-back">← Record</button>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="touch-hint">Drag to look · WASD / arrows to move</div>
+  <button id="btn-gyro">Enable Gyroscope</button>
+</div>
+
+<!-- Three.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   GPS WORLD WALKER  –  Main script
+   ═══════════════════════════════════════════════════════════ */
+
+'use strict';
+
+// ── Storage key ──
+const STORAGE_KEY = 'world-walk-trail';
+
+// ── Trail data ──
+let trail    = [];   // [{lat, lng, ts}]
+let recording = false;
+let watchId  = null;
+
+// ── Load from localStorage ──
+function loadTrail() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) trail = JSON.parse(raw);
+  } catch { trail = []; }
+}
+function saveTrail() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(trail)); } catch {}
+}
+
+// ── GPS maths ──
+const METERS_PER_DEG_LAT = 111111;
+
+function geoToLocal(lat, lng, originLat, originLng) {
+  const cosLat = Math.cos(originLat * Math.PI / 180);
+  return {
+    x: (lng - originLng) * METERS_PER_DEG_LAT * cosLat,
+    z: -(lat - originLat) * METERS_PER_DEG_LAT
+  };
+}
+
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+          * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function totalDistance() {
+  let d = 0;
+  for (let i = 1; i < trail.length; i++)
+    d += haversineM(trail[i-1].lat, trail[i-1].lng, trail[i].lat, trail[i].lng);
+  return d;
+}
+
+/* Shared colour helper — maps trail index 0..n-1 to a hue value (140→300).
+   Used in both the 2D mini-map and the Three.js 3D world. */
+function trailHue(i, total) {
+  return (i / Math.max(total - 1, 1)) * 160 + 140;
+}
+
+// ══════════════════════════════════════════
+//  PHASE 1 — RECORD
+// ══════════════════════════════════════════
+
+const mapCanvas = document.getElementById('minimap');
+const ctx2d     = mapCanvas.getContext('2d');
+let animFrame1  = null;
+
+// Pill references
+const pillGps  = document.getElementById('pill-gps');
+const pillAcc  = document.getElementById('pill-acc');
+const pillPts  = document.getElementById('pill-pts');
+const pillDist = document.getElementById('pill-dist');
+const lblGps   = document.getElementById('lbl-gps');
+const lblAcc   = document.getElementById('lbl-acc');
+const lblPts   = document.getElementById('lbl-pts');
+const lblDist  = document.getElementById('lbl-dist');
+
+const btnRecord = document.getElementById('btn-record');
+const btnEnter  = document.getElementById('btn-enter');
+const btnClear  = document.getElementById('btn-clear');
+
+let lastPos = null;   // last raw GPS position
+let gpsBlink = 0;
+
+function updatePills(pos) {
+  const acc = pos ? Math.round(pos.coords.accuracy) : null;
+  lblGps.textContent  = pos ? 'GPS: active' : 'GPS: waiting…';
+  lblAcc.textContent  = acc != null ? `Accuracy: ±${acc} m` : 'Accuracy: —';
+  lblPts.textContent  = `Points: ${trail.length}`;
+  lblDist.textContent = `Distance: ${totalDistance().toFixed(1)} m`;
+
+  pillGps.className   = pos ? 'pill active' : 'pill warn';
+  pillAcc.className   = acc != null && acc < 20 ? 'pill active' : 'pill warn';
+  pillPts.className   = trail.length > 0 ? 'pill active' : 'pill';
+  pillDist.className  = totalDistance() > 0 ? 'pill active' : 'pill';
+}
+
+// Resize minimap canvas to fit its wrapper (square)
+function resizeMinimap() {
+  const wrap = document.getElementById('map-wrap');
+  const side  = Math.min(wrap.clientWidth - 32, wrap.clientHeight - 32, 480);
+  mapCanvas.width  = side;
+  mapCanvas.height = side;
+}
+
+// Draw the 2D minimap
+function drawMinimap() {
+  const W = mapCanvas.width, H = mapCanvas.height;
+  ctx2d.clearRect(0, 0, W, H);
+
+  // Background
+  ctx2d.fillStyle = '#050a12';
+  ctx2d.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx2d.strokeStyle = 'rgba(0,204,255,0.06)';
+  ctx2d.lineWidth = 1;
+  const grid = W / 8;
+  for (let x = 0; x <= W; x += grid) {
+    ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, H); ctx2d.stroke();
+  }
+  for (let y = 0; y <= H; y += grid) {
+    ctx2d.beginPath(); ctx2d.moveTo(0, y); ctx2d.lineTo(W, y); ctx2d.stroke();
+  }
+
+  if (trail.length < 2) {
+    // Placeholder text
+    ctx2d.fillStyle = 'rgba(0,204,255,0.3)';
+    ctx2d.font = `${W * 0.04}px 'Courier New', monospace`;
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(
+      trail.length === 0 ? 'AWAITING GPS…' : 'WALK TO BUILD MAP',
+      W / 2, H / 2
+    );
+    ctx2d.textAlign = 'left';
+
+    // Draw single dot if we have one point
+    if (trail.length === 1 && lastPos) drawCurrentDot(W / 2, H / 2, W);
+    return;
+  }
+
+  // Compute bounds
+  let minLat = Infinity, maxLat = -Infinity;
+  let minLng = Infinity, maxLng = -Infinity;
+  trail.forEach(p => {
+    if (p.lat < minLat) minLat = p.lat; if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng; if (p.lng > maxLng) maxLng = p.lng;
+  });
+  const pad = 0.1;
+  const latSpan = (maxLat - minLat) || 0.0001;
+  const lngSpan = (maxLng - minLng) || 0.0001;
+  const scale = Math.min(W * (1 - pad * 2) / lngSpan, H * (1 - pad * 2) / latSpan);
+  const offX = W / 2 - ((minLng + maxLng) / 2 - minLng) * scale - (minLng * scale);
+  const offZ = H / 2 + ((minLat + maxLat) / 2 - minLat) * scale + (minLat * scale);
+
+  function toCanvas(lat, lng) {
+    return {
+      x: (lng - minLng) * scale + W * pad + ((W * (1 - pad * 2)) - (maxLng - minLng) * scale) / 2,
+      y: H - ((lat - minLat) * scale + H * pad + ((H * (1 - pad * 2)) - (maxLat - minLat) * scale) / 2)
+    };
+  }
+
+  // Trail shadow
+  ctx2d.beginPath();
+  ctx2d.strokeStyle = 'rgba(0,255,136,0.12)';
+  ctx2d.lineWidth = 7;
+  ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round';
+  let p0 = toCanvas(trail[0].lat, trail[0].lng);
+  ctx2d.moveTo(p0.x, p0.y);
+  trail.forEach(p => { const c = toCanvas(p.lat, p.lng); ctx2d.lineTo(c.x, c.y); });
+  ctx2d.stroke();
+
+  // Trail line
+  ctx2d.beginPath();
+  ctx2d.strokeStyle = '#00ff88';
+  ctx2d.lineWidth = 2;
+  ctx2d.moveTo(p0.x, p0.y);
+  trail.forEach(p => { const c = toCanvas(p.lat, p.lng); ctx2d.lineTo(c.x, c.y); });
+  ctx2d.stroke();
+
+  // Waypoint dots
+  trail.forEach((p, i) => {
+    const c = toCanvas(p.lat, p.lng);
+    const hue = trailHue(i, trail.length);
+    ctx2d.beginPath();
+    ctx2d.arc(c.x, c.y, 3, 0, Math.PI * 2);
+    ctx2d.fillStyle = `hsl(${hue},100%,60%)`;
+    ctx2d.fill();
+  });
+
+  // Start marker
+  const cs = toCanvas(trail[0].lat, trail[0].lng);
+  ctx2d.beginPath();
+  ctx2d.arc(cs.x, cs.y, 6, 0, Math.PI * 2);
+  ctx2d.strokeStyle = '#00ff88'; ctx2d.lineWidth = 2; ctx2d.stroke();
+
+  // Animated current position
+  const last = trail[trail.length - 1];
+  const cl = toCanvas(last.lat, last.lng);
+  drawCurrentDot(cl.x, cl.y, W);
+}
+
+function drawCurrentDot(x, y, W) {
+  const t = Date.now() / 1000;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+  const r = 4 + pulse * 4;
+
+  // Outer ring
+  ctx2d.beginPath();
+  ctx2d.arc(x, y, r + 4, 0, Math.PI * 2);
+  ctx2d.strokeStyle = `rgba(0,255,136,${0.2 * pulse})`;
+  ctx2d.lineWidth = 2; ctx2d.stroke();
+
+  // Inner dot
+  ctx2d.beginPath();
+  ctx2d.arc(x, y, 5, 0, Math.PI * 2);
+  ctx2d.fillStyle = '#00ff88';
+  ctx2d.shadowBlur = 12; ctx2d.shadowColor = '#00ff88';
+  ctx2d.fill();
+  ctx2d.shadowBlur = 0;
+}
+
+function animateMinimap() {
+  drawMinimap();
+  animFrame1 = requestAnimationFrame(animateMinimap);
+}
+
+// ── GPS handlers ──
+function onGpsSuccess(pos) {
+  lastPos = pos;
+  updatePills(pos);
+
+  if (!recording) return;
+
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+  // Skip points with terrible accuracy
+  if (accuracy > 50) return;
+
+  // Skip duplicate / near-identical points (< 1 m)
+  if (trail.length > 0) {
+    const prev = trail[trail.length - 1];
+    if (haversineM(prev.lat, prev.lng, lat, lng) < 1) return;
+  }
+
+  trail.push({ lat, lng, ts: Date.now() });
+  saveTrail();
+  updatePills(pos);
+  btnEnter.disabled = trail.length < 3;
+}
+
+function onGpsError(err) {
+  lblGps.textContent = `GPS: ${err.message || 'error'}`;
+  pillGps.className = 'pill warn';
+}
+
+btnRecord.addEventListener('click', () => {
+  if (!recording) {
+    recording = true;
+    btnRecord.textContent = '■ Stop Recording';
+    btnRecord.classList.add('active');
+    watchId = navigator.geolocation.watchPosition(onGpsSuccess, onGpsError, {
+      enableHighAccuracy: true, maximumAge: 0, timeout: 10000
+    });
+  } else {
+    recording = false;
+    btnRecord.textContent = '▶ Start Recording';
+    btnRecord.classList.remove('active');
+    if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  }
+});
+
+btnClear.addEventListener('click', () => {
+  if (trail.length > 0 && !confirm('Clear the recorded trail?')) return;
+  trail = [];
+  saveTrail();
+  updatePills(lastPos);
+  btnEnter.disabled = true;
+});
+
+btnEnter.addEventListener('click', () => {
+  if (trail.length < 3) return;
+  enterExplore();
+});
+
+// ══════════════════════════════════════════
+//  PHASE 2 — 3D EXPLORE
+// ══════════════════════════════════════════
+
+let three = null;   // { scene, camera, renderer, … }
+
+function enterExplore() {
+  // Hide record, show explore
+  document.getElementById('phase-record').style.display = 'none';
+  const exploreEl = document.getElementById('phase-explore');
+  exploreEl.style.display = 'block';
+
+  // Stop minimap animation while in 3D
+  if (animFrame1) { cancelAnimationFrame(animFrame1); animFrame1 = null; }
+
+  if (!three) {
+    three = buildThreeWorld(trail);
+  }
+  three.start();
+  showGyroButton();
+}
+
+document.getElementById('btn-back').addEventListener('click', () => {
+  document.getElementById('phase-explore').style.display = 'none';
+  document.getElementById('phase-record').style.display  = 'flex';
+  if (three) three.stop();
+  // Re-start minimap
+  animateMinimap();
+  updatePills(lastPos);
+});
+
+// ── iOS gyro permission ──
+function showGyroButton() {
+  const btn = document.getElementById('btn-gyro');
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    btn.style.display = 'block';
+  }
+}
+document.getElementById('btn-gyro').addEventListener('click', async () => {
+  try {
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res === 'granted') {
+      document.getElementById('btn-gyro').style.display = 'none';
+      if (three) three.enableGyro();
+    }
+  } catch (e) {
+    console.warn('Gyro permission error', e);
+  }
+});
+
+// ── Three.js world builder ──
+function buildThreeWorld(gpsTrail) {
+  const canvas   = document.getElementById('three-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = false;
+
+  const scene  = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0f1a);
+  scene.fog = new THREE.FogExp2(0x0a0f1a, 0.025);
+
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 500);
+  camera.position.y = 1.6; // eye height
+
+  // ── Lighting ──
+  scene.add(new THREE.AmbientLight(0x112233, 1.5));
+  const dirLight = new THREE.DirectionalLight(0x00ccff, 0.8);
+  dirLight.position.set(10, 20, 10);
+  scene.add(dirLight);
+
+  const origin = gpsTrail[0];
+  const pts = gpsTrail.map(p => geoToLocal(p.lat, p.lng, origin.lat, origin.lng));
+
+  // ── Floor material (dark with emissive grid) ──
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x0d1a2a,
+    roughness: 0.9,
+    metalness: 0.1,
+    emissive: new THREE.Color(0x002233),
+    emissiveIntensity: 0.4
+  });
+
+  // ── Grid texture overlay on floor ──
+  const gridMat = new THREE.MeshBasicMaterial({
+    color: 0x003355,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.25
+  });
+
+  const CORRIDOR_W = 4;
+  const FLOOR_H    = 0.1;
+
+  // ── Build corridor segments ──
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 0.01) continue;
+
+    const mx = (a.x + b.x) / 2;
+    const mz = (a.z + b.z) / 2;
+    const angle = Math.atan2(dx, dz); // rotation around Y
+
+    // Floor panel
+    const floorGeo = new THREE.BoxGeometry(CORRIDOR_W, FLOOR_H, len + 0.05);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.position.set(mx, -FLOOR_H / 2, mz);
+    floor.rotation.y = angle;
+    scene.add(floor);
+
+    // Grid overlay
+    const gridGeo = new THREE.PlaneGeometry(CORRIDOR_W, len + 0.05, 4, Math.ceil(len));
+    const grid = new THREE.Mesh(gridGeo, gridMat);
+    grid.position.set(mx, 0.01, mz);
+    grid.rotation.set(-Math.PI / 2, 0, angle);
+    scene.add(grid);
+
+    // Thin walls on sides
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0x003344,
+      emissive: new THREE.Color(0x001a2a),
+      emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.55
+    });
+    const wallH = 2.5;
+    [-1, 1].forEach(side => {
+      const wallGeo = new THREE.BoxGeometry(0.08, wallH, len + 0.05);
+      const wall = new THREE.Mesh(wallGeo, wallMat);
+      wall.rotation.y = angle;
+      // Offset perpendicular to corridor direction
+      const perpX = -dz / len * (CORRIDOR_W / 2) * side;
+      const perpZ =  dx / len * (CORRIDOR_W / 2) * side;
+      wall.position.set(mx + perpX, wallH / 2 - FLOOR_H, mz + perpZ);
+      scene.add(wall);
+    });
+
+    // Ceiling light strip
+    const ceilMat = new THREE.MeshBasicMaterial({
+      color: 0x004455,
+      transparent: true, opacity: 0.3
+    });
+    const ceilGeo = new THREE.BoxGeometry(0.2, 0.05, len);
+    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
+    ceil.position.set(mx, 2.4, mz);
+    ceil.rotation.y = angle;
+    scene.add(ceil);
+
+    // Point light along segment
+    if (len > 2) {
+      const pl = new THREE.PointLight(0x004466, 1.5, 12);
+      pl.position.set(mx, 2.0, mz);
+      scene.add(pl);
+    }
+  }
+
+  // ── Pillar markers at each waypoint ──
+  pts.forEach((p, i) => {
+    const hue = trailHue(i, pts.length);
+    const col = new THREE.Color(`hsl(${hue},100%,55%)`);
+
+    // Pillar stem
+    const stemGeo = new THREE.CylinderGeometry(0.07, 0.12, 3, 8);
+    const stemMat = new THREE.MeshStandardMaterial({
+      color: col, emissive: col, emissiveIntensity: 0.7,
+      roughness: 0.3, metalness: 0.4
+    });
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.position.set(p.x, 1.5, p.z);
+    scene.add(stem);
+
+    // Sphere on top
+    const sphereGeo = new THREE.SphereGeometry(0.22, 10, 8);
+    const sphereMat = new THREE.MeshStandardMaterial({
+      color: col, emissive: col, emissiveIntensity: 1.0,
+      roughness: 0.1, metalness: 0.6
+    });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    sphere.position.set(p.x, 3.2, p.z);
+    scene.add(sphere);
+
+    // Glow light
+    const glow = new THREE.PointLight(col, 1.2, 8);
+    glow.position.set(p.x, 3.2, p.z);
+    scene.add(glow);
+  });
+
+  // ── Start/End markers (larger) ──
+  function bigMarker(pos, color, label) {
+    const geo = new THREE.CylinderGeometry(0.15, 0.2, 4, 8);
+    const mat = new THREE.MeshStandardMaterial({
+      color, emissive: new THREE.Color(color), emissiveIntensity: 1.2
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(pos.x, 2, pos.z);
+    scene.add(mesh);
+    const pl = new THREE.PointLight(color, 2, 12);
+    pl.position.set(pos.x, 4, pos.z);
+    scene.add(pl);
+  }
+  bigMarker(pts[0], 0x00ff88, 'START');
+  bigMarker(pts[pts.length - 1], 0xff4466, 'END');
+
+  // ── Stars ──
+  const starGeo = new THREE.BufferGeometry();
+  const starPos = [];
+  for (let i = 0; i < 600; i++) {
+    starPos.push((Math.random() - 0.5) * 500, Math.random() * 60 + 5, (Math.random() - 0.5) * 500);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0x8899bb, size: 0.3, sizeAttenuation: true });
+  scene.add(new THREE.Points(starGeo, starMat));
+
+  // ── Place camera at start, facing first segment ──
+  const start = pts[0];
+  const next  = pts[Math.min(1, pts.length - 1)];
+  const dx0 = next.x - start.x, dz0 = next.z - start.z;
+  camera.position.set(start.x, 1.6, start.z);
+  const lookTarget = new THREE.Vector3(
+    start.x + (dx0 || 0.001),
+    1.6,
+    start.z + (dz0 || 0.001)
+  );
+  camera.lookAt(lookTarget);
+
+  // ── First-person controls ──
+  let yaw = Math.atan2(dx0, dz0);
+  let pitch = 0;
+  const keys = {};
+
+  // Mouse drag look
+  let isDragging = false, lastMX = 0, lastMY = 0;
+  let touchId = null, lastTX = 0, lastTY = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true; lastMX = e.clientX; lastMY = e.clientY;
+    canvas.requestPointerLock && canvas.requestPointerLock();
+  });
+  document.addEventListener('mouseup', () => { isDragging = false; });
+  document.addEventListener('mousemove', e => {
+    const locked = document.pointerLockElement === canvas;
+    if (locked) {
+      yaw   -= e.movementX * 0.003;
+      pitch -= e.movementY * 0.003;
+    } else if (isDragging) {
+      yaw   -= (e.clientX - lastMX) * 0.004;
+      pitch -= (e.clientY - lastMY) * 0.004;
+      lastMX = e.clientX; lastMY = e.clientY;
+    }
+    pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+  });
+
+  // Touch look
+  canvas.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    touchId = t.identifier; lastTX = t.clientX; lastTY = t.clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    for (const t of e.touches) {
+      if (t.identifier === touchId) {
+        yaw   -= (t.clientX - lastTX) * 0.004;
+        pitch -= (t.clientY - lastTY) * 0.004;
+        lastTX = t.clientX; lastTY = t.clientY;
+        pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+        break;
+      }
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchend', () => { touchId = null; }, { passive: true });
+
+  // Keyboard
+  document.addEventListener('keydown', e => { keys[e.code] = true; });
+  document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+  // Gyroscope (DeviceOrientation)
+  let gyroEnabled = false;
+  let gyroAlpha = null, gyroBeta = null, gyroGamma = null;
+
+  function onDeviceOrientation(e) {
+    if (!gyroEnabled) return;
+    if (e.beta  != null) gyroBeta  = e.beta;
+    if (e.gamma != null) gyroGamma = e.gamma;
+    if (e.alpha != null) gyroAlpha = e.alpha;
+  }
+  window.addEventListener('deviceorientation', onDeviceOrientation, true);
+
+  function enableGyro() {
+    gyroEnabled = true;
+    document.getElementById('touch-hint').style.opacity = '0';
+  }
+
+  // Auto-detect Android gyro (no permission needed)
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission !== 'function') {
+    gyroEnabled = true;
+  }
+
+  // HUD elements
+  const hudDist = document.getElementById('hud-dist');
+  const hudPos  = document.getElementById('hud-pos');
+  const hudWpts = document.getElementById('hud-wpts');
+  hudWpts.textContent = pts.length;
+
+  // ── Animation loop ──
+  const clock = new THREE.Clock();
+  let rafId = null;
+  let running = false;
+
+  // Pillar bob animation targets (store references)
+  const bobObjects = [];
+  scene.traverse(obj => {
+    if (obj.isMesh && obj.geometry.type === 'SphereGeometry') bobObjects.push(obj);
+  });
+
+  function animate() {
+    if (!running) return;
+    rafId = requestAnimationFrame(animate);
+
+    const dt  = clock.getDelta();
+    const spd = 2.5; // m/s
+
+    // ── Movement ──
+    if (!gyroEnabled) {
+      // WASD / arrow keys
+      const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+
+      if (keys['KeyW'] || keys['ArrowUp'])    camera.position.addScaledVector(fwd,  spd * dt);
+      if (keys['KeyS'] || keys['ArrowDown'])  camera.position.addScaledVector(fwd, -spd * dt);
+      if (keys['KeyA'] || keys['ArrowLeft'])  camera.position.addScaledVector(right,-spd * dt);
+      if (keys['KeyD'] || keys['ArrowRight']) camera.position.addScaledVector(right, spd * dt);
+      camera.position.y = 1.6; // keep on ground
+    }
+
+    // ── Camera rotation (yaw/pitch from mouse/touch) ──
+    if (!gyroEnabled || gyroBeta == null) {
+      const q = new THREE.Quaternion();
+      q.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+      camera.quaternion.copy(q);
+    } else {
+      // Use device orientation
+      const beta  = gyroBeta  * Math.PI / 180;
+      const gamma = gyroGamma * Math.PI / 180;
+      // Map: beta = pitch (forward tilt), gamma = roll (side tilt → yaw)
+      pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, beta - Math.PI / 2));
+      yaw  -= gamma * dt * 0.8;
+
+      const q2 = new THREE.Quaternion();
+      q2.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+      camera.quaternion.copy(q2);
+
+      // Auto-move forward on gyro mode
+      const fwdG = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      camera.position.addScaledVector(fwdG, spd * 0.5 * dt);
+      camera.position.y = 1.6;
+    }
+
+    // ── Pillar bob ──
+    const t = clock.getElapsedTime();
+    bobObjects.forEach((obj, i) => {
+      obj.position.y = 3.2 + Math.sin(t * 1.5 + i * 0.8) * 0.15;
+    });
+
+    // ── HUD update ──
+    const cx = camera.position.x, cz = camera.position.z;
+    const distFromStart = Math.sqrt(cx * cx + cz * cz);
+    hudDist.textContent = `${distFromStart.toFixed(1)} m`;
+    hudPos.textContent  = `${cx.toFixed(1)}, ${cz.toFixed(1)}`;
+
+    renderer.render(scene, camera);
+  }
+
+  // ── Resize handler ──
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+  window.addEventListener('resize', onResize);
+
+  return {
+    start() {
+      running = true;
+      clock.start();
+      animate();
+      // Hide touch hint after 4 s
+      setTimeout(() => {
+        const hint = document.getElementById('touch-hint');
+        if (hint) hint.style.opacity = '0';
+      }, 4000);
+    },
+    stop() {
+      running = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      document.exitPointerLock && document.exitPointerLock();
+    },
+    enableGyro
+  };
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadTrail();
+resizeMinimap();
+window.addEventListener('resize', () => {
+  resizeMinimap();
+  if (animFrame1 != null) drawMinimap();
+});
+
+btnEnter.disabled = trail.length < 3;
+updatePills(null);
+
+// Kick off minimap animation
+animateMinimap();
+
+// If trail already loaded, request one GPS fix to update accuracy pill
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(
+    pos => { lastPos = pos; updatePills(pos); },
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+  );
+}
+</script>
+</body>
+</html>
