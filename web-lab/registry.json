@@ -64,118 +64,114 @@
     },
     {
       "id": "experiment-c",
-      "displayName": "Unity AR Foundation Local/Hybrid",
-      "description": "Native Unity AR Foundation session (ARCore/ARKit) with local-world anchors and optional GPS overlay. Serves as the baseline for native tracking quality comparison.",
-      "runtimeType": "native-arfoundation",
-      "environment": "any",
-      "trackingMode": "local-world",
-      "requiredCapabilities": ["camera", "arcore"],
-      "supportedPlatforms": ["android", "ios"],
-      "expectedAccuracy": "cm-scale local; GPS overlay adds ~5–15 m",
+      "displayName": "GPS Journey Live Dashboard",
+      "description": "Real-time GPS journey tracker with live speed, distance, max speed, heading compass and a colour-coded path canvas. Speed-gradient colourmap (green→amber→red). Pinch/pan canvas map. No external dependencies — pure canvas + Geolocation API.",
+      "runtimeType": "browser-gps",
+      "environment": "outdoor",
+      "trackingMode": "gps-relative",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "5–15 m GPS horizontal",
       "driftRisk": "low",
-      "driftNote": "Local anchors are stable within a session. GPS overlay drifts independently.",
-      "starterScene": "Scenes/ExperimentC_LocalTracking",
+      "driftNote": "GPS accuracy varies by environment; speed calculation relies on fix frequency.",
+      "starterScene": "web-lab/experiments/experiment-c/index.html",
       "configOptions": {
-        "maxAnchors": 50,
-        "driftWarningAfterSeconds": 300,
-        "showDebugHUD": true,
-        "anchorPersistence": "session"
+        "gpsPollingIntervalMs": 2000,
+        "speedHistoryPoints": 80,
+        "showDebugHUD": true
       },
       "limitations": [
-        "Requires native build — not available in browser",
-        "Local anchors do not persist across app restarts without cloud anchors",
-        "GPS overlay accuracy limited by hardware"
+        "GPS-only — no centimetre precision",
+        "Speed derived from successive GPS fixes — may spike at low accuracy",
+        "Indoor GPS unreliable"
       ],
-      "bestUseCase": "Indoor AR prototyping; local anchor quality benchmarking",
-      "deviceRequirements": ["Android ARCore device or iOS ARKit device", "Native app build required"],
+      "bestUseCase": "Live walk/run stats; speed-colour path visualisation; GPS capability assessment",
+      "deviceRequirements": ["Any browser with Geolocation API", "HTTPS", "Outdoor recommended"],
       "status": "available",
-      "labPath": "native-unity-lab/experiment-c/index.html"
+      "labPath": "web-lab/experiments/experiment-c/index.html"
     },
     {
       "id": "experiment-d",
-      "displayName": "ARCore Geospatial Outdoor",
-      "description": "ARCore Geospatial API providing WGS-84 anchors at ~10–30 cm accuracy outdoors. Requires Google VPS streetscape coverage.",
-      "runtimeType": "native-arcore-geospatial",
+      "displayName": "Waypoint Room Builder",
+      "description": "Walk a loop and drop up to 12 GPS waypoints. After collecting at least 6 markers the app validates spacing (≥5 m), then generates a dungeon-style corridor map from your real-world path. The interior of any closed loop is shown as fog-of-war — only the walked edge is accessible.",
+      "runtimeType": "browser-gps",
       "environment": "outdoor",
-      "trackingMode": "arcore-geospatial",
-      "requiredCapabilities": ["camera", "arcore"],
-      "supportedPlatforms": ["android"],
-      "expectedAccuracy": "10–30 cm horizontal where streetscape coverage exists",
+      "trackingMode": "gps-waypoints",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "5–15 m GPS — waypoints spaced ≥5 m required",
       "driftRisk": "low",
-      "driftNote": "Accuracy degrades significantly outside Google streetscape coverage areas.",
-      "starterScene": "Scenes/ExperimentD_GeospatialAnchors",
+      "driftNote": "Map generation uses GPS coordinates relative to origin. Accuracy affects corridor shape.",
+      "starterScene": "web-lab/experiments/experiment-d/index.html",
       "configOptions": {
-        "maxAnchors": 20,
-        "showDebugHUD": true,
-        "anchorPersistence": "backend"
+        "minWaypoints": 6,
+        "maxWaypoints": 12,
+        "minGapMetres": 5,
+        "corridorWidthMetres": 4,
+        "loopCloseMetres": 15
       },
       "limitations": [
-        "Android-only (ARCore)",
-        "Requires Google streetscape coverage — not available everywhere",
-        "Native build required",
-        "API key required"
+        "Corridor map is approximate — GPS accuracy bounds corridor alignment",
+        "Interior fog-of-war is intentional; user can only walk along their waypoint path",
+        "Loop closure requires last waypoint within ~30 m of first"
       ],
-      "bestUseCase": "Outdoor AR with persistent geo-anchored content in covered areas",
-      "deviceRequirements": ["Android ARCore device", "Google Play Services AR", "Outdoor streetscape area", "Native build"],
+      "bestUseCase": "GPS world generation; corridor mapping; gamified outdoor exploration",
+      "deviceRequirements": ["Any mobile browser", "HTTPS", "Geolocation permission", "Outdoor open space"],
       "status": "available",
-      "labPath": "native-unity-lab/experiment-d/index.html"
+      "labPath": "web-lab/experiments/experiment-d/index.html"
     },
     {
       "id": "experiment-e",
-      "displayName": "Niantic Spatial VPS",
-      "description": "Niantic Lightship VPS for sub-metre localisation at pre-scanned wayspots. Enables persistent AR anchors at known real-world locations.",
-      "runtimeType": "native-vps",
+      "displayName": "GPS Trail Cinema",
+      "description": "Record a GPS trail while walking, then watch a cinematic animated replay. The path is drawn progressively with speed-coded colours and a live speed readout. Scrub through the timeline to jump to any moment. Full stats: distance, max speed, average speed, duration.",
+      "runtimeType": "browser-gps",
       "environment": "outdoor",
-      "trackingMode": "vps",
-      "requiredCapabilities": ["camera", "vps-sdk"],
-      "supportedPlatforms": ["android", "ios"],
-      "expectedAccuracy": "< 1 m at scanned wayspot locations",
-      "driftRisk": "none",
-      "driftNote": "Accuracy only guaranteed at pre-scanned Niantic wayspot locations.",
-      "starterScene": "Scenes/ExperimentE_VPS",
+      "trackingMode": "gps-relative",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "5–15 m GPS horizontal",
+      "driftRisk": "low",
+      "driftNote": "Recording quality depends on GPS fix frequency and accuracy.",
+      "starterScene": "web-lab/experiments/experiment-e/index.html",
       "configOptions": {
-        "maxAnchors": 10,
-        "showDebugHUD": true,
-        "anchorPersistence": "backend"
+        "gpsPollingIntervalMs": 2000,
+        "replaySpeedMultiplier": 4
       },
       "limitations": [
-        "Requires Niantic Lightship SDK — native build only",
-        "VPS only works at pre-scanned locations",
-        "Niantic API key and developer account required",
-        "Limited to wayspot coverage"
+        "Recording requires continuous GPS — indoor use unreliable",
+        "Replay is device-local only — no cloud storage"
       ],
-      "bestUseCase": "Persistent, shareable AR experiences at specific real-world landmarks",
-      "deviceRequirements": ["iOS or Android", "Niantic Lightship native SDK", "Pre-scanned VPS location"],
+      "bestUseCase": "Route review; speed analysis; walk/run replay cinema",
+      "deviceRequirements": ["Any browser with Geolocation API", "HTTPS"],
       "status": "available",
-      "labPath": "vps-lab/experiment-e/index.html"
+      "labPath": "web-lab/experiments/experiment-e/index.html"
     },
     {
       "id": "experiment-f",
-      "displayName": "GIS / Engineering Coordinates",
-      "description": "High-precision survey coordinate system AR. Anchors placed using GIS / local grid coordinates for engineering, construction, or survey use cases.",
-      "runtimeType": "native-arfoundation",
-      "environment": "mixed",
-      "trackingMode": "gis-coordinates",
-      "requiredCapabilities": ["camera", "arcore"],
-      "supportedPlatforms": ["android", "ios"],
-      "expectedAccuracy": "Dependent on survey control point accuracy (mm–cm with RTK GPS)",
+      "displayName": "GPS Territory Grid",
+      "description": "Walk around and fill in a GPS grid — every cell you visit lights up, speed-coded from green (walking) to red (sprinting). Track visited area, unlock achievements at coverage milestones, and watch a live coverage donut. Configurable cell size: 5, 10, 20, or 50 m.",
+      "runtimeType": "browser-gps",
+      "environment": "outdoor",
+      "trackingMode": "gps-grid",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "Cell size determines minimum meaningful GPS accuracy (~10 m recommended)",
       "driftRisk": "low",
-      "driftNote": "Accuracy is bounded by quality of the control point survey data.",
-      "starterScene": "Scenes/ExperimentF_GIS",
+      "driftNote": "GPS jitter may register neighbouring cells spuriously at high accuracy settings.",
+      "starterScene": "web-lab/experiments/experiment-f/index.html",
       "configOptions": {
-        "maxAnchors": 100,
-        "showDebugHUD": true,
-        "anchorPersistence": "backend"
+        "cellSizeMetres": 10,
+        "maxCells": 5000,
+        "achievementThresholds": [1, 10, 50, 100, 250, 500]
       },
       "limitations": [
-        "Requires survey control points",
-        "Native build required",
-        "Complex coordinate transformation setup"
+        "Grid is session-local — no persistence across reloads",
+        "GPS jitter can mark adjacent cells at 5 m cell size"
       ],
-      "bestUseCase": "AEC / engineering AR overlay on surveyed sites; utility mapping",
-      "deviceRequirements": ["High-precision GNSS receiver or RTK GPS", "Android/iOS native build", "Survey control data"],
+      "bestUseCase": "Gamified outdoor exploration; territory coverage tracking; GPS accuracy demo",
+      "deviceRequirements": ["Any mobile browser", "HTTPS", "Geolocation permission"],
       "status": "available",
-      "labPath": "native-unity-lab/experiment-f/index.html"
+      "labPath": "web-lab/experiments/experiment-f/index.html"
     }
   ]
 }

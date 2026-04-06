@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Experiment C — GPS Journey Live Dashboard | AR Lab</title>
+  <link rel="icon" href="../../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #060910;
+      --panel:    rgba(255,255,255,0.04);
+      --border:   rgba(255,255,255,0.09);
+      --green:    #00ff88;
+      --cyan:     #00ccff;
+      --amber:    #ffaa00;
+      --red:      #ff4455;
+      --text:     rgba(255,255,255,0.85);
+      --dim:      rgba(255,255,255,0.38);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+    /* ── Top bar ── */
+    #top-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: rgba(0,0,0,0.75);
+      border-bottom: 1px solid rgba(0,255,136,0.18);
+      flex-shrink: 0; z-index: 10;
+      flex-wrap: wrap;
+    }
+    #back-link { color: var(--green); text-decoration: none; font-size: 0.8rem; letter-spacing: 0.06em; white-space: nowrap; }
+    #back-link:hover { text-decoration: underline; }
+    #exp-title { font-size: 0.88rem; font-weight: 700; flex: 1; text-align: center; }
+    .badge {
+      font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 10px; font-weight: 700;
+      background: rgba(0,255,136,0.12); color: var(--green); border: 1px solid rgba(0,255,136,0.25);
+      white-space: nowrap;
+    }
+
+    /* ── Map canvas ── */
+    #map-wrap {
+      position: relative; flex: 1; overflow: hidden; min-height: 0;
+    }
+    #map-canvas { display: block; width: 100%; height: 100%; }
+
+    /* ── Map overlay HUD ── */
+    #map-hud {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none;
+    }
+    #accuracy-pill {
+      background: rgba(0,0,0,0.72); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 5px 10px; font-size: 0.7rem; color: var(--dim);
+    }
+    #accuracy-pill strong { color: var(--text); }
+
+    #compass-ring {
+      width: 52px; height: 52px;
+      background: rgba(0,0,0,0.72); border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+      color: var(--green); position: relative;
+    }
+    #compass-ring .needle {
+      position: absolute; width: 2px; height: 18px;
+      background: var(--green); border-radius: 1px;
+      top: 50%; left: 50%; transform-origin: bottom center;
+      transform: translateX(-50%) translateY(-100%);
+      transition: transform 0.4s ease;
+    }
+    #compass-ring .label { z-index: 1; margin-top: 18px; }
+
+    /* ── Stats grid ── */
+    #stats-bar {
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      background: rgba(0,0,0,0.88);
+      border-top: 1px solid rgba(0,255,136,0.18);
+    }
+    .stat-cell {
+      padding: 10px 8px 8px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.07);
+      position: relative;
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-lbl {
+      display: block; font-size: 0.55rem; font-weight: 700;
+      letter-spacing: 0.13em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 3px;
+    }
+    .stat-val {
+      display: block; font-size: 1.3rem; font-weight: 800;
+      line-height: 1; color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-unit {
+      display: block; font-size: 0.58rem;
+      color: var(--dim); margin-top: 2px;
+    }
+
+    /* ── Secondary stats ── */
+    #secondary-bar {
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      background: rgba(0,0,0,0.7);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .sec-cell {
+      padding: 7px 8px 6px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .sec-cell:last-child { border-right: none; }
+    .sec-lbl { display: block; font-size: 0.52rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+    .sec-val { display: block; font-size: 0.88rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+
+    /* ── Control buttons ── */
+    #controls {
+      flex-shrink: 0;
+      display: flex; gap: 10px; padding: 10px 14px;
+      background: rgba(0,0,0,0.85);
+      border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .btn {
+      flex: 1; padding: 12px 8px;
+      border: none; border-radius: 12px;
+      font-size: 0.82rem; font-weight: 700; letter-spacing: 0.06em;
+      cursor: pointer; transition: opacity 0.2s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn-primary { background: var(--green); color: #000; }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
+    .btn-danger { background: rgba(255,68,85,0.18); color: var(--red); border: 1px solid rgba(255,68,85,0.3); }
+    .btn:disabled { opacity: 0.35; pointer-events: none; }
+
+    /* ── Status overlay ── */
+    #status-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(6,9,16,0.92);
+      text-align: center; padding: 24px;
+    }
+    #status-overlay .so-icon { font-size: 2.8rem; margin-bottom: 14px; }
+    #status-overlay h2 { font-size: 1.25rem; font-weight: 800; margin-bottom: 10px; color: var(--text); }
+    #status-overlay p { font-size: 0.85rem; color: var(--dim); line-height: 1.6; max-width: 320px; }
+    #status-overlay .so-btn {
+      margin-top: 22px;
+      padding: 14px 36px; border-radius: 14px; border: none;
+      background: var(--green); color: #000;
+      font-size: 0.92rem; font-weight: 800; cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Speed sparkline ── */
+    #speed-bar-canvas { display: block; width: 100%; height: 36px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: rgba(0,0,0,0.85); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 10px; padding: 9px 18px;
+      font-size: 0.8rem; color: var(--green);
+      transition: transform 0.3s ease; white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="top-bar">
+    <a id="back-link" href="../../../index.html">← Lab</a>
+    <span id="exp-title">GPS Journey Live</span>
+    <span class="badge">GPS · Live · Browser</span>
+  </div>
+
+  <!-- Map area -->
+  <div id="map-wrap">
+    <canvas id="map-canvas"></canvas>
+
+    <!-- Status overlay (shown when idle) -->
+    <div id="status-overlay">
+      <div class="so-icon">📡</div>
+      <h2>GPS Journey Live</h2>
+      <p>Real-time speed, distance, heading and path map. Start moving — your route paints itself on the canvas as you go.</p>
+      <button class="so-btn" id="start-btn">Start Tracking</button>
+    </div>
+
+    <!-- Map overlays -->
+    <div id="map-hud">
+      <div id="accuracy-pill">GPS <strong id="acc-val">—</strong> m acc.</div>
+      <div id="compass-ring">
+        <div class="needle" id="compass-needle"></div>
+        <span class="label" id="compass-label">N</span>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" id="toast"></div>
+  </div>
+
+  <!-- Speed sparkline -->
+  <canvas id="speed-bar-canvas"></canvas>
+
+  <!-- Primary stats -->
+  <div id="stats-bar">
+    <div class="stat-cell">
+      <span class="stat-lbl">Speed</span>
+      <span class="stat-val" id="stat-speed">0.0</span>
+      <span class="stat-unit">km/h</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-lbl">Distance</span>
+      <span class="stat-val" id="stat-dist">0</span>
+      <span class="stat-unit" id="stat-dist-unit">m</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-lbl">Max Speed</span>
+      <span class="stat-val" id="stat-maxspeed">0.0</span>
+      <span class="stat-unit">km/h</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-lbl">Time</span>
+      <span class="stat-val" id="stat-time">0:00</span>
+      <span class="stat-unit">elapsed</span>
+    </div>
+  </div>
+
+  <!-- Secondary stats -->
+  <div id="secondary-bar">
+    <div class="sec-cell">
+      <span class="sec-lbl">Avg Speed</span>
+      <span class="sec-val" id="sec-avg">— km/h</span>
+    </div>
+    <div class="sec-cell">
+      <span class="sec-lbl">Points</span>
+      <span class="sec-val" id="sec-pts">0</span>
+    </div>
+    <div class="sec-cell">
+      <span class="sec-lbl">Altitude</span>
+      <span class="sec-val" id="sec-alt">— m</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <button class="btn btn-danger" id="stop-btn" disabled>Stop</button>
+    <button class="btn btn-secondary" id="reset-btn">Reset</button>
+    <button class="btn btn-secondary" id="center-btn">Re-centre</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── State ────────────────────────────────────────────────────────────────
+  var STATE = {
+    running: false,
+    watchId: null,
+    path: [],          // [{lat,lng,ts,speed,alt,acc}]
+    totalDist: 0,      // metres
+    maxSpeed: 0,       // km/h
+    startTs: null,
+    speedHistory: [],  // last N speed values for sparkline
+    heading: 0,
+    mapOffset: { x: 0, y: 0 },
+    mapZoom: 1,        // pixels per metre
+    dragging: false,
+    lastTouch: null,
+    autoCenter: true
+  };
+
+  var MAX_SPEED_HISTORY = 80;
+
+  // ── DOM refs ─────────────────────────────────────────────────────────────
+  var mapCanvas    = document.getElementById('map-canvas');
+  var mapCtx       = mapCanvas.getContext('2d');
+  var sparkCanvas  = document.getElementById('speed-bar-canvas');
+  var sparkCtx     = sparkCanvas.getContext('2d');
+  var statusOverlay= document.getElementById('status-overlay');
+  var startBtn     = document.getElementById('start-btn');
+  var stopBtn      = document.getElementById('stop-btn');
+  var resetBtn     = document.getElementById('reset-btn');
+  var centerBtn    = document.getElementById('center-btn');
+  var needle       = document.getElementById('compass-needle');
+  var compassLabel = document.getElementById('compass-label');
+  var toastEl      = document.getElementById('toast');
+
+  var statSpeed    = document.getElementById('stat-speed');
+  var statDist     = document.getElementById('stat-dist');
+  var statDistUnit = document.getElementById('stat-dist-unit');
+  var statMaxspeed = document.getElementById('stat-maxspeed');
+  var statTime     = document.getElementById('stat-time');
+  var secAvg       = document.getElementById('sec-avg');
+  var secPts       = document.getElementById('sec-pts');
+  var secAlt       = document.getElementById('sec-alt');
+  var accVal       = document.getElementById('acc-val');
+
+  // ── Maths helpers ─────────────────────────────────────────────────────────
+  var EARTH_R = 6371000;
+
+  function haversine(lat1, lng1, lat2, lng2) {
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.sin(dLng/2)*Math.sin(dLng/2);
+    return EARTH_R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function bearing(lat1, lng1, lat2, lng2) {
+    var y = Math.sin((lng2-lng1)*Math.PI/180) * Math.cos(lat2*Math.PI/180);
+    var x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) -
+            Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.cos((lng2-lng1)*Math.PI/180);
+    return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+  }
+
+  // ── GPS to local metres (relative to first point) ─────────────────────────
+  function gpsToLocal(lat, lng) {
+    if (!STATE.path.length) return { x: 0, y: 0 };
+    var origin = STATE.path[0];
+    var mx = (lng - origin.lng) * Math.cos(origin.lat * Math.PI / 180) * 111320;
+    var my = -(lat - origin.lat) * 111111;
+    return { x: mx, y: my };
+  }
+
+  // ── Resize canvases ───────────────────────────────────────────────────────
+  function resizeCanvases() {
+    var mapWrap = document.getElementById('map-wrap');
+    mapCanvas.width  = mapWrap.offsetWidth;
+    mapCanvas.height = mapWrap.offsetHeight;
+    sparkCanvas.width  = sparkCanvas.offsetWidth * (window.devicePixelRatio || 1);
+    sparkCanvas.height = sparkCanvas.offsetHeight * (window.devicePixelRatio || 1);
+    redraw();
+  }
+
+  // ── Draw map ──────────────────────────────────────────────────────────────
+  function redraw() {
+    var W = mapCanvas.width, H = mapCanvas.height;
+    mapCtx.clearRect(0, 0, W, H);
+
+    // Background
+    mapCtx.fillStyle = '#060910';
+    mapCtx.fillRect(0, 0, W, H);
+
+    if (!STATE.path.length) {
+      drawIdleGrid(W, H);
+      return;
+    }
+
+    // Auto-fit zoom
+    if (STATE.autoCenter) autoFit(W, H);
+
+    // Grid
+    drawGrid(W, H);
+
+    // Path
+    drawPath(W, H);
+
+    // Current position
+    if (STATE.running && STATE.path.length) {
+      var last = STATE.path[STATE.path.length - 1];
+      var p = worldToScreen(gpsToLocal(last.lat, last.lng), W, H);
+      drawPlayerDot(p.x, p.y);
+    }
+  }
+
+  function drawIdleGrid(W, H) {
+    mapCtx.strokeStyle = 'rgba(0,255,136,0.06)';
+    mapCtx.lineWidth = 1;
+    var step = 40;
+    for (var x = 0; x < W; x += step) { mapCtx.beginPath(); mapCtx.moveTo(x,0); mapCtx.lineTo(x,H); mapCtx.stroke(); }
+    for (var y = 0; y < H; y += step) { mapCtx.beginPath(); mapCtx.moveTo(0,y); mapCtx.lineTo(W,y); mapCtx.stroke(); }
+    mapCtx.fillStyle = 'rgba(0,255,136,0.3)';
+    mapCtx.font = '0.72rem monospace';
+    mapCtx.textAlign = 'center';
+    mapCtx.fillText('Waiting for GPS…', W/2, H/2);
+  }
+
+  function autoFit(W, H) {
+    if (STATE.path.length < 2) {
+      var pt = gpsToLocal(STATE.path[0].lat, STATE.path[0].lng);
+      STATE.mapOffset.x = W/2 - pt.x;
+      STATE.mapOffset.y = H/2 - pt.y;
+      STATE.mapZoom = 8;
+      return;
+    }
+    var pts = STATE.path.map(function(p) { return gpsToLocal(p.lat, p.lng); });
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    pts.forEach(function(p) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    });
+    var pad = 40;
+    var rangeX = maxX - minX || 50;
+    var rangeY = maxY - minY || 50;
+    var zoom = Math.min((W - pad*2) / rangeX, (H - pad*2) / rangeY);
+    zoom = Math.max(0.5, Math.min(zoom, 50));
+    STATE.mapZoom = zoom;
+    STATE.mapOffset.x = W/2 - (minX + rangeX/2) * zoom;
+    STATE.mapOffset.y = H/2 - (minY + rangeY/2) * zoom;
+  }
+
+  function worldToScreen(pt, W, H) {
+    return {
+      x: pt.x * STATE.mapZoom + STATE.mapOffset.x,
+      y: pt.y * STATE.mapZoom + STATE.mapOffset.y
+    };
+  }
+
+  function drawGrid(W, H) {
+    // Determine a nice grid spacing in metres
+    var targetPxSpacing = 60;
+    var mPerPx = 1 / STATE.mapZoom;
+    var mSpacing = niceNumber(targetPxSpacing * mPerPx);
+    var pxSpacing = mSpacing * STATE.mapZoom;
+    if (pxSpacing < 20) return;
+
+    mapCtx.strokeStyle = 'rgba(0,255,136,0.07)';
+    mapCtx.lineWidth = 1;
+    var origin = worldToScreen({x:0, y:0}, W, H);
+    // Vertical lines
+    for (var x = origin.x % pxSpacing; x < W; x += pxSpacing) {
+      mapCtx.beginPath(); mapCtx.moveTo(x, 0); mapCtx.lineTo(x, H); mapCtx.stroke();
+    }
+    // Horizontal lines
+    for (var y = origin.y % pxSpacing; y < H; y += pxSpacing) {
+      mapCtx.beginPath(); mapCtx.moveTo(0, y); mapCtx.lineTo(W, y); mapCtx.stroke();
+    }
+    // Scale label
+    mapCtx.fillStyle = 'rgba(0,255,136,0.4)';
+    mapCtx.font = '9px monospace';
+    mapCtx.textAlign = 'right';
+    mapCtx.fillText(mSpacing >= 1000 ? (mSpacing/1000).toFixed(1)+'km grid' : mSpacing+'m grid', W-8, H-8);
+  }
+
+  function niceNumber(n) {
+    var magnitudes = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+    for (var i = 0; i < magnitudes.length; i++) {
+      if (magnitudes[i] >= n) return magnitudes[i];
+    }
+    return magnitudes[magnitudes.length - 1];
+  }
+
+  function drawPath(W, H) {
+    if (STATE.path.length < 2) return;
+
+    // Glow pass
+    mapCtx.save();
+    mapCtx.shadowBlur = 12;
+    mapCtx.shadowColor = 'rgba(0,255,136,0.4)';
+
+    for (var i = 1; i < STATE.path.length; i++) {
+      var p0 = worldToScreen(gpsToLocal(STATE.path[i-1].lat, STATE.path[i-1].lng), W, H);
+      var p1 = worldToScreen(gpsToLocal(STATE.path[i].lat,   STATE.path[i].lng),   W, H);
+
+      // Colour by speed
+      var spd = STATE.path[i].speed || 0;
+      mapCtx.strokeStyle = speedColor(spd);
+      mapCtx.lineWidth = Math.max(2, Math.min(5, STATE.mapZoom * 0.4));
+      mapCtx.lineCap = 'round';
+      mapCtx.beginPath();
+      mapCtx.moveTo(p0.x, p0.y);
+      mapCtx.lineTo(p1.x, p1.y);
+      mapCtx.stroke();
+    }
+    mapCtx.restore();
+
+    // Waypoint dots
+    STATE.path.forEach(function(wp, i) {
+      if (i % 5 !== 0 && i !== STATE.path.length - 1) return;
+      var p = worldToScreen(gpsToLocal(wp.lat, wp.lng), W, H);
+      mapCtx.beginPath();
+      mapCtx.arc(p.x, p.y, 2.5, 0, Math.PI*2);
+      mapCtx.fillStyle = 'rgba(0,255,136,0.6)';
+      mapCtx.fill();
+    });
+  }
+
+  function speedColor(kmh) {
+    if (kmh < 3)  return '#00ff88';
+    if (kmh < 8)  return '#aaff00';
+    if (kmh < 15) return '#ffcc00';
+    if (kmh < 25) return '#ff8800';
+    return '#ff4455';
+  }
+
+  function drawPlayerDot(x, y) {
+    mapCtx.save();
+    mapCtx.shadowBlur = 18;
+    mapCtx.shadowColor = '#00ccff';
+    // Outer ring
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 10, 0, Math.PI*2);
+    mapCtx.strokeStyle = 'rgba(0,204,255,0.5)';
+    mapCtx.lineWidth = 2;
+    mapCtx.stroke();
+    // Inner dot
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 5, 0, Math.PI*2);
+    mapCtx.fillStyle = '#00ccff';
+    mapCtx.fill();
+    mapCtx.restore();
+  }
+
+  // ── Sparkline ─────────────────────────────────────────────────────────────
+  function drawSparkline() {
+    var W = sparkCanvas.width, H = sparkCanvas.height;
+    sparkCtx.clearRect(0, 0, W, H);
+    sparkCtx.fillStyle = 'rgba(0,0,0,0.5)';
+    sparkCtx.fillRect(0, 0, W, H);
+
+    var hist = STATE.speedHistory;
+    if (hist.length < 2) return;
+    var maxV = Math.max.apply(null, hist) || 1;
+    var step = W / (hist.length - 1);
+
+    sparkCtx.beginPath();
+    for (var i = 0; i < hist.length; i++) {
+      var px = i * step;
+      var py = H - (hist[i] / maxV) * (H - 4) - 2;
+      if (i === 0) sparkCtx.moveTo(px, py);
+      else sparkCtx.lineTo(px, py);
+    }
+    sparkCtx.strokeStyle = '#00ff88';
+    sparkCtx.lineWidth = 1.5;
+    sparkCtx.stroke();
+
+    // Fill under
+    sparkCtx.lineTo(W, H); sparkCtx.lineTo(0, H); sparkCtx.closePath();
+    sparkCtx.fillStyle = 'rgba(0,255,136,0.1)';
+    sparkCtx.fill();
+  }
+
+  // ── Time format ───────────────────────────────────────────────────────────
+  function formatTime(ms) {
+    var s = Math.floor(ms / 1000);
+    var m = Math.floor(s / 60); s %= 60;
+    var h = Math.floor(m / 60); m %= 60;
+    if (h > 0) return h + ':' + pad2(m) + ':' + pad2(s);
+    return m + ':' + pad2(s);
+  }
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  // ── Update HUD ────────────────────────────────────────────────────────────
+  function updateHUD() {
+    var path = STATE.path;
+    if (!path.length) return;
+
+    var last = path[path.length - 1];
+
+    // Speed
+    var spd = last.speed || 0;
+    statSpeed.textContent = spd.toFixed(1);
+    statSpeed.style.color = speedColor(spd);
+
+    // Distance
+    var d = STATE.totalDist;
+    if (d >= 1000) {
+      statDist.textContent = (d/1000).toFixed(2);
+      statDistUnit.textContent = 'km';
+    } else {
+      statDist.textContent = Math.round(d);
+      statDistUnit.textContent = 'm';
+    }
+
+    // Max speed
+    statMaxspeed.textContent = STATE.maxSpeed.toFixed(1);
+
+    // Time
+    if (STATE.startTs) {
+      statTime.textContent = formatTime(Date.now() - STATE.startTs);
+    }
+
+    // Avg speed
+    var elapsed = STATE.startTs ? (Date.now() - STATE.startTs) / 3600000 : 0;
+    var avgSpd = elapsed > 0 ? (STATE.totalDist / 1000) / elapsed : 0;
+    secAvg.textContent = avgSpd.toFixed(1) + ' km/h';
+
+    // Points
+    secPts.textContent = path.length;
+
+    // Altitude
+    if (last.alt !== null && last.alt !== undefined) {
+      secAlt.textContent = Math.round(last.alt) + ' m';
+    } else {
+      secAlt.textContent = '— m';
+    }
+
+    // Accuracy
+    accVal.textContent = last.acc ? Math.round(last.acc) : '—';
+
+    // Compass
+    var h = STATE.heading;
+    needle.style.transform = 'translateX(-50%) translateY(-100%) rotate(' + h + 'deg)';
+    compassLabel.textContent = headingLabel(h);
+  }
+
+  function headingLabel(deg) {
+    var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  // ── GPS callbacks ─────────────────────────────────────────────────────────
+  function onGPS(pos) {
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+    var acc = pos.coords.accuracy;
+    var alt = pos.coords.altitude;
+    var ts  = pos.timestamp;
+
+    var prev = STATE.path.length ? STATE.path[STATE.path.length - 1] : null;
+
+    // Calculate speed from position delta if GPS doesn't provide it
+    var speed = 0;
+    if (pos.coords.speed !== null && pos.coords.speed >= 0) {
+      speed = pos.coords.speed * 3.6; // m/s → km/h
+    } else if (prev) {
+      var dist = haversine(prev.lat, prev.lng, lat, lng);
+      var dt = (ts - prev.ts) / 1000;
+      speed = dt > 0 ? (dist / dt) * 3.6 : 0;
+    }
+
+    // Heading from movement
+    if (prev && haversine(prev.lat, prev.lng, lat, lng) > 2) {
+      STATE.heading = bearing(prev.lat, prev.lng, lat, lng);
+    }
+
+    // Add point (skip if accuracy too bad or no movement)
+    if (acc > 100 && STATE.path.length > 0) return; // ignore very inaccurate fixes after start
+
+    STATE.path.push({ lat: lat, lng: lng, ts: ts, speed: speed, alt: alt, acc: acc });
+
+    // Update distance
+    if (prev) {
+      STATE.totalDist += haversine(prev.lat, prev.lng, lat, lng);
+    }
+
+    if (speed > STATE.maxSpeed) STATE.maxSpeed = speed;
+
+    // Speed history for sparkline
+    STATE.speedHistory.push(speed);
+    if (STATE.speedHistory.length > MAX_SPEED_HISTORY) STATE.speedHistory.shift();
+
+    updateHUD();
+    redraw();
+    drawSparkline();
+  }
+
+  function onGPSError(err) {
+    showToast('GPS: ' + err.message);
+  }
+
+  // ── Orientation ───────────────────────────────────────────────────────────
+  function onOrientation(e) {
+    var h;
+    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+      h = e.webkitCompassHeading;
+    } else if (e.absolute && e.alpha !== null) {
+      h = (360 - e.alpha) % 360;
+    } else {
+      return;
+    }
+    // Only use compass heading if we don't have movement-derived heading
+    if (STATE.path.length < 3) STATE.heading = h;
+    needle.style.transform = 'translateX(-50%) translateY(-100%) rotate(' + STATE.heading + 'deg)';
+    compassLabel.textContent = headingLabel(STATE.heading);
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  var toastTimer;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2500);
+  }
+
+  // ── Controls ──────────────────────────────────────────────────────────────
+  startBtn.addEventListener('click', function() {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not available on this device/browser.');
+      return;
+    }
+    STATE.running = true;
+    STATE.startTs = Date.now();
+    statusOverlay.style.display = 'none';
+    stopBtn.disabled  = false;
+
+    STATE.watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+      enableHighAccuracy: true,
+      maximumAge: 2000,
+      timeout: 15000
+    });
+
+    if (window.DeviceOrientationEvent) {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(function(r) {
+          if (r === 'granted') window.addEventListener('deviceorientation', onOrientation, true);
+        }).catch(function(){});
+      } else {
+        window.addEventListener('deviceorientation', onOrientation, true);
+      }
+    }
+
+    // Timer tick for elapsed time display
+    STATE._tick = setInterval(function() {
+      if (STATE.startTs) statTime.textContent = formatTime(Date.now() - STATE.startTs);
+    }, 1000);
+
+    showToast('GPS started — move to begin recording');
+  });
+
+  stopBtn.addEventListener('click', function() {
+    if (STATE.watchId !== null) {
+      navigator.geolocation.clearWatch(STATE.watchId);
+      STATE.watchId = null;
+    }
+    clearInterval(STATE._tick);
+    STATE.running = false;
+    stopBtn.disabled = true;
+    showToast('Tracking stopped');
+  });
+
+  resetBtn.addEventListener('click', function() {
+    if (STATE.watchId !== null) {
+      navigator.geolocation.clearWatch(STATE.watchId);
+      STATE.watchId = null;
+    }
+    clearInterval(STATE._tick);
+    STATE.running = false;
+    STATE.path = [];
+    STATE.totalDist = 0;
+    STATE.maxSpeed = 0;
+    STATE.startTs = null;
+    STATE.speedHistory = [];
+    STATE.heading = 0;
+    STATE.autoCenter = true;
+    stopBtn.disabled = true;
+    statusOverlay.style.display = '';
+    statSpeed.textContent = '0.0';
+    statDist.textContent = '0';
+    statDistUnit.textContent = 'm';
+    statMaxspeed.textContent = '0.0';
+    statTime.textContent = '0:00';
+    secAvg.textContent = '— km/h';
+    secPts.textContent = '0';
+    secAlt.textContent = '— m';
+    accVal.textContent = '—';
+    redraw();
+    drawSparkline();
+  });
+
+  centerBtn.addEventListener('click', function() {
+    STATE.autoCenter = true;
+    redraw();
+    showToast('Re-centred');
+  });
+
+  // ── Pinch/pan on map ─────────────────────────────────────────────────────
+  var _lastDist = null;
+  mapCanvas.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      STATE.dragging = true;
+      STATE.lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      STATE.autoCenter = false;
+    }
+  }, { passive: true });
+  mapCanvas.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2) {
+      var d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (_lastDist !== null) {
+        var ratio = d / _lastDist;
+        STATE.mapZoom *= ratio;
+        STATE.mapZoom = Math.max(0.2, Math.min(100, STATE.mapZoom));
+        redraw();
+      }
+      _lastDist = d;
+      return;
+    }
+    _lastDist = null;
+    if (!STATE.dragging || !STATE.lastTouch) return;
+    var dx = e.touches[0].clientX - STATE.lastTouch.x;
+    var dy = e.touches[0].clientY - STATE.lastTouch.y;
+    STATE.mapOffset.x += dx;
+    STATE.mapOffset.y += dy;
+    STATE.lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    redraw();
+  }, { passive: true });
+  mapCanvas.addEventListener('touchend', function() {
+    STATE.dragging = false;
+    STATE.lastTouch = null;
+    _lastDist = null;
+  }, { passive: true });
+
+  // Mouse wheel zoom
+  mapCanvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var factor = e.deltaY > 0 ? 0.85 : 1.18;
+    STATE.mapZoom = Math.max(0.2, Math.min(100, STATE.mapZoom * factor));
+    STATE.autoCenter = false;
+    redraw();
+  }, { passive: false });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  window.addEventListener('resize', resizeCanvases);
+  resizeCanvases();
+  redraw();
+  drawSparkline();
+
+}());
+</script>
+</body>
+</html>

@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Experiment D — Waypoint Room Builder | AR Lab</title>
+  <link rel="icon" href="../../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #05080f;
+      --green:   #00ff88;
+      --cyan:    #00ccff;
+      --amber:   #ffaa00;
+      --red:     #ff4455;
+      --purple:  #cc88ff;
+      --text:    rgba(255,255,255,0.88);
+      --dim:     rgba(255,255,255,0.36);
+      --panel:   rgba(255,255,255,0.04);
+      --border:  rgba(255,255,255,0.09);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+    /* ── Top bar ── */
+    #top-bar {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      background: rgba(0,0,0,0.8); border-bottom: 1px solid rgba(0,255,136,0.18);
+      flex-shrink: 0; z-index: 10; flex-wrap: wrap;
+    }
+    #back-link { color: var(--green); text-decoration: none; font-size: 0.78rem; white-space: nowrap; }
+    #back-link:hover { text-decoration: underline; }
+    #exp-title { font-size: 0.86rem; font-weight: 700; flex: 1; text-align: center; }
+    .badge {
+      font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 10px; font-weight: 700; white-space: nowrap;
+    }
+    .badge-gps    { background: rgba(0,255,136,0.12); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
+    .badge-purple { background: rgba(204,136,255,0.12); color: var(--purple); border: 1px solid rgba(204,136,255,0.25); }
+
+    /* ── Phase banner ── */
+    #phase-banner {
+      flex-shrink: 0; padding: 7px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(0,0,0,0.7); border-bottom: 1px solid rgba(255,255,255,0.07);
+      font-size: 0.72rem;
+    }
+    #phase-label { font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--green); }
+    #phase-desc  { color: var(--dim); font-size: 0.68rem; }
+    #wp-counter  { font-weight: 700; font-size: 0.82rem; color: var(--text); }
+
+    /* ── Main canvas area ── */
+    #canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    #main-canvas { display: block; width: 100%; height: 100%; }
+
+    /* ── Canvas overlays ── */
+    #map-top-hud {
+      position: absolute; top: 8px; left: 8px; right: 8px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none;
+    }
+    .hud-pill {
+      background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 5px 10px; font-size: 0.68rem; color: var(--dim);
+    }
+    .hud-pill strong { color: var(--text); }
+
+    #validation-overlay {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(5,8,15,0.92); padding: 24px;
+    }
+    #validation-overlay.active { display: flex; }
+    #validation-overlay h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: 18px; }
+    .val-row {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; max-width: 340px;
+      padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.85rem;
+    }
+    .val-row:last-of-type { border-bottom: none; }
+    .val-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+    .val-text { flex: 1; color: var(--text); }
+    .val-note { font-size: 0.72rem; color: var(--dim); }
+    .val-btn {
+      margin-top: 24px; padding: 14px 40px; border-radius: 14px; border: none;
+      font-size: 0.92rem; font-weight: 800; cursor: pointer; letter-spacing: 0.04em;
+    }
+    .val-btn-go { background: var(--green); color: #000; }
+    .val-btn-back { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+
+    /* ── Idle / intro overlay ── */
+    #intro-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(5,8,15,0.95); padding: 28px; text-align: center;
+    }
+    #intro-overlay .icon { font-size: 3rem; margin-bottom: 14px; }
+    #intro-overlay h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: 10px; }
+    #intro-overlay p { font-size: 0.84rem; color: var(--dim); line-height: 1.65; max-width: 340px; margin-bottom: 6px; }
+    #intro-overlay .steps {
+      text-align: left; width: 100%; max-width: 320px;
+      margin: 16px 0 22px;
+    }
+    .step-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .step-row:last-child { border-bottom: none; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: rgba(0,255,136,0.12); border: 1px solid rgba(0,255,136,0.3);
+      color: var(--green); font-size: 0.72rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-txt { font-size: 0.82rem; color: rgba(255,255,255,0.6); line-height: 1.5; }
+    .btn-start-collect {
+      padding: 14px 40px; border-radius: 14px; border: none;
+      background: var(--green); color: #000; font-size: 0.95rem; font-weight: 800;
+      cursor: pointer; letter-spacing: 0.04em;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Controls bar ── */
+    #controls {
+      flex-shrink: 0;
+      background: rgba(0,0,0,0.9); border-top: 1px solid rgba(255,255,255,0.07);
+    }
+
+    #collect-controls { display: flex; gap: 8px; padding: 10px 12px; }
+    #generate-controls { display: none; flex-direction: column; padding: 10px 12px; gap: 8px; }
+    #explore-controls  { display: none; flex-direction: column; padding: 10px 12px; gap: 8px; }
+
+    .btn {
+      flex: 1; padding: 13px 8px; border: none; border-radius: 12px;
+      font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      letter-spacing: 0.04em;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn-primary  { background: var(--green); color: #000; }
+    .btn-cyan     { background: var(--cyan); color: #000; }
+    .btn-amber    { background: var(--amber); color: #000; }
+    .btn-ghost    { background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger   { background: rgba(255,68,85,0.18); color: var(--red); border: 1px solid rgba(255,68,85,0.3); }
+    .btn:disabled { opacity: 0.3; pointer-events: none; }
+    .btn-full { width: 100%; display: block; text-align: center; }
+    .btn-row  { display: flex; gap: 8px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: rgba(0,0,0,0.88); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 10px; padding: 9px 18px;
+      font-size: 0.8rem; color: var(--green);
+      transition: transform 0.3s ease; white-space: nowrap; pointer-events: none; z-index: 200;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.error { border-color: rgba(255,68,85,0.4); color: var(--red); }
+
+    /* ── Stats strip ── */
+    #stats-strip {
+      display: none; flex-shrink: 0;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      background: rgba(0,0,0,0.65); border-top: 1px solid rgba(255,255,255,0.05);
+    }
+    .ss-cell { padding: 7px 4px; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); }
+    .ss-cell:last-child { border-right: none; }
+    .ss-lbl { display: block; font-size: 0.52rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+    .ss-val { display: block; font-size: 0.82rem; font-weight: 700; color: rgba(255,255,255,0.75); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="top-bar">
+    <a id="back-link" href="../../../index.html">← Lab</a>
+    <span id="exp-title">Waypoint Room Builder</span>
+    <span class="badge badge-purple">GPS · World Gen</span>
+  </div>
+
+  <!-- Phase banner -->
+  <div id="phase-banner">
+    <span id="phase-label">Idle</span>
+    <span id="phase-desc">Ready to start</span>
+    <span id="wp-counter">0 / 12 waypoints</span>
+  </div>
+
+  <!-- Canvas area -->
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+
+    <!-- Map overlays -->
+    <div id="map-top-hud">
+      <div class="hud-pill">GPS <strong id="acc-hud">—</strong>m</div>
+      <div class="hud-pill" id="dist-hud">Dist: <strong>—</strong></div>
+    </div>
+
+    <!-- Intro overlay -->
+    <div id="intro-overlay">
+      <div class="icon">🏚️</div>
+      <h2>Waypoint Room Builder</h2>
+      <p>Walk a loop and drop waypoints along the way. When you've collected 6–12 markers, this app will build a dungeon-style corridor map from your real-world path.</p>
+      <div class="steps">
+        <div class="step-row"><div class="step-num">1</div><div class="step-txt"><strong>Walk & drop waypoints</strong> — press the button each time you reach a new spot (min 5 m apart).</div></div>
+        <div class="step-row"><div class="step-num">2</div><div class="step-txt"><strong>Validation</strong> — the app checks spacing. Close the loop to create a real room.</div></div>
+        <div class="step-row"><div class="step-num">3</div><div class="step-txt"><strong>World Generation</strong> — your path becomes a corridor map. You can only walk where you've already been.</div></div>
+      </div>
+      <button class="btn-start-collect" id="intro-start-btn">Begin Collecting</button>
+    </div>
+
+    <!-- Validation overlay -->
+    <div id="validation-overlay">
+      <h2 id="val-heading">Validating…</h2>
+      <div id="val-rows"></div>
+      <button class="val-btn val-btn-go" id="val-build-btn" style="display:none">Build Room →</button>
+      <button class="val-btn val-btn-back" id="val-back-btn">← Back to Collect</button>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+  </div>
+
+  <!-- Stats strip -->
+  <div id="stats-strip">
+    <div class="ss-cell"><span class="ss-lbl">Path Length</span><span class="ss-val" id="ss-length">—</span></div>
+    <div class="ss-cell"><span class="ss-lbl">Area</span><span class="ss-val" id="ss-area">—</span></div>
+    <div class="ss-cell"><span class="ss-lbl">Min Gap</span><span class="ss-val" id="ss-mingap">—</span></div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+
+    <div id="collect-controls">
+      <button class="btn btn-primary" id="drop-btn" disabled>📍 Drop Waypoint</button>
+      <button class="btn btn-cyan"    id="validate-btn" disabled>Validate →</button>
+      <button class="btn btn-ghost"   id="undo-btn" disabled>↩</button>
+    </div>
+
+    <div id="generate-controls">
+      <p style="font-size:0.76rem;color:var(--dim);text-align:center;margin-bottom:4px;">Generation complete — explore your dungeon map!</p>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-full" id="explore-start-btn">Explore Map →</button>
+        <button class="btn btn-ghost" id="gen-back-btn">↩ Re-collect</button>
+      </div>
+    </div>
+
+    <div id="explore-controls">
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="exp-recenter-btn">Re-centre</button>
+        <button class="btn btn-danger" id="exp-reset-btn">Start Over</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Constants ─────────────────────────────────────────────────────────────
+  var MIN_WAYPOINTS    = 6;
+  var MAX_WAYPOINTS    = 12;
+  var MIN_GAP_M        = 5;    // Minimum distance between adjacent waypoints (metres)
+  var CORRIDOR_WIDTH_M = 4;    // Corridor half-width in metres for rendering
+  var LOOP_CLOSE_M     = 15;   // If last WP is this close to first, auto-close loop
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var PHASE = 'idle';  // idle | collecting | validating | generating | exploring
+
+  var GPS = {
+    watchId: null,
+    current: null,    // {lat,lng,acc}
+    heading: 0
+  };
+
+  var WPS = [];        // collected waypoints: [{lat,lng,id}]
+  var MAP = {
+    offset: { x: 0, y: 0 },
+    zoom: 8,           // px per metre
+    autoFit: true,
+    dragging: false,
+    lastTouch: null
+  };
+  var ROOM = null;     // generated room data
+
+  // ── DOM ───────────────────────────────────────────────────────────────────
+  var canvas      = document.getElementById('main-canvas');
+  var ctx         = canvas.getContext('2d');
+  var introOverlay= document.getElementById('intro-overlay');
+  var valOverlay  = document.getElementById('validation-overlay');
+  var phaseLbl    = document.getElementById('phase-label');
+  var phaseDesc   = document.getElementById('phase-desc');
+  var wpCounter   = document.getElementById('wp-counter');
+  var accHud      = document.getElementById('acc-hud');
+  var distHud     = document.getElementById('dist-hud');
+  var statsStrip  = document.getElementById('stats-strip');
+  var toastEl     = document.getElementById('toast');
+
+  var dropBtn     = document.getElementById('drop-btn');
+  var validateBtn = document.getElementById('validate-btn');
+  var undoBtn     = document.getElementById('undo-btn');
+  var collectControls  = document.getElementById('collect-controls');
+  var generateControls = document.getElementById('generate-controls');
+  var exploreControls  = document.getElementById('explore-controls');
+
+  // ── Math helpers ──────────────────────────────────────────────────────────
+  function haversine(lat1, lng1, lat2, lng2) {
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function gpsToLocal(lat, lng) {
+    var origin = WPS[0] || { lat: lat, lng: lng };
+    return {
+      x:  (lng - origin.lng) * Math.cos(origin.lat * Math.PI / 180) * 111320,
+      y: -(lat - origin.lat) * 111111
+    };
+  }
+
+  // ── Canvas sizing ─────────────────────────────────────────────────────────
+  function resizeCanvas() {
+    var wrap = document.getElementById('canvas-wrap');
+    canvas.width  = wrap.offsetWidth;
+    canvas.height = wrap.offsetHeight;
+    if (PHASE !== 'idle') redraw();
+  }
+
+  // ── World → screen ────────────────────────────────────────────────────────
+  function w2s(pt) {
+    return {
+      x: pt.x * MAP.zoom + MAP.offset.x,
+      y: pt.y * MAP.zoom + MAP.offset.y
+    };
+  }
+
+  function autoFitWps() {
+    var W = canvas.width, H = canvas.height;
+    if (!WPS.length) { MAP.offset = {x:W/2,y:H/2}; MAP.zoom = 8; return; }
+    var pts = WPS.map(function(wp) { return gpsToLocal(wp.lat, wp.lng); });
+    if (GPS.current) pts.push(gpsToLocal(GPS.current.lat, GPS.current.lng));
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    pts.forEach(function(p) {
+      minX = Math.min(minX,p.x); maxX = Math.max(maxX,p.x);
+      minY = Math.min(minY,p.y); maxY = Math.max(maxY,p.y);
+    });
+    var pad = 60;
+    var rX = maxX - minX || 30, rY = maxY - minY || 30;
+    MAP.zoom = Math.max(1, Math.min(40, Math.min((W-pad*2)/rX, (H-pad*2)/rY)));
+    MAP.offset.x = W/2 - (minX + rX/2) * MAP.zoom;
+    MAP.offset.y = H/2 - (minY + rY/2) * MAP.zoom;
+  }
+
+  // ── Redraw ────────────────────────────────────────────────────────────────
+  function redraw() {
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#05080f';
+    ctx.fillRect(0,0,W,H);
+
+    if (PHASE === 'idle') return;
+
+    if (MAP.autoFit) autoFitWps();
+    drawGrid(W,H);
+
+    if (PHASE === 'exploring' || PHASE === 'generating') {
+      drawGeneratedRoom(W,H);
+    } else {
+      drawCollectionMap(W,H);
+    }
+
+    if (GPS.current && PHASE !== 'exploring') {
+      drawGPSDot();
+    }
+    if (PHASE === 'exploring' && GPS.current) {
+      drawPlayerOnRoom();
+    }
+  }
+
+  function drawGrid(W,H) {
+    var targetPx = 50;
+    var mPer = 1 / MAP.zoom;
+    var mSp = niceNumber(targetPx * mPer);
+    var pxSp = mSp * MAP.zoom;
+    if (pxSp < 15) return;
+    ctx.strokeStyle = 'rgba(0,255,136,0.06)';
+    ctx.lineWidth = 1;
+    var ox = MAP.offset.x % pxSp;
+    var oy = MAP.offset.y % pxSp;
+    for (var x = ox; x < W; x += pxSp) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (var y = oy; y < H; y += pxSp) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(0,255,136,0.35)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(mSp >= 1000 ? (mSp/1000).toFixed(1)+'km' : mSp+'m grid', W-8, H-8);
+  }
+
+  function niceNumber(n) {
+    var m = [0.5,1,2,5,10,20,50,100,200,500,1000,2000,5000];
+    for (var i=0;i<m.length;i++) if(m[i]>=n) return m[i];
+    return m[m.length-1];
+  }
+
+  // ── Collection map ────────────────────────────────────────────────────────
+  function drawCollectionMap(W,H) {
+    if (!WPS.length) {
+      ctx.fillStyle = 'rgba(0,255,136,0.25)';
+      ctx.font = '0.75rem monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Move to your first spot and drop a waypoint', W/2, H/2);
+      return;
+    }
+
+    // Draw path lines
+    ctx.save();
+    ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(0,255,136,0.4)';
+    ctx.strokeStyle = 'rgba(0,255,136,0.5)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    WPS.forEach(function(wp, i) {
+      var p = w2s(gpsToLocal(wp.lat, wp.lng));
+      if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    });
+    // Dashed line to current GPS
+    if (GPS.current) {
+      var cp = w2s(gpsToLocal(GPS.current.lat, GPS.current.lng));
+      ctx.lineTo(cp.x,cp.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Loop close indicator
+    if (WPS.length >= MIN_WAYPOINTS && GPS.current) {
+      var distToOrigin = haversine(GPS.current.lat, GPS.current.lng, WPS[0].lat, WPS[0].lng);
+      if (distToOrigin < LOOP_CLOSE_M * 3) {
+        var op = w2s(gpsToLocal(WPS[0].lat, WPS[0].lng));
+        ctx.beginPath(); ctx.arc(op.x,op.y, 20,0,Math.PI*2);
+        ctx.strokeStyle = 'rgba(255,170,0,0.6)'; ctx.lineWidth = 2;
+        ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,170,0,0.8)'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('Close loop here', op.x, op.y - 26);
+      }
+    }
+
+    // Draw waypoint markers
+    WPS.forEach(function(wp, i) {
+      var p = w2s(gpsToLocal(wp.lat, wp.lng));
+      // Glow
+      ctx.save(); ctx.shadowBlur = 12; ctx.shadowColor = i===0 ? 'rgba(255,170,0,0.6)' : 'rgba(0,255,136,0.6)';
+      ctx.beginPath(); ctx.arc(p.x,p.y,8,0,Math.PI*2);
+      ctx.fillStyle = i===0 ? 'rgba(255,170,0,0.85)' : 'rgba(0,255,136,0.8)'; ctx.fill();
+      ctx.restore();
+      // Number
+      ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(i+1, p.x, p.y+3);
+      // Distance label from previous
+      if (i > 0) {
+        var dist = haversine(WPS[i-1].lat, WPS[i-1].lng, wp.lat, wp.lng);
+        var pm = w2s(gpsToLocal(WPS[i-1].lat, WPS[i-1].lng));
+        var mx = (p.x+pm.x)/2, my = (p.y+pm.y)/2;
+        ctx.fillStyle = 'rgba(0,255,136,0.65)'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(dist.toFixed(0)+'m', mx, my-6);
+      }
+    });
+  }
+
+  function drawGPSDot() {
+    if (!GPS.current) return;
+    var p = w2s(gpsToLocal(GPS.current.lat, GPS.current.lng));
+    ctx.save();
+    ctx.shadowBlur = 16; ctx.shadowColor = '#00ccff';
+    ctx.beginPath(); ctx.arc(p.x,p.y,10,0,Math.PI*2);
+    ctx.strokeStyle = 'rgba(0,204,255,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2);
+    ctx.fillStyle = '#00ccff'; ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Room generation ───────────────────────────────────────────────────────
+  function generateRoom() {
+    var pts = WPS.map(function(wp) { return gpsToLocal(wp.lat, wp.lng); });
+    var isLoop = haversine(WPS[WPS.length-1].lat, WPS[WPS.length-1].lng, WPS[0].lat, WPS[0].lng) < LOOP_CLOSE_M * 2;
+
+    // Build segments: list of {ax,ay,bx,by} for each corridor
+    var segments = [];
+    for (var i = 0; i < pts.length - 1; i++) {
+      segments.push({ ax: pts[i].x, ay: pts[i].y, bx: pts[i+1].x, by: pts[i+1].y });
+    }
+    if (isLoop) {
+      segments.push({ ax: pts[pts.length-1].x, ay: pts[pts.length-1].y, bx: pts[0].x, by: pts[0].y });
+    }
+
+    // Polygon outline (offset corridor sides)
+    var polyA = [], polyB = [];
+    segments.forEach(function(seg) {
+      var dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+      var len = Math.sqrt(dx*dx + dy*dy) || 1;
+      var nx = -dy/len * CORRIDOR_WIDTH_M;
+      var ny =  dx/len * CORRIDOR_WIDTH_M;
+      polyA.push({x: seg.ax + nx, y: seg.ay + ny});
+      polyA.push({x: seg.bx + nx, y: seg.by + ny});
+      polyB.push({x: seg.ax - nx, y: seg.ay - ny});
+      polyB.push({x: seg.bx - nx, y: seg.by - ny});
+    });
+
+    ROOM = {
+      pts: pts,
+      segments: segments,
+      polyA: polyA,
+      polyB: polyB,
+      isLoop: isLoop,
+      totalLength: computePathLength(),
+      area: isLoop ? computeArea(pts) : null
+    };
+  }
+
+  function computePathLength() {
+    var total = 0;
+    for (var i = 1; i < WPS.length; i++) {
+      total += haversine(WPS[i-1].lat, WPS[i-1].lng, WPS[i].lat, WPS[i].lng);
+    }
+    return total;
+  }
+
+  function computeArea(pts) {
+    // Shoelace (metres²)
+    var area = 0;
+    for (var i = 0; i < pts.length; i++) {
+      var j = (i+1) % pts.length;
+      area += pts[i].x * pts[j].y;
+      area -= pts[j].x * pts[i].y;
+    }
+    return Math.abs(area) / 2;
+  }
+
+  // ── Draw generated room ───────────────────────────────────────────────────
+  var _genAnim = 0; // 0-1 progress
+
+  function drawGeneratedRoom(W, H) {
+    if (!ROOM) return;
+    var pts = ROOM.pts;
+    var segs = ROOM.segments;
+    var progress = PHASE === 'generating' ? _genAnim : 1;
+    var visSegs = Math.ceil(segs.length * progress);
+
+    // ── Draw corridor floor ──
+    segs.slice(0, visSegs).forEach(function(seg, i) {
+      var pa = w2s({x: seg.ax, y: seg.ay});
+      var pb = w2s({x: seg.bx, y: seg.by});
+      var dx = pb.x - pa.x, dy = pb.y - pa.y;
+      var len = Math.sqrt(dx*dx+dy*dy) || 1;
+      var nx = -dy/len, ny = dx/len;
+      var hw = CORRIDOR_WIDTH_M * MAP.zoom;
+
+      // Floor fill
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(pa.x + nx*hw, pa.y + ny*hw);
+      ctx.lineTo(pb.x + nx*hw, pb.y + ny*hw);
+      ctx.lineTo(pb.x - nx*hw, pb.y - ny*hw);
+      ctx.lineTo(pa.x - nx*hw, pa.y - ny*hw);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(20,35,60,0.95)';
+      ctx.fill();
+      // Floor texture dots
+      ctx.fillStyle = 'rgba(0,100,60,0.08)';
+      var steps = Math.max(1, Math.floor(len / 8));
+      for (var s = 0; s <= steps; s++) {
+        var t = s/steps;
+        var cx = pa.x + dx*t, cy = pa.y + dy*t;
+        ctx.beginPath(); ctx.arc(cx,cy,1.5,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+
+      // Corridor walls
+      ctx.save();
+      ctx.shadowBlur = 6; ctx.shadowColor = 'rgba(0,204,255,0.3)';
+      ctx.strokeStyle = 'rgba(0,204,255,0.6)'; ctx.lineWidth = 1.5;
+      // Side A
+      ctx.beginPath(); ctx.moveTo(pa.x+nx*hw,pa.y+ny*hw); ctx.lineTo(pb.x+nx*hw,pb.y+ny*hw); ctx.stroke();
+      // Side B
+      ctx.beginPath(); ctx.moveTo(pa.x-nx*hw,pa.y-ny*hw); ctx.lineTo(pb.x-nx*hw,pb.y-ny*hw); ctx.stroke();
+      ctx.restore();
+    });
+
+    // ── Draw rooms (nodes) ──
+    pts.slice(0, visSegs + 1).forEach(function(pt, i) {
+      var p = w2s(pt);
+      var isOrigin = i === 0;
+      var isLast   = i === pts.length - 1;
+      var r = Math.max(10, CORRIDOR_WIDTH_M * MAP.zoom * 1.3);
+
+      // Room floor
+      ctx.save();
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = isOrigin ? 'rgba(255,170,0,0.5)' : isLast ? 'rgba(204,136,255,0.5)' : 'rgba(0,255,136,0.3)';
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
+      ctx.fillStyle = isOrigin ? 'rgba(255,170,0,0.15)' : isLast ? 'rgba(204,136,255,0.15)' : 'rgba(0,255,136,0.1)';
+      ctx.fill();
+      // Wall circle
+      ctx.strokeStyle = isOrigin ? 'rgba(255,170,0,0.8)' : isLast ? 'rgba(204,136,255,0.8)' : 'rgba(0,204,255,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      // Label
+      ctx.fillStyle = isOrigin ? 'rgba(255,170,0,0.9)' : 'rgba(0,255,136,0.8)';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(isOrigin ? 'START' : (isLast && ROOM.isLoop) ? 'END' : (i+1)+'', p.x, p.y - r - 6);
+    });
+
+    // ── Centre path line (walkable) ──
+    if (visSegs >= 2) {
+      ctx.save();
+      ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(0,255,136,0.5)';
+      ctx.strokeStyle = 'rgba(0,255,136,0.35)'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,6]); ctx.lineDashOffset = -(Date.now() / 80) % 10;
+      ctx.beginPath();
+      pts.slice(0, visSegs+1).forEach(function(pt,i) {
+        var p = w2s(pt);
+        if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      });
+      if (ROOM.isLoop && visSegs >= segs.length) {
+        var fp = w2s(pts[0]);
+        ctx.lineTo(fp.x,fp.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // ── Interior fog (only if loop closed) ──
+    if (ROOM.isLoop && progress >= 1) {
+      // Draw the interior polygon with a dark fog overlay
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      pts.forEach(function(pt,i) {
+        var p = w2s(pt);
+        if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fill();
+      // Fog of war label
+      var cx = pts.reduce(function(s,p){return s+p.x;},0)/pts.length;
+      var cy = pts.reduce(function(s,p){return s+p.y;},0)/pts.length;
+      var cp = w2s({x:cx,y:cy});
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('? UNEXPLORED ?', cp.x, cp.y - 8);
+      ctx.font = '9px monospace';
+      ctx.fillText('(interior inaccessible)', cp.x, cp.y + 8);
+      ctx.restore();
+    }
+
+    // ── Stats overlay ──
+    if (PHASE === 'exploring') {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(8,8,170,38);
+      ctx.fillStyle = 'rgba(0,255,136,0.9)';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('PATH: ' + (ROOM.totalLength >= 1000 ? (ROOM.totalLength/1000).toFixed(2)+'km' : Math.round(ROOM.totalLength)+'m'), 16, 24);
+      if (ROOM.area) ctx.fillText('AREA: ~' + (ROOM.area >= 10000 ? (ROOM.area/10000).toFixed(2)+'ha' : Math.round(ROOM.area)+'m²'), 16, 38);
+    }
+
+    // Request next animation frame if generating
+    if (PHASE === 'generating' && _genAnim < 1) {
+      requestAnimationFrame(function() {
+        _genAnim = Math.min(1, _genAnim + 0.025);
+        redraw();
+        if (_genAnim >= 1) {
+          PHASE = 'generated';
+          generateControls.style.display = 'flex';
+          collectControls.style.display = 'none';
+          setPhaseBanner('generated', 'World generated — review your dungeon');
+        }
+      });
+    }
+  }
+
+  function drawPlayerOnRoom() {
+    var p = w2s(gpsToLocal(GPS.current.lat, GPS.current.lng));
+    ctx.save();
+    ctx.shadowBlur = 20; ctx.shadowColor = '#ffaa00';
+    ctx.beginPath(); ctx.arc(p.x,p.y,12,0,Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,170,0,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x,p.y,5,0,Math.PI*2);
+    ctx.fillStyle = '#ffaa00'; ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,170,0,0.9)';
+    ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('YOU', p.x, p.y - 16);
+  }
+
+  // ── Validation ────────────────────────────────────────────────────────────
+  function runValidation() {
+    setPhase('validating');
+    valOverlay.classList.add('active');
+
+    var results = [];
+
+    // Check: minimum waypoints
+    results.push({
+      pass: WPS.length >= MIN_WAYPOINTS,
+      label: 'Waypoint count',
+      note: WPS.length + ' collected (need ≥ ' + MIN_WAYPOINTS + ')'
+    });
+
+    // Check: minimum spacing on all segments
+    var gaps = [];
+    for (var i = 1; i < WPS.length; i++) {
+      gaps.push(haversine(WPS[i-1].lat, WPS[i-1].lng, WPS[i].lat, WPS[i].lng));
+    }
+    var minGap = gaps.length ? Math.min.apply(null, gaps) : 0;
+    results.push({
+      pass: minGap >= MIN_GAP_M,
+      label: 'Minimum spacing',
+      note: 'Smallest gap: ' + minGap.toFixed(1) + 'm (need ≥ ' + MIN_GAP_M + 'm)'
+    });
+
+    // Check: total path length
+    var totalLen = gaps.reduce(function(s,v){return s+v;},0);
+    results.push({
+      pass: totalLen >= 20,
+      label: 'Total path length',
+      note: totalLen.toFixed(0) + 'm total (need ≥ 20m)'
+    });
+
+    // Check: loop closure
+    var loopDist = haversine(WPS[WPS.length-1].lat, WPS[WPS.length-1].lng, WPS[0].lat, WPS[0].lng);
+    var isLoop = loopDist < LOOP_CLOSE_M * 2;
+    results.push({
+      pass: isLoop,
+      warn: !isLoop,
+      label: 'Loop closure',
+      note: isLoop
+        ? 'Loop closed! (' + loopDist.toFixed(0) + 'm from start)'
+        : 'Open path — last WP is ' + loopDist.toFixed(0) + 'm from start (return closer for a room)'
+    });
+
+    // Update stats strip
+    document.getElementById('ss-length').textContent = totalLen.toFixed(0) + 'm';
+    document.getElementById('ss-area').textContent = isLoop ? computeArea(WPS.map(function(wp){return gpsToLocal(wp.lat,wp.lng);})).toFixed(0)+'m²' : 'Open';
+    document.getElementById('ss-mingap').textContent = minGap.toFixed(0) + 'm';
+
+    // Render validation rows
+    var allPass = results.slice(0,3).every(function(r){return r.pass;});
+    var valRows = document.getElementById('val-rows');
+    valRows.innerHTML = '';
+    results.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'val-row';
+      var icon = r.pass ? '✅' : (r.warn ? '⚠️' : '❌');
+      row.innerHTML = '<span class="val-icon">' + icon + '</span><div><div class="val-text">' + r.label + '</div><div class="val-note">' + r.note + '</div></div>';
+      valRows.appendChild(row);
+    });
+
+    var valHeading = document.getElementById('val-heading');
+    valHeading.textContent = allPass ? '✅ Ready to Build!' : '⚠️ Issues Found';
+
+    var buildBtn = document.getElementById('val-build-btn');
+    if (allPass) {
+      buildBtn.style.display = '';
+      buildBtn.textContent = isLoop ? 'Build Room →' : 'Build Corridor →';
+    } else {
+      buildBtn.style.display = 'none';
+    }
+  }
+
+  // ── Phase management ──────────────────────────────────────────────────────
+  function setPhase(phase) {
+    PHASE = phase;
+    collectControls.style.display  = 'none';
+    generateControls.style.display = 'none';
+    exploreControls.style.display  = 'none';
+
+    if (phase === 'collecting') {
+      collectControls.style.display = 'flex';
+      statsStrip.style.display = 'grid';
+    } else if (phase === 'generated') {
+      generateControls.style.display = 'flex';
+    } else if (phase === 'exploring') {
+      exploreControls.style.display = 'flex';
+    }
+  }
+
+  function setPhaseBanner(phase, desc) {
+    var labels = {
+      collecting: 'Collecting',
+      validating: 'Validating',
+      generating: 'Generating',
+      generated:  'Generated',
+      exploring:  'Exploring'
+    };
+    phaseLbl.textContent = labels[phase] || phase;
+    phaseDesc.textContent = desc || '';
+    phaseLbl.style.color = {
+      collecting: '#00ff88', validating: '#ffaa00',
+      generating: '#00ccff', generated: '#cc88ff', exploring: '#ffaa00'
+    }[phase] || '#00ff88';
+  }
+
+  function updateWpCounter() {
+    wpCounter.textContent = WPS.length + ' / ' + MAX_WAYPOINTS + ' waypoints';
+    validateBtn.disabled = WPS.length < MIN_WAYPOINTS;
+    undoBtn.disabled = !WPS.length;
+  }
+
+  // ── GPS callbacks ─────────────────────────────────────────────────────────
+  function onGPS(pos) {
+    GPS.current = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      acc: pos.coords.accuracy
+    };
+    accHud.textContent = Math.round(pos.coords.accuracy);
+
+    // Update dist to last waypoint
+    if (WPS.length) {
+      var last = WPS[WPS.length-1];
+      var d = haversine(last.lat, last.lng, GPS.current.lat, GPS.current.lng);
+      var distHudEl = document.getElementById('dist-hud');
+      distHudEl.innerHTML = 'To WP: <strong>' + d.toFixed(0) + 'm</strong>';
+      dropBtn.disabled = (d < MIN_GAP_M);
+    } else {
+      dropBtn.disabled = false;
+    }
+
+    if (PHASE === 'collecting' || PHASE === 'exploring') redraw();
+  }
+
+  function onGPSError(err) {
+    showToast('GPS: ' + err.message, true);
+  }
+
+  // ── Drop waypoint ─────────────────────────────────────────────────────────
+  function dropWaypoint() {
+    if (!GPS.current) { showToast('Waiting for GPS fix…', true); return; }
+    if (GPS.current.acc > 40) { showToast('GPS accuracy too low (' + Math.round(GPS.current.acc) + 'm). Wait…', true); return; }
+    if (WPS.length > 0) {
+      var last = WPS[WPS.length-1];
+      var gap = haversine(last.lat, last.lng, GPS.current.lat, GPS.current.lng);
+      if (gap < MIN_GAP_M) {
+        showToast('Too close to last WP (' + gap.toFixed(0) + 'm). Need ' + MIN_GAP_M + 'm.', true);
+        return;
+      }
+    }
+    if (WPS.length >= MAX_WAYPOINTS) {
+      showToast('Maximum ' + MAX_WAYPOINTS + ' waypoints reached. Validate now.', true);
+      return;
+    }
+
+    WPS.push({ lat: GPS.current.lat, lng: GPS.current.lng, id: Date.now() });
+    MAP.autoFit = true;
+    updateWpCounter();
+    updateStatsStrip();
+    showToast('Waypoint ' + WPS.length + ' dropped!');
+    redraw();
+  }
+
+  function updateStatsStrip() {
+    if (WPS.length < 2) {
+      document.getElementById('ss-length').textContent = '—';
+      document.getElementById('ss-mingap').textContent = '—';
+      document.getElementById('ss-area').textContent = '—';
+      return;
+    }
+    var gaps = [];
+    for (var i = 1; i < WPS.length; i++) {
+      gaps.push(haversine(WPS[i-1].lat, WPS[i-1].lng, WPS[i].lat, WPS[i].lng));
+    }
+    var total = gaps.reduce(function(s,v){return s+v;},0);
+    document.getElementById('ss-length').textContent = total.toFixed(0) + 'm';
+    document.getElementById('ss-mingap').textContent = Math.min.apply(null,gaps).toFixed(0) + 'm';
+    document.getElementById('ss-area').textContent = '—';
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  var _toastTimer;
+  function showToast(msg, isError) {
+    toastEl.textContent = msg;
+    toastEl.className = 'show' + (isError ? ' error' : '');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function() { toastEl.className = ''; }, 2800);
+  }
+
+  // ── Full reset ────────────────────────────────────────────────────────────
+  function fullReset() {
+    if (GPS.watchId !== null) { navigator.geolocation.clearWatch(GPS.watchId); GPS.watchId = null; }
+    WPS = []; ROOM = null; GPS.current = null; _genAnim = 0;
+    setPhase('idle');
+    introOverlay.style.display = '';
+    valOverlay.classList.remove('active');
+    collectControls.style.display = 'flex';
+    statsStrip.style.display = 'none';
+    setPhaseBanner('idle', 'Ready to start');
+    wpCounter.textContent = '0 / 12 waypoints';
+    dropBtn.disabled = true; validateBtn.disabled = true; undoBtn.disabled = true;
+    MAP.autoFit = true;
+    redraw();
+  }
+
+  // ── Button wiring ─────────────────────────────────────────────────────────
+  document.getElementById('intro-start-btn').addEventListener('click', function() {
+    if (!navigator.geolocation) { alert('Geolocation not available.'); return; }
+    introOverlay.style.display = 'none';
+    setPhase('collecting');
+    setPhaseBanner('collecting', 'Walk and drop waypoints');
+    updateWpCounter();
+    MAP.autoFit = true;
+    redraw();
+
+    GPS.watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+      enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+    });
+    showToast('GPS started — walk to your first spot');
+  });
+
+  dropBtn.addEventListener('click', dropWaypoint);
+
+  validateBtn.addEventListener('click', runValidation);
+
+  undoBtn.addEventListener('click', function() {
+    if (!WPS.length) return;
+    WPS.pop();
+    MAP.autoFit = true;
+    updateWpCounter();
+    updateStatsStrip();
+    redraw();
+    showToast('Waypoint removed');
+  });
+
+  document.getElementById('val-build-btn').addEventListener('click', function() {
+    valOverlay.classList.remove('active');
+    setPhase('generating');
+    setPhaseBanner('generating', 'Building your dungeon…');
+    collectControls.style.display = 'none';
+    generateRoom();
+    _genAnim = 0;
+    MAP.autoFit = true;
+    redraw();
+    showToast('Generating corridor map…');
+  });
+
+  document.getElementById('val-back-btn').addEventListener('click', function() {
+    valOverlay.classList.remove('active');
+    setPhase('collecting');
+    setPhaseBanner('collecting', 'Walk and drop waypoints');
+    collectControls.style.display = 'flex';
+    redraw();
+  });
+
+  document.getElementById('explore-start-btn').addEventListener('click', function() {
+    setPhase('exploring');
+    generateControls.style.display = 'none';
+    exploreControls.style.display = 'flex';
+    setPhaseBanner('exploring', 'Your dungeon — walk the perimeter!');
+    MAP.autoFit = true;
+    redraw();
+    showToast('Explore your dungeon! Walk where you placed waypoints.');
+  });
+
+  document.getElementById('gen-back-btn').addEventListener('click', function() {
+    ROOM = null; _genAnim = 0;
+    setPhase('collecting');
+    collectControls.style.display = 'flex';
+    generateControls.style.display = 'none';
+    setPhaseBanner('collecting', 'Walk and drop waypoints');
+    redraw();
+  });
+
+  document.getElementById('exp-recenter-btn').addEventListener('click', function() {
+    MAP.autoFit = true; redraw(); showToast('Re-centred');
+  });
+
+  document.getElementById('exp-reset-btn').addEventListener('click', function() {
+    if (confirm('Start over? This will clear all waypoints.')) fullReset();
+  });
+
+  // ── Touch/pinch pan zoom ──────────────────────────────────────────────────
+  var _lastPinchDist = null;
+  canvas.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      MAP.dragging = true; MAP.autoFit = false;
+      MAP.lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2) {
+      var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if (_lastPinchDist) { MAP.zoom = Math.max(0.5, Math.min(80, MAP.zoom * d / _lastPinchDist)); redraw(); }
+      _lastPinchDist = d; return;
+    }
+    _lastPinchDist = null;
+    if (!MAP.dragging || !MAP.lastTouch) return;
+    MAP.offset.x += e.touches[0].clientX - MAP.lastTouch.x;
+    MAP.offset.y += e.touches[0].clientY - MAP.lastTouch.y;
+    MAP.lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    redraw();
+  }, { passive: true });
+  canvas.addEventListener('touchend', function() { MAP.dragging = false; MAP.lastTouch = null; _lastPinchDist = null; }, { passive: true });
+  canvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    MAP.zoom = Math.max(0.5, Math.min(80, MAP.zoom * (e.deltaY > 0 ? 0.85 : 1.18)));
+    MAP.autoFit = false; redraw();
+  }, { passive: false });
+
+  // ── Animate walkable dashes ───────────────────────────────────────────────
+  function animLoop() {
+    if (PHASE === 'exploring' || PHASE === 'generated') redraw();
+    requestAnimationFrame(animLoop);
+  }
+  animLoop();
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  statsStrip.style.display = 'none';
+
+}());
+</script>
+</body>
+</html>
