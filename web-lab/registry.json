@@ -88,8 +88,8 @@
       ],
       "bestUseCase": "Indoor AR prototyping; local anchor quality benchmarking",
       "deviceRequirements": ["Android ARCore device or iOS ARKit device", "Native app build required"],
-      "status": "coming-soon",
-      "labPath": null
+      "status": "available",
+      "labPath": "native-unity-lab/experiment-c/index.html"
     },
     {
       "id": "experiment-d",
@@ -117,8 +117,8 @@
       ],
       "bestUseCase": "Outdoor AR with persistent geo-anchored content in covered areas",
       "deviceRequirements": ["Android ARCore device", "Google Play Services AR", "Outdoor streetscape area", "Native build"],
-      "status": "coming-soon",
-      "labPath": null
+      "status": "available",
+      "labPath": "native-unity-lab/experiment-d/index.html"
     },
     {
       "id": "experiment-e",
@@ -146,8 +146,8 @@
       ],
       "bestUseCase": "Persistent, shareable AR experiences at specific real-world landmarks",
       "deviceRequirements": ["iOS or Android", "Niantic Lightship native SDK", "Pre-scanned VPS location"],
-      "status": "coming-soon",
-      "labPath": null
+      "status": "available",
+      "labPath": "vps-lab/experiment-e/index.html"
     },
     {
       "id": "experiment-f",
@@ -174,8 +174,8 @@
       ],
       "bestUseCase": "AEC / engineering AR overlay on surveyed sites; utility mapping",
       "deviceRequirements": ["High-precision GNSS receiver or RTK GPS", "Android/iOS native build", "Survey control data"],
-      "status": "coming-soon",
-      "labPath": null
+      "status": "available",
+      "labPath": "native-unity-lab/experiment-f/index.html"
     }
   ]
 }

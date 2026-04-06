@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Experiment E — Niantic Spatial VPS | AR Lab</title>
+  <link rel="icon" href="../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; min-height: 100%;
+      background: #0a0a0f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+      overflow-y: auto;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    #top-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.85);
+      border-bottom: 1px solid rgba(180,100,255,0.2);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    #back-link {
+      color: #00ff88; text-decoration: none;
+      font-size: 0.8rem; letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    #back-link:hover { text-decoration: underline; }
+
+    #experiment-title {
+      font-size: clamp(0.85rem, 2.5vw, 1rem);
+      font-weight: 700; flex: 1; text-align: center; color: #fff;
+    }
+
+    /* ── Native build banner ─────────────────────────────────────────────── */
+    #native-banner {
+      width: 100%;
+      padding: 8px 16px;
+      background: rgba(180,100,255,0.12);
+      border-bottom: 1px solid rgba(180,100,255,0.3);
+      text-align: center;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: #cc88ff;
+    }
+
+    /* ── Page content ────────────────────────────────────────────────────── */
+    #page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    .hero-icon { font-size: 3.5rem; margin-bottom: 16px; }
+
+    h1 {
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #cc88ff 60%, #9944ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      line-height: 1.15;
+    }
+
+    .runtime-badge {
+      display: inline-block;
+      font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 4px 12px; border-radius: 12px;
+      font-weight: 700; margin-bottom: 20px;
+      background: rgba(180,100,255,0.15); color: #cc88ff;
+      border: 1px solid rgba(180,100,255,0.3);
+    }
+
+    .lead {
+      font-size: 1rem; color: rgba(255,255,255,0.65);
+      line-height: 1.7; margin-bottom: 32px;
+    }
+
+    /* ── Info cards grid ─────────────────────────────────────────────────── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .info-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .info-card h3 {
+      font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: rgba(200,136,255,0.8);
+      margin-bottom: 10px;
+    }
+
+    .info-card p, .info-card li {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+    }
+    .info-card ul { padding-left: 18px; }
+    .info-card li { margin-bottom: 4px; }
+
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.83rem;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: rgba(255,255,255,0.4); }
+    .metric-val   { color: #fff; font-weight: 600; text-align: right; }
+
+    /* ── Section title ───────────────────────────────────────────────────── */
+    .section-title {
+      font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: rgba(200,136,255,0.7);
+      border-bottom: 1px solid rgba(180,100,255,0.15);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+
+    pre {
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      font-size: 0.78rem;
+      color: rgba(200,255,220,0.8);
+      line-height: 1.65;
+      overflow-x: auto;
+      margin-bottom: 28px;
+      white-space: pre;
+    }
+
+    /* ── Localization flow ───────────────────────────────────────────────── */
+    .state-flow {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(180,100,255,0.15);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 32px;
+    }
+    .state-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.83rem;
+    }
+    .state-row:last-child { border-bottom: none; }
+    .state-name {
+      background: rgba(180,100,255,0.12);
+      border: 1px solid rgba(180,100,255,0.25);
+      border-radius: 20px;
+      padding: 3px 12px;
+      color: #cc88ff;
+      font-weight: 700;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .state-name.success {
+      background: rgba(0,255,136,0.12);
+      border-color: rgba(0,255,136,0.25);
+      color: #00ff88;
+    }
+    .state-name.fail {
+      background: rgba(255,60,60,0.12);
+      border-color: rgba(255,60,60,0.25);
+      color: #ff8888;
+    }
+    .state-desc { color: rgba(255,255,255,0.5); font-size: 0.8rem; line-height: 1.5; }
+
+    /* ── Build steps ─────────────────────────────────────────────────────── */
+    .build-steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin-bottom: 28px;
+    }
+    .build-steps li {
+      counter-increment: step;
+      display: flex; gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.5;
+    }
+    .build-steps li::before {
+      content: counter(step);
+      display: flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(180,100,255,0.12);
+      border: 1px solid rgba(180,100,255,0.25);
+      color: #cc88ff;
+      font-size: 0.75rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Note box ────────────────────────────────────────────────────────── */
+    .note-box {
+      background: rgba(180,100,255,0.07);
+      border: 1px solid rgba(180,100,255,0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 0.82rem;
+      color: rgba(220,180,255,0.85);
+      line-height: 1.55;
+      margin-bottom: 28px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<div id="top-bar">
+  <a id="back-link" href="../../index.html">← Back to Lab</a>
+  <span id="experiment-title">Experiment E — Niantic Spatial VPS</span>
+</div>
+
+<!-- ── Native build notice ──────────────────────────────────────────────── -->
+<div id="native-banner">Native Build Required — Android / iOS · Niantic Lightship ARDK</div>
+
+<!-- ── Page body ────────────────────────────────────────────────────────── -->
+<div id="page">
+
+  <div class="hero-icon">🏛️</div>
+  <h1>Niantic Spatial VPS<br>Visual Positioning System</h1>
+  <span class="runtime-badge">Native · Android / iOS · Niantic Lightship</span>
+
+  <p class="lead">
+    Niantic's Visual Positioning System (VPS) localizes a device to a sub-metre pose
+    at a pre-scanned wayspot using visual feature matching against a stored 3D map
+    of that location. Accuracy is typically &lt; 1 m — unlike GPS, VPS provides a
+    repeatable, drift-resistant pose at each visit.
+  </p>
+
+  <!-- ── Metrics ── -->
+  <div class="info-grid">
+
+    <div class="info-card">
+      <h3>◈ Performance Metrics</h3>
+      <div class="metric-row"><span class="metric-label">Accuracy</span><span class="metric-val">&lt; 1 m at scanned wayspots</span></div>
+      <div class="metric-row"><span class="metric-label">Drift risk</span><span class="metric-val">None (VPS re-localizes)</span></div>
+      <div class="metric-row"><span class="metric-label">Anchor persistence</span><span class="metric-val">Backend (cross-session)</span></div>
+      <div class="metric-row"><span class="metric-label">Localization timeout</span><span class="metric-val">30 s before fail state</span></div>
+      <div class="metric-row"><span class="metric-label">Platform</span><span class="metric-val">Android + iOS</span></div>
+      <div class="metric-row"><span class="metric-label">Max anchors</span><span class="metric-val">10 per wayspot</span></div>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ Prerequisites</h3>
+      <ul>
+        <li>Niantic Lightship ARDK installed via UPM</li>
+        <li>Niantic developer account + API key</li>
+        <li>AR Foundation 5.x</li>
+        <li>Pre-scanned Niantic wayspot for testing</li>
+        <li>Physical Android or iOS device (VPS cannot be tested in editor)</li>
+        <li>Native Unity build required</li>
+      </ul>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ What VPS Is NOT</h3>
+      <ul>
+        <li>Not a general-purpose positioning system</li>
+        <li>Not available at arbitrary locations — only scanned wayspots</li>
+        <li>Not a substitute for GPS in outdoor navigation</li>
+        <li>Not usable without a Niantic developer API key</li>
+      </ul>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ Best Use Case</h3>
+      <p>Persistent, shareable AR experiences at specific real-world landmarks.
+         Best for museum installations, public art, retail activations, or any
+         experience that returns users to the same physical location.</p>
+    </div>
+
+  </div>
+
+  <!-- ── Localization flow ── -->
+  <div class="section-title">◈ Localization State Flow</div>
+  <div class="state-flow">
+    <div class="state-row"><span class="state-name">App Launch</span><span class="state-desc">WayspotLoader.cs fetches wayspot list from backend — falls back to default-wayspots.json if offline</span></div>
+    <div class="state-row"><span class="state-name">Wayspot Selected</span><span class="state-desc">User selects wayspot from list; POST /sessions to obtain session token</span></div>
+    <div class="state-row"><span class="state-name">ATTEMPTING</span><span class="state-desc">LocalizationMonitor polls IARLocalizationPayload — UI shows "Scanning… point device at the location"</span></div>
+    <div class="state-row"><span class="state-name success">LOCALIZED</span><span class="state-desc">✓ Sub-metre accuracy confirmed — VPS-anchored content revealed — POST /calibration-events (vps-localised)</span></div>
+    <div class="state-row"><span class="state-name fail">FAILED</span><span class="state-desc">✗ Timeout after 30 s — offer Try Again / Exit — POST /calibration-events (vps-localisation-failed)</span></div>
+    <div class="state-row"><span class="state-name">LOST</span><span class="state-desc">⚠ Tracking lost after initial fix — triggers re-scanning — POST /calibration-events (relocalisation-triggered)</span></div>
+  </div>
+
+  <!-- ── Architecture ── -->
+  <div class="section-title">◈ Architecture — vps-lab</div>
+<pre>vps-lab/Assets/
+  ├── Scenes/
+  │   ├── Loader.unity              # Entry point (shared pattern with native-unity-lab)
+  │   └── ExperimentE_VPS.unity
+  └── Scripts/
+      ├── Core/
+      │   ├── VPSSessionManager.cs  # VPS session lifecycle
+      │   ├── BackendClient.cs      # REST client
+      │   └── TelemetryEmitter.cs
+      ├── VPS/
+      │   ├── WayspotLoader.cs      # Fetches wayspot list from backend
+      │   ├── LocalizationMonitor.cs# Polls VPS localisation state
+      │   └── VPSAnchorController.cs# Creates PersistentAnchorComponent instances
+      └── UI/
+          ├── LocalizationProgressPanel.cs
+          ├── DebugHUD.cs
+          └── WayspotSelector.cs</pre>
+
+  <div class="note-box">
+    <strong>Content authoring:</strong> VPS-anchored content is stored on the backend, not hard-coded
+    in the app. After localisation, <code>VPSAnchorController</code> calls
+    <code>GET /scenes/:sceneId</code> and creates anchors at the poses returned.
+    New content can be added at a wayspot via <code>POST /anchors</code> without a new app build.
+  </div>
+
+  <!-- ── Build steps ── -->
+  <div class="section-title">◈ How to Build &amp; Run</div>
+  <ol class="build-steps">
+    <li>Create a Niantic developer account at <strong>lightship.dev</strong> and obtain an API key.</li>
+    <li>Open <strong>vps-lab/</strong> as a Unity 2022 LTS (or later) project.</li>
+    <li>Install <strong>Niantic Lightship ARDK</strong> and <strong>AR Foundation 5.x</strong> via Package Manager.</li>
+    <li>Add your Niantic API key to the Lightship settings asset in the Unity project.</li>
+    <li>Open the <strong>Loader</strong> scene (<code>Assets/Scenes/Loader.unity</code>) as the build entry point.</li>
+    <li>Build for Android or iOS and deploy to a physical device.</li>
+    <li>Test at a pre-scanned Niantic wayspot — use the Niantic Wayfarer app to scan new locations.</li>
+  </ol>
+
+  <!-- ── Multi-location strategy ── -->
+  <div class="section-title">◈ Multi-Location Strategy</div>
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>◈ Adding a New Location</h3>
+      <ol style="padding-left:18px; font-size:0.85rem; color:rgba(255,255,255,0.6); line-height:1.8;">
+        <li>Scan the real-world location with the Niantic Wayfarer app to create a wayspot.</li>
+        <li>Add a <code>LocationDefinition</code> to the backend with the Niantic <code>vpsMapId</code>.</li>
+        <li>Place anchors via <code>POST /anchors</code> — no app rebuild required.</li>
+      </ol>
+    </div>
+    <div class="info-card">
+      <h3>◈ Endpoints Used</h3>
+      <div class="metric-row"><span class="metric-label">Wayspot list</span><span class="metric-val">GET /locations</span></div>
+      <div class="metric-row"><span class="metric-label">Start session</span><span class="metric-val">POST /sessions</span></div>
+      <div class="metric-row"><span class="metric-label">Scene content</span><span class="metric-val">GET /scenes/:sceneId</span></div>
+      <div class="metric-row"><span class="metric-label">Persist anchor</span><span class="metric-val">POST /anchors</span></div>
+      <div class="metric-row"><span class="metric-label">Calibration event</span><span class="metric-val">POST /calibration-events</span></div>
+      <div class="metric-row"><span class="metric-label">Telemetry</span><span class="metric-val">POST /telemetry</span></div>
+    </div>
+  </div>
+
+</div><!-- /#page -->
+
+</body>
+</html>

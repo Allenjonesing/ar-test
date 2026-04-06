@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Experiment C — Unity AR Foundation Local/Hybrid | AR Lab</title>
+  <link rel="icon" href="../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; min-height: 100%;
+      background: #0a0a0f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+      overflow-y: auto;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    #top-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.85);
+      border-bottom: 1px solid rgba(255,140,0,0.2);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    #back-link {
+      color: #00ff88; text-decoration: none;
+      font-size: 0.8rem; letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    #back-link:hover { text-decoration: underline; }
+
+    #experiment-title {
+      font-size: clamp(0.85rem, 2.5vw, 1rem);
+      font-weight: 700; flex: 1; text-align: center; color: #fff;
+    }
+
+    /* ── Native build banner ─────────────────────────────────────────────── */
+    #native-banner {
+      width: 100%;
+      padding: 8px 16px;
+      background: rgba(255,140,0,0.15);
+      border-bottom: 1px solid rgba(255,140,0,0.3);
+      text-align: center;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: #ffaa44;
+    }
+
+    /* ── Page content ────────────────────────────────────────────────────── */
+    #page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    .hero-icon { font-size: 3.5rem; margin-bottom: 16px; }
+
+    h1 {
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #ffaa44 60%, #ff6600 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      line-height: 1.15;
+    }
+
+    .runtime-badge {
+      display: inline-block;
+      font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 4px 12px; border-radius: 12px;
+      font-weight: 700; margin-bottom: 20px;
+      background: rgba(255,140,0,0.15); color: #ffaa44;
+      border: 1px solid rgba(255,140,0,0.3);
+    }
+
+    .lead {
+      font-size: 1rem; color: rgba(255,255,255,0.65);
+      line-height: 1.7; margin-bottom: 32px;
+    }
+
+    /* ── Info cards grid ─────────────────────────────────────────────────── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .info-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .info-card h3 {
+      font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: rgba(255,170,68,0.8);
+      margin-bottom: 10px;
+    }
+
+    .info-card p, .info-card li {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+    }
+    .info-card ul { padding-left: 18px; }
+    .info-card li { margin-bottom: 4px; }
+
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.83rem;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: rgba(255,255,255,0.4); }
+    .metric-val   { color: #fff; font-weight: 600; text-align: right; }
+
+    /* ── Architecture section ────────────────────────────────────────────── */
+    .section-title {
+      font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: rgba(255,170,68,0.7);
+      border-bottom: 1px solid rgba(255,140,0,0.15);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+
+    pre {
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px 18px;
+      font-size: 0.78rem;
+      color: rgba(200,255,220,0.8);
+      line-height: 1.65;
+      overflow-x: auto;
+      margin-bottom: 28px;
+      white-space: pre;
+    }
+
+    /* ── State machine ───────────────────────────────────────────────────── */
+    .state-flow {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,140,0,0.15);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 32px;
+    }
+    .state-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0;
+      font-size: 0.83rem;
+    }
+    .state-name {
+      background: rgba(255,140,0,0.12);
+      border: 1px solid rgba(255,140,0,0.25);
+      border-radius: 20px;
+      padding: 3px 12px;
+      color: #ffaa44;
+      font-weight: 700;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+    .state-desc { color: rgba(255,255,255,0.5); font-size: 0.8rem; }
+    .state-arrow { color: rgba(255,255,255,0.3); font-size: 1rem; margin-left: 4px; }
+
+    /* ── Build steps ─────────────────────────────────────────────────────── */
+    .build-steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin-bottom: 28px;
+    }
+    .build-steps li {
+      counter-increment: step;
+      display: flex; gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.5;
+    }
+    .build-steps li::before {
+      content: counter(step);
+      display: flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(255,140,0,0.15);
+      border: 1px solid rgba(255,140,0,0.3);
+      color: #ffaa44;
+      font-size: 0.75rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── GPS overlay note ────────────────────────────────────────────────── */
+    .note-box {
+      background: rgba(255,200,0,0.07);
+      border: 1px solid rgba(255,200,0,0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 0.82rem;
+      color: rgba(255,220,100,0.85);
+      line-height: 1.55;
+      margin-bottom: 28px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<div id="top-bar">
+  <a id="back-link" href="../../index.html">← Back to Lab</a>
+  <span id="experiment-title">Experiment C — Unity AR Foundation Local/Hybrid</span>
+</div>
+
+<!-- ── Native build notice ──────────────────────────────────────────────── -->
+<div id="native-banner">Native Build Required — Android APK or iOS IPA</div>
+
+<!-- ── Page body ────────────────────────────────────────────────────────── -->
+<div id="page">
+
+  <div class="hero-icon">📱</div>
+  <h1>Unity AR Foundation<br>Local / Hybrid Tracking</h1>
+  <span class="runtime-badge">Native · Android / iOS · AR Foundation</span>
+
+  <p class="lead">
+    ARCore (Android) and ARKit (iOS) local world tracking with optional GPS overlay.
+    Provides centimetre-scale local anchors — the baseline for native tracking quality
+    comparison across all AR Lab experiments. Tap to place anchors; a drift warning
+    appears after 5 minutes of continuous session.
+  </p>
+
+  <!-- ── Metrics ── -->
+  <div class="info-grid">
+
+    <div class="info-card">
+      <h3>◈ Performance Metrics</h3>
+      <div class="metric-row"><span class="metric-label">Local accuracy</span><span class="metric-val">cm-scale</span></div>
+      <div class="metric-row"><span class="metric-label">GPS overlay</span><span class="metric-val">±5–15 m</span></div>
+      <div class="metric-row"><span class="metric-label">Drift (local)</span><span class="metric-val">Low</span></div>
+      <div class="metric-row"><span class="metric-label">Max anchors</span><span class="metric-val">50</span></div>
+      <div class="metric-row"><span class="metric-label">Drift warning after</span><span class="metric-val">5 min</span></div>
+      <div class="metric-row"><span class="metric-label">Anchor persistence</span><span class="metric-val">Session only</span></div>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ Device Requirements</h3>
+      <ul>
+        <li>Android device with ARCore support</li>
+        <li>— OR — iOS device with ARKit support</li>
+        <li>Google Play Services for AR (Android)</li>
+        <li>iOS 12+ (iOS)</li>
+        <li>Native build — not available in browser</li>
+        <li>HTTPS not required (native app)</li>
+      </ul>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ Limitations</h3>
+      <ul>
+        <li>Anchors do not persist across app restarts (no cloud anchors)</li>
+        <li>GPS overlay accuracy limited by consumer hardware (±5–15 m)</li>
+        <li>Local anchors and GPS overlay are not precisely aligned</li>
+        <li>Requires native build — cannot run in browser</li>
+      </ul>
+    </div>
+
+    <div class="info-card">
+      <h3>◈ Best Use Case</h3>
+      <p>Indoor AR prototyping; local anchor quality benchmarking; comparison
+         baseline for Experiment D (geospatial) and Experiment E (VPS).</p>
+    </div>
+
+  </div>
+
+  <!-- ── Architecture ── -->
+  <div class="section-title">◈ Architecture — native-unity-lab</div>
+<pre>Loader Scene
+  └── ExperimentLoader.cs
+        ├── GET /experiments/experiment-c  (fetch config)
+        └── Load ExperimentC_LocalTracking scene additively
+
+ExperimentC_LocalTracking scene
+  ├── AR Session Origin
+  │     └── AR Camera (ARCameraManager, ARCameraBackground)
+  ├── AR Plane Manager         → detects horizontal / vertical planes
+  ├── AR Raycast Manager       → tap-to-place hit testing
+  ├── AnchorController.cs      → manages ARAnchor lifecycle
+  ├── LocalTrackingManager.cs  → monitors ARSession.state, emits TrackingSnapshot
+  └── DebugHUD.cs              → tracking state, anchor count, session time</pre>
+
+  <!-- ── State machine ── -->
+  <div class="section-title">◈ Tracking State Machine</div>
+  <div class="state-flow">
+    <div class="state-row"><span class="state-name">INITIALIZING</span><span class="state-desc">Waiting for ARSession.state == Tracking</span></div>
+    <div class="state-row"><span class="state-arrow">↓</span></div>
+    <div class="state-row"><span class="state-name">TRACKING</span><span class="state-desc">Plane detected — tap to place anchor</span></div>
+    <div class="state-row"><span class="state-arrow">↓</span></div>
+    <div class="state-row"><span class="state-name">ANCHOR_PLACED</span><span class="state-desc">One or more anchors placed in local space</span></div>
+    <div class="state-row"><span class="state-arrow">↓</span></div>
+    <div class="state-row"><span class="state-name">DRIFT_WARNING</span><span class="state-desc">After 5 min — banner shown to user</span></div>
+    <div class="state-row"><span class="state-arrow">↓</span></div>
+    <div class="state-row"><span class="state-name">ENDED</span><span class="state-desc">Session ends → POST /telemetry with session summary</span></div>
+  </div>
+
+  <!-- ── GPS overlay ── -->
+  <div class="note-box">
+    <strong>GPS Overlay (optional):</strong> When <code>configOptions.enableGpsOverlay</code> is <code>true</code>,
+    <code>LocalTrackingManager</code> also starts <code>LocationService</code> and projects GPS coordinates onto
+    the local AR coordinate frame using the initial fix as the local origin.
+    <br><br>
+    Accuracy note shown to user: <em>"GPS overlay ±5–15 m. Local AR anchors are cm-scale.
+    The two do not match precisely."</em>
+  </div>
+
+  <!-- ── Build steps ── -->
+  <div class="section-title">◈ How to Build &amp; Run</div>
+  <ol class="build-steps">
+    <li>Open <strong>native-unity-lab/</strong> as a Unity 2022 LTS (or later) project.</li>
+    <li>Install <strong>AR Foundation 5.x</strong>, <strong>ARCore XR Plugin</strong>, and <strong>ARKit XR Plugin</strong> via Package Manager.</li>
+    <li>Open the <strong>Loader</strong> scene (<code>Assets/Scenes/Loader.unity</code>) as the build entry point.</li>
+    <li>Configure Android Build Support (or iOS Build Support) module in Unity Hub.</li>
+    <li>Build &amp; Run to an ARCore-supported Android device or iOS ARKit device.</li>
+    <li>The app fetches the experiment config from <code>GET /experiments/experiment-c</code> on launch; falls back to <code>StreamingAssets/default-config.json</code> if offline.</li>
+  </ol>
+
+  <!-- ── Backend ── -->
+  <div class="section-title">◈ Backend Integration</div>
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>◈ Endpoints Used</h3>
+      <div class="metric-row"><span class="metric-label">Load config</span><span class="metric-val">GET /experiments/experiment-c</span></div>
+      <div class="metric-row"><span class="metric-label">Start session</span><span class="metric-val">POST /sessions</span></div>
+      <div class="metric-row"><span class="metric-label">Telemetry</span><span class="metric-val">POST /telemetry</span></div>
+    </div>
+  </div>
+
+</div><!-- /#page -->
+
+</body>
+</html>
