@@ -176,6 +176,58 @@
     .ss-cell:last-child { border-right: none; }
     .ss-lbl { display: block; font-size: 0.52rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
     .ss-val { display: block; font-size: 0.82rem; font-weight: 700; color: rgba(255,255,255,0.75); }
+
+    /* ── VR World overlay ─────────────────────────────────────────────────────── */
+    #vr-overlay {
+      position: fixed; inset: 0; display: none; z-index: 200;
+      background: #000;
+    }
+    #vr-canvas {
+      position: absolute; inset: 0; display: block; width: 100%; height: 100%;
+      touch-action: none;
+    }
+    #vr-hud {
+      position: absolute; top: 12px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; gap: 8px;
+    }
+    #vr-hud-info {
+      background: rgba(5,8,15,0.78); border: 1px solid rgba(0,204,255,0.22);
+      border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; line-height: 1.75;
+      color: rgba(0,204,255,0.9); backdrop-filter: blur(4px); min-width: 130px;
+    }
+    #vr-hud-info span { color: var(--green); font-weight: 700; }
+    #vr-back-btn {
+      pointer-events: all; color: var(--green); border: 1px solid rgba(0,255,136,0.5);
+      background: rgba(5,8,15,0.82); backdrop-filter: blur(4px);
+      padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; cursor: pointer;
+      font-family: inherit; letter-spacing: 0.04em; transition: background 0.2s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    #vr-back-btn:hover { background: rgba(0,255,136,0.2); }
+    #vr-crosshair {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 20px; height: 20px; pointer-events: none;
+    }
+    #vr-crosshair::before, #vr-crosshair::after {
+      content: ''; position: absolute; background: rgba(0,255,136,0.55);
+    }
+    #vr-crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #vr-crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+    #vr-touch-hint {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(5,8,15,0.72); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px; padding: 6px 18px; font-size: 0.68rem;
+      color: rgba(255,255,255,0.4); pointer-events: none; transition: opacity 1.2s;
+      white-space: nowrap;
+    }
+    #vr-gyro-btn {
+      position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%);
+      color: var(--cyan); border: 1px solid var(--cyan);
+      background: rgba(5,8,15,0.88); backdrop-filter: blur(4px);
+      padding: 9px 22px; border-radius: 20px; font-size: 0.8rem;
+      cursor: pointer; font-family: inherit; letter-spacing: 0.04em; display: none;
+    }
   </style>
 </head>
 <body>
@@ -252,6 +304,7 @@
         <button class="btn btn-primary btn-full" id="explore-start-btn">Explore Map →</button>
         <button class="btn btn-ghost" id="gen-back-btn">↩ Re-collect</button>
       </div>
+      <button class="btn btn-cyan btn-full" id="enter-vr-btn">🥽 Enter Virtual World</button>
     </div>
 
     <div id="explore-controls">
@@ -259,11 +312,31 @@
         <button class="btn btn-ghost" id="exp-recenter-btn">Re-centre</button>
         <button class="btn btn-danger" id="exp-reset-btn">Start Over</button>
       </div>
+      <button class="btn btn-cyan btn-full" id="exp-enter-vr-btn">🥽 Enter Virtual World</button>
     </div>
 
   </div>
 
 </div>
+
+<!-- VR World overlay (Three.js first-person) -->
+<div id="vr-overlay">
+  <canvas id="vr-canvas"></canvas>
+  <div id="vr-hud">
+    <div id="vr-hud-info">
+      NODES: <span id="vr-node-count">0</span><br>
+      DIST: <span id="vr-dist">0 m</span><br>
+      <span style="font-size:0.6rem;color:rgba(255,255,255,0.3)">Drag to look · WASD/↑↓←→ move</span>
+    </div>
+    <button id="vr-back-btn">← Map</button>
+  </div>
+  <div id="vr-crosshair"></div>
+  <div id="vr-touch-hint">Drag screen to look around</div>
+  <button id="vr-gyro-btn">Enable Gyroscope</button>
+</div>
+
+<!-- Three.js from CDN (required for virtual world) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
 <script>
 (function () {
@@ -294,6 +367,7 @@
     lastTouch: null
   };
   var ROOM = null;     // generated room data
+  var THREE_WORLD = null; // lazily-built Three.js VR world
 
   // ── DOM ───────────────────────────────────────────────────────────────────
   var canvas      = document.getElementById('main-canvas');
@@ -907,6 +981,8 @@
   function fullReset() {
     if (GPS.watchId !== null) { navigator.geolocation.clearWatch(GPS.watchId); GPS.watchId = null; }
     WPS = []; ROOM = null; GPS.current = null; _genAnim = 0;
+    if (THREE_WORLD) { THREE_WORLD.dispose(); THREE_WORLD = null; }
+    exitVRWorld();
     setPhase('idle');
     introOverlay.style.display = '';
     valOverlay.classList.remove('active');
@@ -981,6 +1057,7 @@
 
   document.getElementById('gen-back-btn').addEventListener('click', function() {
     ROOM = null; _genAnim = 0;
+    if (THREE_WORLD) { THREE_WORLD.dispose(); THREE_WORLD = null; }
     setPhase('collecting');
     collectControls.style.display = 'flex';
     generateControls.style.display = 'none';
@@ -1030,6 +1107,398 @@
     requestAnimationFrame(animLoop);
   }
   animLoop();
+
+  // ── VR World ──────────────────────────────────────────────────────────────
+
+  function enterVRWorld() {
+    if (!ROOM) { showToast('Generate the world first', true); return; }
+    var vrOverlay = document.getElementById('vr-overlay');
+    if (!THREE_WORLD) {
+      var pts = WPS.map(function(wp) {
+        var local = gpsToLocal(wp.lat, wp.lng);
+        return { x: local.x, z: local.y };
+      });
+      THREE_WORLD = buildVirtualWorld(pts, ROOM.isLoop);
+    }
+    vrOverlay.style.display = 'block';
+    THREE_WORLD.start();
+    showVRGyroButton();
+  }
+
+  function exitVRWorld() {
+    document.getElementById('vr-overlay').style.display = 'none';
+    if (THREE_WORLD) THREE_WORLD.stop();
+  }
+
+  function showVRGyroButton() {
+    var btn = document.getElementById('vr-gyro-btn');
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      btn.style.display = 'block';
+    }
+  }
+
+  document.getElementById('enter-vr-btn').addEventListener('click', enterVRWorld);
+  document.getElementById('exp-enter-vr-btn').addEventListener('click', enterVRWorld);
+
+  document.getElementById('vr-back-btn').addEventListener('click', exitVRWorld);
+
+  document.getElementById('vr-gyro-btn').addEventListener('click', function() {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(function(res) {
+        if (res === 'granted') {
+          document.getElementById('vr-gyro-btn').style.display = 'none';
+          if (THREE_WORLD) THREE_WORLD.enableGyro();
+        }
+      }).catch(function(e) { console.warn('Gyro permission error', e); });
+    }
+  });
+
+  // ── Three.js virtual world builder ────────────────────────────────────────
+  function buildVirtualWorld(pts, isLoop) {
+    var vrCanvas  = document.getElementById('vr-canvas');
+    var renderer  = new THREE.WebGLRenderer({ canvas: vrCanvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05080f);
+    scene.fog = new THREE.FogExp2(0x05080f, 0.02);
+
+    var camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 500);
+    camera.position.y = 1.6;
+
+    // ── Lighting ──
+    scene.add(new THREE.AmbientLight(0x102030, 1.8));
+    var dirLight = new THREE.DirectionalLight(0x00ccff, 0.7);
+    dirLight.position.set(10, 20, 10);
+    scene.add(dirLight);
+
+    var CORR_W        = 4;
+    var WALL_H        = 2.8;
+    var FLOOR_H       = 0.12;
+    var GYRO_YAW_SENS = 0.8;  // How fast gamma (side tilt) steers yaw in gyro mode
+    var STAR_SPREAD   = 400;  // XZ spread of star field (metres)
+    var STAR_HEIGHT   = 60;   // Max height of stars above ground (metres)
+    var STAR_MIN_H    = 5;    // Min height of stars above ground (metres)
+
+    // ── Build corridor segments ──
+    var segments = [];
+    for (var i = 0; i < pts.length - 1; i++) {
+      segments.push({ a: pts[i], b: pts[i + 1] });
+    }
+    if (isLoop && pts.length >= 3) {
+      segments.push({ a: pts[pts.length - 1], b: pts[0] });
+    }
+
+    var floorMat = new THREE.MeshStandardMaterial({
+      color: 0x0d1a2a, roughness: 0.9, metalness: 0.1,
+      emissive: new THREE.Color(0x001a2a), emissiveIntensity: 0.4
+    });
+    var wallMat = new THREE.MeshStandardMaterial({
+      color: 0x003344, emissive: new THREE.Color(0x001a2a),
+      emissiveIntensity: 0.5, transparent: true, opacity: 0.6
+    });
+    var gridMat = new THREE.MeshBasicMaterial({
+      color: 0x003355, wireframe: true, transparent: true, opacity: 0.18
+    });
+
+    segments.forEach(function(seg) {
+      var a = seg.a, b = seg.b;
+      var dx = b.x - a.x, dz = b.z - a.z;
+      var len = Math.sqrt(dx * dx + dz * dz);
+      if (len < 0.01) return;
+      var mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+      var angle = Math.atan2(dx, dz);
+
+      // Floor
+      var floorGeo = new THREE.BoxGeometry(CORR_W, FLOOR_H, len + 0.1);
+      var floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.position.set(mx, -FLOOR_H / 2, mz);
+      floor.rotation.y = angle;
+      scene.add(floor);
+
+      // Grid overlay on floor
+      var gridGeo = new THREE.PlaneGeometry(CORR_W, len + 0.1, 4, Math.max(1, Math.ceil(len)));
+      var grid = new THREE.Mesh(gridGeo, gridMat);
+      grid.position.set(mx, 0.01, mz);
+      grid.rotation.set(-Math.PI / 2, 0, angle);
+      scene.add(grid);
+
+      // Side walls — offset perpendicular to the corridor direction.
+      // The perpendicular unit vector to (dx, dz) is (-dz/len, dx/len).
+      [-1, 1].forEach(function(side) {
+        var wallGeo = new THREE.BoxGeometry(0.1, WALL_H, len + 0.1);
+        var wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.rotation.y = angle;
+        var px = -dz / len * (CORR_W / 2) * side;
+        var pz =  dx / len * (CORR_W / 2) * side;
+        wall.position.set(mx + px, WALL_H / 2 - FLOOR_H, mz + pz);
+        scene.add(wall);
+      });
+
+      // Ceiling light strip
+      var ceilMat = new THREE.MeshBasicMaterial({ color: 0x004466, transparent: true, opacity: 0.35 });
+      var ceilGeo = new THREE.BoxGeometry(0.25, 0.06, len * 0.85);
+      var ceil = new THREE.Mesh(ceilGeo, ceilMat);
+      ceil.position.set(mx, 2.5, mz);
+      ceil.rotation.y = angle;
+      scene.add(ceil);
+
+      // Point light along segment
+      if (len > 2) {
+        var pl = new THREE.PointLight(0x004466, 1.5, 14);
+        pl.position.set(mx, 2.2, mz);
+        scene.add(pl);
+      }
+    });
+
+    // ── Waypoint nodes ──
+    var bobSpheres = [];
+    pts.forEach(function(p, i) {
+      var isStart = i === 0;
+      var isEnd   = i === pts.length - 1;
+      var colHex  = isStart ? 0x00ff88 : (isEnd ? 0xff4466 : 0x00ccff);
+      var col     = new THREE.Color(colHex);
+
+      // Disc floor at node
+      var discGeo = new THREE.CylinderGeometry(CORR_W * 0.85, CORR_W * 0.85, FLOOR_H, 18);
+      var discMat = new THREE.MeshStandardMaterial({
+        color: col, emissive: col, emissiveIntensity: 0.12, roughness: 0.8
+      });
+      var disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.set(p.x, -FLOOR_H / 2, p.z);
+      scene.add(disc);
+
+      // Glowing ring at mid-height
+      var ringGeo = new THREE.TorusGeometry(CORR_W * 0.85, 0.05, 8, 28);
+      var ringMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5 });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(p.x, WALL_H * 0.5, p.z);
+      scene.add(ring);
+
+      // Pillar stem
+      var stemGeo = new THREE.CylinderGeometry(0.07, 0.12, 3, 8);
+      var stemMat = new THREE.MeshStandardMaterial({
+        color: col, emissive: col, emissiveIntensity: 0.7, roughness: 0.3, metalness: 0.4
+      });
+      var stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.set(p.x, 1.5, p.z);
+      scene.add(stem);
+
+      // Sphere on top (animated bob)
+      var sphereGeo = new THREE.SphereGeometry(0.2, 12, 8);
+      var sphereMat = new THREE.MeshStandardMaterial({
+        color: col, emissive: col, emissiveIntensity: 1.0, roughness: 0.1, metalness: 0.5
+      });
+      var sphere = new THREE.Mesh(sphereGeo, sphereMat);
+      sphere.position.set(p.x, 3.2, p.z);
+      scene.add(sphere);
+      bobSpheres.push(sphere);
+
+      // Glow light at sphere
+      var glow = new THREE.PointLight(col, 1.2, 8);
+      glow.position.set(p.x, 3.2, p.z);
+      scene.add(glow);
+    });
+
+    // ── Stars ──
+    var starGeo = new THREE.BufferGeometry();
+    var starPos = [];
+    for (var s = 0; s < 500; s++) {
+      starPos.push(
+        (Math.random() - 0.5) * STAR_SPREAD,
+        Math.random() * STAR_HEIGHT + STAR_MIN_H,
+        (Math.random() - 0.5) * STAR_SPREAD
+      );
+    }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 0.28, sizeAttenuation: true })));
+
+    // ── Camera start position facing first segment ──
+    var start = pts[0];
+    var next  = pts[Math.min(1, pts.length - 1)];
+    var dx0 = next.x - start.x, dz0 = next.z - start.z;
+    camera.position.set(start.x, 1.6, start.z);
+    var yaw   = Math.atan2(dx0 || 0.001, dz0 || 0.001);
+    var pitch = 0;
+
+    // ── Input state ──
+    var keys       = {};
+    var isDragging = false, lastMX = 0, lastMY = 0;
+    var touchId    = null,  lastTX = 0, lastTY = 0;
+
+    function onMouseDown(e) { isDragging = true; lastMX = e.clientX; lastMY = e.clientY; if (vrCanvas.requestPointerLock) vrCanvas.requestPointerLock(); }
+    function onMouseUp()    { isDragging = false; }
+    function onMouseMove(e) {
+      var locked = document.pointerLockElement === vrCanvas;
+      if (locked) {
+        yaw   -= e.movementX * 0.003;
+        pitch -= e.movementY * 0.003;
+      } else if (isDragging) {
+        yaw   -= (e.clientX - lastMX) * 0.004;
+        pitch -= (e.clientY - lastMY) * 0.004;
+        lastMX = e.clientX; lastMY = e.clientY;
+      }
+      pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+    }
+    function onTouchStart(e) { var t = e.touches[0]; touchId = t.identifier; lastTX = t.clientX; lastTY = t.clientY; }
+    function onTouchMove(e) {
+      for (var ti = 0; ti < e.touches.length; ti++) {
+        var t = e.touches[ti];
+        if (t.identifier === touchId) {
+          yaw   -= (t.clientX - lastTX) * 0.004;
+          pitch -= (t.clientY - lastTY) * 0.004;
+          lastTX = t.clientX; lastTY = t.clientY;
+          pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+          break;
+        }
+      }
+    }
+    function onTouchEnd() { touchId = null; }
+    function onKeyDown(e) { keys[e.code] = true; }
+    function onKeyUp(e)   { keys[e.code] = false; }
+
+    vrCanvas.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup',   onMouseUp);
+    document.addEventListener('mousemove', onMouseMove);
+    vrCanvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    vrCanvas.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    vrCanvas.addEventListener('touchend',   onTouchEnd,   { passive: true });
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup',   onKeyUp);
+
+    // ── Gyroscope / device orientation ──
+    var gyroEnabled = false;
+    var gyroBeta = null, gyroGamma = null;
+
+    function onDeviceOrientation(e) {
+      if (!gyroEnabled) return;
+      if (e.beta  != null) gyroBeta  = e.beta;
+      if (e.gamma != null) gyroGamma = e.gamma;
+    }
+    window.addEventListener('deviceorientation', onDeviceOrientation, true);
+
+    function enableGyro() {
+      gyroEnabled = true;
+      var hint = document.getElementById('vr-touch-hint');
+      if (hint) hint.style.opacity = '0';
+      document.getElementById('vr-hud-info').lastElementChild.textContent = 'Tilt phone to look · auto-walk';
+    }
+
+    // Auto-enable on Android (no permission API)
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission !== 'function') {
+      gyroEnabled = true;
+    }
+
+    // ── HUD elements ──
+    var hudDist  = document.getElementById('vr-dist');
+    var hudNodes = document.getElementById('vr-node-count');
+    if (hudNodes) hudNodes.textContent = pts.length;
+
+    // ── Animation loop ──
+    var clock   = new THREE.Clock();
+    var rafId   = null;
+    var running = false;
+    var SPD     = 2.5; // m/s walk speed
+
+    function animate() {
+      if (!running) return;
+      rafId = requestAnimationFrame(animate);
+      var dt = clock.getDelta();
+
+      if (!gyroEnabled || gyroBeta == null) {
+        // Keyboard movement
+        var fwd   = new THREE.Vector3(Math.sin(yaw), 0,  Math.cos(yaw));
+        var right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+        if (keys['KeyW'] || keys['ArrowUp'])    camera.position.addScaledVector(fwd,   SPD * dt);
+        if (keys['KeyS'] || keys['ArrowDown'])  camera.position.addScaledVector(fwd,  -SPD * dt);
+        if (keys['KeyA'] || keys['ArrowLeft'])  camera.position.addScaledVector(right, -SPD * dt);
+        if (keys['KeyD'] || keys['ArrowRight']) camera.position.addScaledVector(right,  SPD * dt);
+        camera.position.y = 1.6;
+        // Apply yaw/pitch from mouse or touch
+        var q = new THREE.Quaternion();
+        q.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+        camera.quaternion.copy(q);
+      } else {
+        // Gyro mode: DeviceOrientation beta is the forward/back tilt of the phone
+        // (0° = flat, 90° = upright). Subtracting PI/2 converts the "held upright"
+        // position (beta≈90°) to a 0° camera pitch.  Gamma (side tilt) steers yaw.
+        var betaRad  = gyroBeta  * Math.PI / 180;
+        var gammaRad = gyroGamma * Math.PI / 180;
+        pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, betaRad - Math.PI / 2));
+        yaw  -= gammaRad * dt * GYRO_YAW_SENS;
+        var q2 = new THREE.Quaternion();
+        q2.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+        camera.quaternion.copy(q2);
+        // Auto-walk forward at half speed
+        var fwdG = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+        camera.position.addScaledVector(fwdG, SPD * 0.5 * dt);
+        camera.position.y = 1.6;
+      }
+
+      // Pillar sphere bob
+      var elapsed = clock.getElapsedTime();
+      bobSpheres.forEach(function(obj, idx) {
+        obj.position.y = 3.2 + Math.sin(elapsed * 1.5 + idx * 0.8) * 0.15;
+      });
+
+      // HUD distance from start
+      if (hudDist) {
+        var cx = camera.position.x - start.x;
+        var cz = camera.position.z - start.z;
+        hudDist.textContent = Math.sqrt(cx * cx + cz * cz).toFixed(1) + ' m';
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onResize);
+
+    function dispose() {
+      running = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      if (document.exitPointerLock) document.exitPointerLock();
+      vrCanvas.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mouseup',   onMouseUp);
+      document.removeEventListener('mousemove', onMouseMove);
+      vrCanvas.removeEventListener('touchstart', onTouchStart);
+      vrCanvas.removeEventListener('touchmove',  onTouchMove);
+      vrCanvas.removeEventListener('touchend',   onTouchEnd);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup',   onKeyUp);
+      window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+      window.removeEventListener('resize', onResize);
+      renderer.dispose();
+    }
+
+    return {
+      start: function() {
+        running = true;
+        clock.start();
+        animate();
+        setTimeout(function() {
+          var hint = document.getElementById('vr-touch-hint');
+          if (hint) hint.style.opacity = '0';
+        }, 4000);
+      },
+      stop: function() {
+        running = false;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        if (document.exitPointerLock) document.exitPointerLock();
+      },
+      enableGyro: enableGyro,
+      dispose:    dispose
+    };
+  }
 
   // ── Init ──────────────────────────────────────────────────────────────────
   window.addEventListener('resize', resizeCanvas);
