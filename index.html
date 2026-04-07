@@ -317,67 +317,71 @@
 
   </div>
 
-  <!-- ── Native Scaffolds ──────────────────────────────────────────────────── -->
-  <div class="section-label">Native Experiments — Requires Native Build</div>
+  <!-- ── GPS Experiments ───────────────────────────────────────────────────── -->
+  <div class="section-label">GPS Experiments — Mobile Browser · No Install</div>
   <div class="cards">
 
-    <a class="card" href="native-unity-lab/experiment-c/index.html">
-      <div class="card-icon">📱</div>
-      <span class="runtime-badge badge-native">Native · Android/iOS</span>
-      <h2>Unity AR Foundation Local/Hybrid</h2>
+    <a class="card" href="web-lab/experiments/experiment-c/index.html">
+      <div class="card-icon">📡</div>
+      <span class="runtime-badge badge-gps">GPS · Live · Browser</span>
+      <h2>GPS Journey Live Dashboard</h2>
       <p class="card-desc">
-        ARCore (Android) or ARKit (iOS) local world tracking with optional
-        GPS overlay. Centimetre-scale local anchors.
+        Real-time journey tracker with live speed, distance, max speed,
+        heading compass and a colour-coded path canvas. Speed is painted
+        green → amber → red as you move faster.
       </p>
       <div class="card-meta">
-        <strong>Accuracy:</strong> cm-scale local; GPS overlay ±5–15 m<br>
-        <strong>Use case:</strong> Indoor AR baseline; native tracking comparison<br>
-        <strong>Requires:</strong> Android ARCore or iOS ARKit · Native build
+        <strong>Accuracy:</strong> ~5–15 m GPS · speed calculated from fixes<br>
+        <strong>Use case:</strong> Live walk/run stats; path visualisation<br>
+        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
       </div>
     </a>
 
-    <a class="card" href="native-unity-lab/experiment-d/index.html">
-      <div class="card-icon">🌐</div>
-      <span class="runtime-badge badge-native">Native · Android · ARCore</span>
-      <h2>ARCore Geospatial Outdoor</h2>
+    <a class="card" href="web-lab/experiments/experiment-d/index.html">
+      <div class="card-icon">🏚️</div>
+      <span class="runtime-badge badge-gps">GPS · World Gen · Browser</span>
+      <h2>Waypoint Room Builder</h2>
       <p class="card-desc">
-        ARCore Geospatial API for WGS-84 anchors. 10–30 cm accuracy where
-        Google streetscape coverage exists.
+        Walk a loop and drop up to 12 GPS waypoints. After validation the
+        app builds a dungeon-style corridor map from your real-world path —
+        only where you've already walked. The interior stays fog-of-war.
       </p>
       <div class="card-meta">
-        <strong>Accuracy:</strong> ±10–30 cm (streetscape coverage areas)<br>
-        <strong>Use case:</strong> Persistent outdoor geo-anchored content<br>
-        <strong>Requires:</strong> Android ARCore · Google API key · Native build
+        <strong>Accuracy:</strong> ~5–15 m GPS · min 5 m waypoint spacing<br>
+        <strong>Use case:</strong> GPS world generation; corridor mapping<br>
+        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
       </div>
     </a>
 
-    <a class="card" href="vps-lab/experiment-e/index.html">
-      <div class="card-icon">🏛️</div>
-      <span class="runtime-badge badge-vps">Native · VPS</span>
-      <h2>Niantic Spatial VPS</h2>
+    <a class="card" href="web-lab/experiments/experiment-e/index.html">
+      <div class="card-icon">🎬</div>
+      <span class="runtime-badge badge-gps">GPS · Replay · Cinema</span>
+      <h2>GPS Trail Cinema</h2>
       <p class="card-desc">
-        Sub-metre localisation at pre-scanned wayspot locations via
-        Niantic Lightship. Persistent AR anchors across visits.
+        Record your walk then watch a cinematic replay of your route.
+        Speed is colour-coded; scrub through the timeline to jump to
+        any moment. Live stats: distance, max speed, avg speed, duration.
       </p>
       <div class="card-meta">
-        <strong>Accuracy:</strong> &lt; 1 m at scanned wayspots<br>
-        <strong>Use case:</strong> Persistent shareable AR at real-world landmarks<br>
-        <strong>Requires:</strong> Android/iOS · Lightship SDK · Pre-scanned location
+        <strong>Accuracy:</strong> ~5–15 m GPS<br>
+        <strong>Use case:</strong> Route review; speed analysis; sharing<br>
+        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
       </div>
     </a>
 
-    <a class="card" href="native-unity-lab/experiment-f/index.html">
-      <div class="card-icon">📐</div>
-      <span class="runtime-badge badge-gis">Native · GIS</span>
-      <h2>GIS / Engineering Coordinates</h2>
+    <a class="card" href="web-lab/experiments/experiment-f/index.html">
+      <div class="card-icon">🗺️</div>
+      <span class="runtime-badge badge-gps">GPS · Territory · Game</span>
+      <h2>GPS Territory Grid</h2>
       <p class="card-desc">
-        AR anchors placed using survey-grade GIS / local grid coordinates.
-        Designed for AEC/construction site workflows.
+        Fill in a GPS grid as you explore — every cell you walk lights up.
+        Speed-coded colours (green → red), visit-count overlays,
+        achievement unlocks, and a coverage donut tracker.
       </p>
       <div class="card-meta">
-        <strong>Accuracy:</strong> mm–cm with RTK GPS control points<br>
-        <strong>Use case:</strong> AEC AR overlay on surveyed sites; utility mapping<br>
-        <strong>Requires:</strong> RTK GPS · Survey control data · Native build
+        <strong>Accuracy:</strong> ~5–15 m GPS · configurable cell size (5–50 m)<br>
+        <strong>Use case:</strong> Gamified exploration; territory coverage<br>
+        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
       </div>
     </a>
 
@@ -386,7 +390,10 @@
   <!-- ── Legacy Experiments ────────────────────────────────────────────────── -->
   <div class="section-label">Legacy Experiments</div>
   <div class="legacy-note">
-    Pre-refactor experiments — kept for reference. These files have not been modified.
+    Pre-refactor experiments — kept for reference. <strong style="color:rgba(255,100,100,0.8)">None of these work reliably:</strong>
+    waypoints follow the user instead of staying fixed, heading drift causes severe misalignment,
+    and the A-Frame GPS AR always renders markers on or behind the camera.
+    The Three.js viewers are functional as offline visualisers but have no correct GPS anchoring.
   </div>
   <div class="cards">
 

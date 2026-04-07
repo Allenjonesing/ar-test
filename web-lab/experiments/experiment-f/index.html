@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Experiment F — GPS Territory Grid | AR Lab</title>
+  <link rel="icon" href="../../../favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:    #040710;
+      --green: #00ff88;
+      --cyan:  #00ccff;
+      --amber: #ffaa00;
+      --red:   #ff4455;
+      --text:  rgba(255,255,255,0.88);
+      --dim:   rgba(255,255,255,0.36);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+    /* Top bar */
+    #top-bar {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      background: rgba(0,0,0,0.82); border-bottom: 1px solid rgba(0,255,136,0.18);
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    #back-link { color: var(--green); text-decoration: none; font-size: 0.78rem; white-space: nowrap; }
+    #back-link:hover { text-decoration: underline; }
+    #exp-title { font-size: 0.86rem; font-weight: 700; flex: 1; text-align: center; }
+    .badge {
+      font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 10px; font-weight: 700;
+      background: rgba(255,170,0,0.12); color: var(--amber); border: 1px solid rgba(255,170,0,0.25);
+    }
+
+    /* Canvas */
+    #canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    #main-canvas { display: block; width: 100%; height: 100%; }
+
+    /* Score overlay */
+    #score-hud {
+      position: absolute; top: 8px; left: 8px;
+      display: flex; flex-direction: column; gap: 5px;
+      pointer-events: none;
+    }
+    .score-chip {
+      background: rgba(0,0,0,0.78); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 5px 10px; font-size: 0.7rem;
+    }
+    .score-chip strong { font-size: 0.9rem; }
+    #coverage-bar-wrap {
+      position: absolute; top: 8px; right: 8px;
+      width: 60px; text-align: center; pointer-events: none;
+    }
+    #coverage-canvas { display: block; width: 60px; height: 60px; }
+    #coverage-label { font-size: 0.62rem; color: var(--dim); margin-top: 3px; }
+
+    /* Achievement toast */
+    #achieve-toast {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%) scale(0.7);
+      background: rgba(0,0,0,0.92); border: 2px solid var(--amber);
+      border-radius: 18px; padding: 20px 28px; text-align: center;
+      opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease;
+      pointer-events: none; z-index: 100;
+    }
+    #achieve-toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    #achieve-toast .ach-icon { font-size: 2rem; }
+    #achieve-toast .ach-title { font-size: 1rem; font-weight: 800; color: var(--amber); margin-top: 6px; }
+    #achieve-toast .ach-desc  { font-size: 0.78rem; color: var(--dim); margin-top: 4px; }
+
+    /* Stats bar */
+    #stats-bar {
+      flex-shrink: 0; display: grid; grid-template-columns: repeat(3, 1fr);
+      background: rgba(0,0,0,0.88); border-top: 1px solid rgba(0,255,136,0.12);
+    }
+    .sb-cell { padding: 9px 6px 7px; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
+    .sb-cell:last-child { border-right: none; }
+    .sb-lbl { display: block; font-size: 0.52rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+    .sb-val { display: block; font-size: 1.1rem; font-weight: 800; color: var(--green); }
+    .sb-unit { display: block; font-size: 0.55rem; color: var(--dim); }
+
+    /* Controls */
+    #controls {
+      flex-shrink: 0; display: flex; gap: 8px; padding: 10px 12px;
+      background: rgba(0,0,0,0.9); border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .btn {
+      flex: 1; padding: 12px 6px; border: none; border-radius: 12px;
+      font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn-primary { background: var(--green); color: #000; }
+    .btn-ghost   { background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid rgba(255,255,255,0.12); }
+    .btn:disabled { opacity: 0.3; pointer-events: none; }
+
+    /* Intro overlay */
+    #intro-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(4,7,16,0.96); padding: 28px; text-align: center;
+    }
+    .io-icon { font-size: 3rem; margin-bottom: 14px; }
+    #intro-overlay h2 { font-size: 1.25rem; font-weight: 800; margin-bottom: 10px; }
+    #intro-overlay p { font-size: 0.84rem; color: var(--dim); line-height: 1.65; max-width: 320px; margin-bottom: 6px; }
+    .io-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      width: 100%; max-width: 300px; margin: 16px 0 22px; text-align: left;
+    }
+    .io-cell {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 10px;
+    }
+    .io-cell .ico { font-size: 1.3rem; margin-bottom: 4px; }
+    .io-cell .lbl { font-size: 0.72rem; font-weight: 700; }
+    .io-cell .sub { font-size: 0.65rem; color: var(--dim); }
+    .io-start-btn {
+      padding: 14px 40px; border-radius: 14px; border: none;
+      background: var(--green); color: #000; font-size: 0.95rem; font-weight: 800;
+      cursor: pointer; letter-spacing: 0.04em;
+    }
+
+    /* Grid size selector */
+    #grid-size-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 16px;
+      font-size: 0.78rem; color: var(--dim);
+    }
+    #grid-size-row label { flex-shrink: 0; }
+    #cell-size-select {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; color: var(--text); padding: 5px 10px; font-size: 0.78rem;
+    }
+
+    /* Toast */
+    #toast {
+      position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: rgba(0,0,0,0.88); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 10px; padding: 8px 16px; font-size: 0.78rem; color: var(--green);
+      transition: transform 0.3s ease; white-space: nowrap; pointer-events: none; z-index: 200;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="top-bar">
+    <a id="back-link" href="../../../index.html">← Lab</a>
+    <span id="exp-title">GPS Territory Grid</span>
+    <span class="badge">GPS · Territory · Game</span>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+
+    <!-- Score HUD -->
+    <div id="score-hud">
+      <div class="score-chip">🗺️ Cells <strong id="cells-count">0</strong></div>
+      <div class="score-chip">📏 Area <strong id="area-val">0 m²</strong></div>
+    </div>
+
+    <!-- Coverage donut -->
+    <div id="coverage-bar-wrap">
+      <canvas id="coverage-canvas"></canvas>
+      <div id="coverage-label">Coverage</div>
+    </div>
+
+    <!-- Achievement toast -->
+    <div id="achieve-toast">
+      <div class="ach-icon" id="ach-icon">🏆</div>
+      <div class="ach-title" id="ach-title">Achievement!</div>
+      <div class="ach-desc" id="ach-desc">You unlocked something.</div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="intro-overlay">
+      <div class="io-icon">🗺️</div>
+      <h2>GPS Territory Grid</h2>
+      <p>Walk around and fill in the grid! Every cell you visit lights up. Try to cover as much territory as possible.</p>
+      <div class="io-grid">
+        <div class="io-cell"><div class="ico">🟩</div><div class="lbl">Fill cells</div><div class="sub">Each visited 10m² block lights up</div></div>
+        <div class="io-cell"><div class="ico">🏆</div><div class="lbl">Achievements</div><div class="sub">Unlock milestones as you explore</div></div>
+        <div class="io-cell"><div class="ico">📊</div><div class="lbl">Live stats</div><div class="sub">Distance, speed, cells, area</div></div>
+        <div class="io-cell"><div class="ico">⚡</div><div class="lbl">Speed streaks</div><div class="sub">Run fast to glow brighter!</div></div>
+      </div>
+      <div id="grid-size-row">
+        <label for="cell-size-select">Cell size:</label>
+        <select id="cell-size-select">
+          <option value="5">5 m (fine)</option>
+          <option value="10" selected>10 m (standard)</option>
+          <option value="20">20 m (large)</option>
+          <option value="50">50 m (region)</option>
+        </select>
+      </div>
+      <button class="io-start-btn" id="intro-start-btn">Start Exploring</button>
+    </div>
+  </div>
+
+  <div id="stats-bar">
+    <div class="sb-cell">
+      <span class="sb-lbl">Distance</span>
+      <span class="sb-val" id="sb-dist">0</span>
+      <span class="sb-unit" id="sb-dist-u">m</span>
+    </div>
+    <div class="sb-cell">
+      <span class="sb-lbl">Speed</span>
+      <span class="sb-val" id="sb-speed">0.0</span>
+      <span class="sb-unit">km/h</span>
+    </div>
+    <div class="sb-cell">
+      <span class="sb-lbl">Time</span>
+      <span class="sb-val" id="sb-time">0:00</span>
+      <span class="sb-unit">elapsed</span>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="btn btn-ghost" id="stop-btn" disabled>⏹ Stop</button>
+    <button class="btn btn-ghost" id="center-btn" disabled>⊕ Re-centre</button>
+    <button class="btn btn-ghost" id="reset-btn">↺ Reset</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Config ────────────────────────────────────────────────────────────────
+  var CELL_SIZE_M  = 10;   // metres per grid cell (set from dropdown)
+  var MAX_CELLS    = 5000; // safety cap on grid memory
+
+  // ── Achievements ─────────────────────────────────────────────────────────
+  var ACHIEVEMENTS = [
+    { id:'first',  cells:1,    icon:'🐾', title:'First Steps', desc:'You've visited your first cell!' },
+    { id:'ten',    cells:10,   icon:'🗺️', title:'Explorer', desc:'10 cells visited!' },
+    { id:'fifty',  cells:50,   icon:'🏃', title:'On the Move', desc:'50 cells covered!' },
+    { id:'hundred',cells:100,  icon:'🌟', title:'Century!', desc:'100 cells explored!' },
+    { id:'twofifty',cells:250, icon:'🚀', title:'Pathfinder', desc:'250 cells — you\'re going places!' },
+    { id:'fivehundred',cells:500,icon:'🏆',title:'Territory Master',desc:'500 cells explored. Impressive!' }
+  ];
+  var unlockedAch = {};
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  var GPS_WATCH_ID = null;
+  var RUNNING = false;
+  var START_TS = null;
+  var CELLS = {};        // key: "cx,cy" → {cx,cy,visits,lastSpeed}
+  var CELL_COUNT = 0;
+  var TOTAL_DIST = 0;
+  var LAST_POS = null;
+  var CUR_SPEED = 0;
+
+  var MAP = {
+    offset: { x:0, y:0 }, zoom: 10,
+    dragging: false, lastTouch: null, autoFit: true
+  };
+
+  // ── DOM ───────────────────────────────────────────────────────────────────
+  var canvas     = document.getElementById('main-canvas');
+  var ctx        = canvas.getContext('2d');
+  var covCanvas  = document.getElementById('coverage-canvas');
+  var covCtx     = covCanvas.getContext('2d');
+  var introOvl   = document.getElementById('intro-overlay');
+  var toastEl    = document.getElementById('toast');
+  var achToast   = document.getElementById('achieve-toast');
+  var stopBtn    = document.getElementById('stop-btn');
+  var centerBtn  = document.getElementById('center-btn');
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function haversine(lat1, lng1, lat2, lng2) {
+    var dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+
+  var _origin = null;
+  function gpsToCell(lat, lng) {
+    if (!_origin) _origin = { lat:lat, lng:lng };
+    var mx = (lng-_origin.lng)*Math.cos(_origin.lat*Math.PI/180)*111320;
+    var my = -(lat-_origin.lat)*111111;
+    return { cx: Math.floor(mx/CELL_SIZE_M), cy: Math.floor(my/CELL_SIZE_M) };
+  }
+
+  function cellToWorld(cx, cy) {
+    return { x: cx * CELL_SIZE_M, y: cy * CELL_SIZE_M };
+  }
+
+  function w2s(pt) {
+    return { x: pt.x*MAP.zoom+MAP.offset.x, y: pt.y*MAP.zoom+MAP.offset.y };
+  }
+
+  function formatTime(ms) {
+    var s=Math.floor(ms/1000), m=Math.floor(s/60); s%=60;
+    return m+':'+(s<10?'0':'')+s;
+  }
+
+  function cellColor(speed) {
+    if (speed < 2)  return 'rgba(0,100,60,0.85)';
+    if (speed < 5)  return 'rgba(0,200,100,0.85)';
+    if (speed < 12) return 'rgba(100,255,100,0.85)';
+    if (speed < 20) return 'rgba(255,220,0,0.85)';
+    return 'rgba(255,100,50,0.85)';
+  }
+
+  function cellGlow(speed) {
+    if (speed < 2)  return 'rgba(0,100,60,0)';
+    if (speed < 5)  return 'rgba(0,255,136,0.15)';
+    if (speed < 12) return 'rgba(100,255,100,0.25)';
+    if (speed < 20) return 'rgba(255,220,0,0.35)';
+    return 'rgba(255,100,50,0.5)';
+  }
+
+  // ── Resize ────────────────────────────────────────────────────────────────
+  function resizeCanvas() {
+    var wrap = document.getElementById('canvas-wrap');
+    canvas.width  = wrap.offsetWidth;
+    canvas.height = wrap.offsetHeight;
+    redraw();
+  }
+
+  // ── Auto-fit ──────────────────────────────────────────────────────────────
+  function autoFit() {
+    var keys = Object.keys(CELLS);
+    if (!keys.length) return;
+    var W=canvas.width, H=canvas.height;
+    var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    keys.forEach(function(k) {
+      var c=CELLS[k], p=cellToWorld(c.cx,c.cy);
+      minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x+CELL_SIZE_M);
+      minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y+CELL_SIZE_M);
+    });
+    var pad=50, rX=maxX-minX||30, rY=maxY-minY||30;
+    MAP.zoom = Math.max(1, Math.min(50, Math.min((W-pad*2)/rX,(H-pad*2)/rY)));
+    MAP.offset.x = W/2-(minX+rX/2)*MAP.zoom;
+    MAP.offset.y = H/2-(minY+rY/2)*MAP.zoom;
+  }
+
+  // ── Draw ──────────────────────────────────────────────────────────────────
+  function redraw() {
+    var W=canvas.width, H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#040710'; ctx.fillRect(0,0,W,H);
+
+    if (!RUNNING && !CELL_COUNT) {
+      ctx.fillStyle='rgba(0,255,136,0.15)'; ctx.font='0.7rem monospace'; ctx.textAlign='center';
+      ctx.fillText('Hit Start to begin filling the grid!', W/2, H/2); return;
+    }
+
+    if (MAP.autoFit && CELL_COUNT) autoFit();
+
+    // Draw grid lines
+    var pxSize = CELL_SIZE_M * MAP.zoom;
+    if (pxSize >= 6) {
+      ctx.strokeStyle='rgba(0,255,136,0.06)'; ctx.lineWidth=0.5;
+      var ox = MAP.offset.x % pxSize, oy = MAP.offset.y % pxSize;
+      for(var x=ox;x<W;x+=pxSize){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+      for(var y=oy;y<H;y+=pxSize){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    }
+
+    // Draw visited cells
+    Object.keys(CELLS).forEach(function(k) {
+      var c = CELLS[k];
+      var p = w2s(cellToWorld(c.cx, c.cy));
+      var sz = pxSize;
+      if (sz < 1.5) return;
+
+      ctx.save();
+      if (sz > 8) {
+        ctx.shadowBlur = Math.min(12, sz * 0.5);
+        ctx.shadowColor = cellGlow(c.lastSpeed||0);
+      }
+      ctx.fillStyle = cellColor(c.lastSpeed||0);
+      ctx.fillRect(p.x+0.5, p.y+0.5, sz-1, sz-1);
+
+      // Visit count dots inside large cells
+      if (sz > 20 && c.visits > 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.font = Math.min(10, sz*0.3) + 'px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(c.visits, p.x+sz/2, p.y+sz/2);
+      }
+      ctx.restore();
+    });
+
+    // Current position
+    if (LAST_POS) {
+      var cell = gpsToCell(LAST_POS.lat, LAST_POS.lng);
+      var cp = w2s(cellToWorld(cell.cx, cell.cy));
+      ctx.save();
+      ctx.shadowBlur = 20; ctx.shadowColor = '#00ccff';
+      ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 2;
+      ctx.strokeRect(cp.x+1, cp.y+1, pxSize-2, pxSize-2);
+      ctx.restore();
+    }
+
+    // Scale label
+    ctx.fillStyle='rgba(0,255,136,0.35)'; ctx.font='9px monospace'; ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+    ctx.fillText(CELL_SIZE_M+'m cells', W-8, H-8);
+
+    // Coverage donut
+    drawCoverage();
+  }
+
+  function drawCoverage() {
+    var S = 60;
+    covCanvas.width = S; covCanvas.height = S;
+    var pct = Math.min(1, CELL_COUNT / 500); // 500 cells = "full"
+    covCtx.clearRect(0,0,S,S);
+    // Background ring
+    covCtx.beginPath(); covCtx.arc(S/2,S/2,22,0,Math.PI*2);
+    covCtx.strokeStyle='rgba(255,255,255,0.08)'; covCtx.lineWidth=7; covCtx.stroke();
+    // Progress ring
+    if (pct > 0) {
+      covCtx.beginPath();
+      covCtx.arc(S/2,S/2,22,-Math.PI/2,-Math.PI/2+pct*Math.PI*2);
+      covCtx.strokeStyle='#00ff88'; covCtx.lineWidth=7; covCtx.stroke();
+    }
+    // Pct text
+    covCtx.fillStyle='rgba(255,255,255,0.7)'; covCtx.font='bold 10px sans-serif';
+    covCtx.textAlign='center'; covCtx.textBaseline='middle';
+    covCtx.fillText(Math.round(pct*100)+'%', S/2, S/2);
+  }
+
+  // ── GPS ───────────────────────────────────────────────────────────────────
+  function onGPS(pos) {
+    if (!RUNNING) return;
+    var lat=pos.coords.latitude, lng=pos.coords.longitude;
+    var ts=pos.timestamp;
+
+    var spd = 0;
+    if (pos.coords.speed !== null && pos.coords.speed >= 0) {
+      spd = pos.coords.speed * 3.6;
+    } else if (LAST_POS) {
+      var d=haversine(LAST_POS.lat,LAST_POS.lng,lat,lng);
+      var dt=(ts-LAST_POS.ts)/1000;
+      spd = dt>0?(d/dt)*3.6:0;
+    }
+    CUR_SPEED = spd;
+
+    if (LAST_POS) TOTAL_DIST += haversine(LAST_POS.lat,LAST_POS.lng,lat,lng);
+    LAST_POS = { lat, lng, ts };
+
+    // Register cell
+    var cell = gpsToCell(lat, lng);
+    var key = cell.cx+','+cell.cy;
+    var isNew = !CELLS[key];
+    if (isNew && CELL_COUNT < MAX_CELLS) {
+      CELLS[key] = { cx:cell.cx, cy:cell.cy, visits:0, lastSpeed:0 };
+      CELL_COUNT++;
+    }
+    if (CELLS[key]) {
+      CELLS[key].visits++;
+      CELLS[key].lastSpeed = spd;
+    }
+
+    // Check achievements
+    if (isNew) checkAchievements();
+
+    // Update stats
+    updateStats();
+    MAP.autoFit = true;
+    redraw();
+  }
+
+  function onGPSError(e) { showToast('GPS: '+e.message); }
+
+  function checkAchievements() {
+    ACHIEVEMENTS.forEach(function(a) {
+      if (!unlockedAch[a.id] && CELL_COUNT >= a.cells) {
+        unlockedAch[a.id] = true;
+        showAchievement(a);
+      }
+    });
+  }
+
+  function showAchievement(a) {
+    document.getElementById('ach-icon').textContent = a.icon;
+    document.getElementById('ach-title').textContent = a.title;
+    document.getElementById('ach-desc').textContent = a.desc;
+    achToast.classList.add('show');
+    setTimeout(function(){ achToast.classList.remove('show'); }, 3000);
+  }
+
+  function updateStats() {
+    var d = TOTAL_DIST;
+    document.getElementById('sb-dist').textContent = d>=1000?(d/1000).toFixed(2):Math.round(d);
+    document.getElementById('sb-dist-u').textContent = d>=1000?'km':'m';
+    document.getElementById('sb-speed').textContent = CUR_SPEED.toFixed(1);
+    if (START_TS) document.getElementById('sb-time').textContent = formatTime(Date.now()-START_TS);
+    document.getElementById('cells-count').textContent = CELL_COUNT;
+    document.getElementById('area-val').textContent = (CELL_COUNT * CELL_SIZE_M * CELL_SIZE_M) >= 10000
+      ? ((CELL_COUNT * CELL_SIZE_M * CELL_SIZE_M)/10000).toFixed(2) + ' ha'
+      : (CELL_COUNT * CELL_SIZE_M * CELL_SIZE_M) + ' m²';
+  }
+
+  // ── Controls ───────────────────────────────────────────────────────────────
+  document.getElementById('intro-start-btn').addEventListener('click', function() {
+    if (!navigator.geolocation) { alert('Geolocation not available.'); return; }
+    CELL_SIZE_M = parseInt(document.getElementById('cell-size-select').value, 10);
+    introOvl.style.display = 'none';
+    RUNNING = true;
+    START_TS = Date.now();
+    CELLS = {}; CELL_COUNT = 0; TOTAL_DIST = 0; LAST_POS = null; _origin = null;
+    unlockedAch = {};
+    stopBtn.disabled = false; centerBtn.disabled = false;
+    GPS_WATCH_ID = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+      enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+    });
+    // Timer tick
+    STATE_TICK = setInterval(function(){
+      if(START_TS) document.getElementById('sb-time').textContent=formatTime(Date.now()-START_TS);
+    }, 1000);
+    redraw();
+    showToast('GPS started — go explore!');
+  });
+
+  var STATE_TICK;
+
+  stopBtn.addEventListener('click', function() {
+    if (GPS_WATCH_ID !== null) { navigator.geolocation.clearWatch(GPS_WATCH_ID); GPS_WATCH_ID = null; }
+    clearInterval(STATE_TICK);
+    RUNNING = false; stopBtn.disabled = true;
+    showToast('Stopped — ' + CELL_COUNT + ' cells explored');
+    redraw();
+  });
+
+  centerBtn.addEventListener('click', function() {
+    MAP.autoFit = true; redraw(); showToast('Re-centred');
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', function() {
+    if (GPS_WATCH_ID !== null) { navigator.geolocation.clearWatch(GPS_WATCH_ID); GPS_WATCH_ID = null; }
+    clearInterval(STATE_TICK);
+    RUNNING = false; CELLS = {}; CELL_COUNT = 0; TOTAL_DIST = 0; LAST_POS = null; _origin = null;
+    START_TS = null; CUR_SPEED = 0; unlockedAch = {};
+    stopBtn.disabled = true; centerBtn.disabled = true;
+    document.getElementById('sb-dist').textContent='0';
+    document.getElementById('sb-dist-u').textContent='m';
+    document.getElementById('sb-speed').textContent='0.0';
+    document.getElementById('sb-time').textContent='0:00';
+    document.getElementById('cells-count').textContent='0';
+    document.getElementById('area-val').textContent='0 m²';
+    introOvl.style.display = '';
+    MAP.autoFit = true;
+    redraw();
+  });
+
+  // ── Touch / pinch ─────────────────────────────────────────────────────────
+  var _lpd=null;
+  canvas.addEventListener('touchstart',function(e){
+    if(e.touches.length===1){MAP.dragging=true;MAP.autoFit=false;MAP.lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+  },{passive:true});
+  canvas.addEventListener('touchmove',function(e){
+    if(e.touches.length===2){
+      var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      if(_lpd){MAP.zoom=Math.max(1,Math.min(80,MAP.zoom*d/_lpd));redraw();}
+      _lpd=d;return;
+    }
+    _lpd=null;
+    if(!MAP.dragging||!MAP.lastTouch)return;
+    MAP.offset.x+=e.touches[0].clientX-MAP.lastTouch.x;
+    MAP.offset.y+=e.touches[0].clientY-MAP.lastTouch.y;
+    MAP.lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
+    redraw();
+  },{passive:true});
+  canvas.addEventListener('touchend',function(){MAP.dragging=false;MAP.lastTouch=null;_lpd=null;},{passive:true});
+  canvas.addEventListener('wheel',function(e){
+    e.preventDefault();
+    MAP.zoom=Math.max(1,Math.min(80,MAP.zoom*(e.deltaY>0?0.85:1.18)));
+    MAP.autoFit=false;redraw();
+  },{passive:false});
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  var _tt;
+  function showToast(msg) {
+    toastEl.textContent=msg; toastEl.classList.add('show');
+    clearTimeout(_tt); _tt=setTimeout(function(){toastEl.classList.remove('show');},2500);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+}());
+</script>
+</body>
+</html>
