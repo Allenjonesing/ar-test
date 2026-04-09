@@ -172,6 +172,62 @@
       "deviceRequirements": ["Any mobile browser", "HTTPS", "Geolocation permission"],
       "status": "available",
       "labPath": "web-lab/experiments/experiment-f/index.html"
+    },
+    {
+      "id": "experiment-g",
+      "displayName": "Fetch Quest",
+      "description": "Dog-walk GPS scavenger hunt. Virtual bones are scattered 25–100 m away in random directions. A compass HUD shows bearing and distance to the nearest bone. Walk within 8 m to collect it — new bones spawn continuously. Earn achievement badges for cumulative fetches.",
+      "runtimeType": "browser-gps",
+      "environment": "outdoor",
+      "trackingMode": "gps-relative",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "5–15 m GPS — collection radius 8 m",
+      "driftRisk": "low",
+      "driftNote": "GPS jitter is unlikely to cause spurious collections given the 8 m radius.",
+      "starterScene": "web-lab/experiments/experiment-g/index.html",
+      "theme": "dog-walk",
+      "configOptions": {
+        "fetchRadiusMetres": 8,
+        "boneCount": 5,
+        "boneSpreadMinMetres": 25,
+        "boneSpreadMaxMetres": 100
+      },
+      "limitations": [
+        "Bones spawn in random directions — not tied to real-world features",
+        "Session-local only — no persistence across reloads"
+      ],
+      "bestUseCase": "Gamified dog walks; GPS scavenger hunt; outdoor exercise motivation",
+      "deviceRequirements": ["Any mobile browser", "HTTPS", "Geolocation permission"],
+      "status": "available",
+      "labPath": "web-lab/experiments/experiment-g/index.html"
+    },
+    {
+      "id": "experiment-h",
+      "displayName": "Paw Print Trail",
+      "description": "Dog-walk GPS trail tracker that paints colourful paw prints on a canvas map as you walk. Paw colour reflects speed: pink (stationary) → purple (slow walk) → green (brisk) → amber (jog) → red (run). Heading compass, distance and time stats, and seven dog-themed achievements.",
+      "runtimeType": "browser-gps",
+      "environment": "outdoor",
+      "trackingMode": "gps-relative",
+      "requiredCapabilities": ["https", "geolocation"],
+      "supportedPlatforms": ["web-android", "web-ios", "web-desktop"],
+      "expectedAccuracy": "5–15 m GPS horizontal",
+      "driftRisk": "low",
+      "driftNote": "GPS accuracy affects paw print spacing but the trail remains continuous.",
+      "starterScene": "web-lab/experiments/experiment-h/index.html",
+      "theme": "dog-walk",
+      "configOptions": {
+        "pawIntervalMetres": 4,
+        "maxPathPoints": 5000
+      },
+      "limitations": [
+        "Trail is session-local — no persistence across reloads",
+        "Heading derived from movement if device compass not available"
+      ],
+      "bestUseCase": "Dog walk tracking; route visualisation; pace awareness",
+      "deviceRequirements": ["Any mobile browser", "HTTPS", "Geolocation permission"],
+      "status": "available",
+      "labPath": "web-lab/experiments/experiment-h/index.html"
     }
   ]
 }
