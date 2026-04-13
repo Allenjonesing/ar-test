@@ -294,8 +294,10 @@
   var MAX_BONES_EVER   = 200;    // safety cap
 
   // Road-snap: OSM Overpass query radius and cache lifetime
-  var ROAD_SNAP_RADIUS_M = 200;   // fetch road nodes within this radius
-  var ROAD_SNAP_TTL_MS   = 90000; // cache lifetime (ms)
+  var ROAD_SNAP_RADIUS_M     = 200;   // fetch road nodes within this radius
+  var ROAD_SNAP_TTL_MS       = 90000; // cache lifetime (ms)
+  var ROAD_SNAP_MOVE_THRESH_M = 100;  // refresh cache when player moves this far from cache centre
+  var OVERPASS_API_URL       = 'https://overpass-api.de/api/interpreter';
 
   var ACHIEVEMENTS = [
     { id:'first',   score:1,   icon:'🎉', title:'First Fetch!',      desc:'You fetched your first bone!' },
@@ -322,7 +324,7 @@
   var unlockedAch  = {};
 
   var MAP = { zoom: 4, offset: { x: 0, y: 0 }, dragging: false, lastTouch: null, autoFit: true };
-  var ROAD_SNAP_CACHE = { nodes: [], lat: 0, lng: 0, ts: 0, loading: false };
+  var ROAD_SNAP_CACHE = { nodes: [], lat: 0, lng: 0, ts: 0, loading: false, pending: [] };
   var PATH = [];
 
   // ── DOM ────────────────────────────────────────────────────────────────────
@@ -377,16 +379,18 @@
     var now = Date.now();
     // Serve from cache if still fresh and centred close enough
     if (ROAD_SNAP_CACHE.nodes.length &&
-        haversine(lat, lng, ROAD_SNAP_CACHE.lat, ROAD_SNAP_CACHE.lng) < ROAD_SNAP_RADIUS_M / 2 &&
+        haversine(lat, lng, ROAD_SNAP_CACHE.lat, ROAD_SNAP_CACHE.lng) < ROAD_SNAP_MOVE_THRESH_M &&
         now - ROAD_SNAP_CACHE.ts < ROAD_SNAP_TTL_MS) {
       callback(ROAD_SNAP_CACHE.nodes);
       return;
     }
+    // Queue callback to be invoked once the in-flight request completes
     if (ROAD_SNAP_CACHE.loading) {
-      callback(ROAD_SNAP_CACHE.nodes); // return stale/empty while loading
+      ROAD_SNAP_CACHE.pending.push(callback);
       return;
     }
     ROAD_SNAP_CACHE.loading = true;
+    ROAD_SNAP_CACHE.pending = [callback];
     var cosLat   = Math.cos(lat * Math.PI / 180);
     var latDelta = ROAD_SNAP_RADIUS_M / 111111;
     var lngDelta = ROAD_SNAP_RADIUS_M / (111320 * cosLat);
@@ -398,7 +402,7 @@
       'way[highway~"^(footway|path|pedestrian|sidewalk|cycleway|residential|' +
       'living_street|service|tertiary|secondary|primary|unclassified|track)$"]' +
       '(' + bbox + ');node(w);out body;';
-    fetch('https://overpass-api.de/api/interpreter', {
+    fetch(OVERPASS_API_URL, {
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
     })
@@ -411,11 +415,16 @@
         ROAD_SNAP_CACHE.nodes = (data.elements || [])
           .filter(function(e) { return e.type === 'node'; })
           .map(function(e) { return { lat: e.lat, lng: e.lon }; });
-        callback(ROAD_SNAP_CACHE.nodes);
+        var cbs = ROAD_SNAP_CACHE.pending;
+        ROAD_SNAP_CACHE.pending = [];
+        cbs.forEach(function(cb) { cb(ROAD_SNAP_CACHE.nodes); });
       })
-      .catch(function() {
+      .catch(function(err) {
+        console.warn('[FetchQuest] Overpass API error:', err);
         ROAD_SNAP_CACHE.loading = false;
-        callback([]);
+        var cbs = ROAD_SNAP_CACHE.pending;
+        ROAD_SNAP_CACHE.pending = [];
+        cbs.forEach(function(cb) { cb([]); });
       });
   }
 
@@ -712,7 +721,7 @@
     RUNNING = false; BONES = []; BONE_ID_SEQ = 0; BONES_SPAWNED = 0;
     PATH = []; TOTAL_DIST = 0; LAST_POS = null; ORIGIN = null;
     SCORE = 0; CUR_SPEED = 0; unlockedAch = {}; START_TS = null;
-    ROAD_SNAP_CACHE.nodes = []; ROAD_SNAP_CACHE.ts = 0; ROAD_SNAP_CACHE.loading = false;
+    ROAD_SNAP_CACHE.nodes = []; ROAD_SNAP_CACHE.ts = 0; ROAD_SNAP_CACHE.loading = false; ROAD_SNAP_CACHE.pending = [];
     stopBtn.disabled = true; centerBtn.disabled = true;
     document.getElementById('score-val').textContent = '0';
     document.getElementById('sb-score').textContent  = '0';
