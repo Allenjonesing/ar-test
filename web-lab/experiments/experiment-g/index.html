@@ -293,6 +293,10 @@
   var BONE_SPREAD_MAX  = 100;    // max distance for new bone (m)
   var MAX_BONES_EVER   = 200;    // safety cap
 
+  // Road-snap: OSM Overpass query radius and cache lifetime
+  var ROAD_SNAP_RADIUS_M = 200;   // fetch road nodes within this radius
+  var ROAD_SNAP_TTL_MS   = 90000; // cache lifetime (ms)
+
   var ACHIEVEMENTS = [
     { id:'first',   score:1,   icon:'🎉', title:'First Fetch!',      desc:'You fetched your first bone!' },
     { id:'five',    score:5,   icon:'🐕', title:'Good Dog!',         desc:'5 bones fetched — nice work!' },
@@ -318,6 +322,7 @@
   var unlockedAch  = {};
 
   var MAP = { zoom: 4, offset: { x: 0, y: 0 }, dragging: false, lastTouch: null, autoFit: true };
+  var ROAD_SNAP_CACHE = { nodes: [], lat: 0, lng: 0, ts: 0, loading: false };
   var PATH = [];
 
   // ── DOM ────────────────────────────────────────────────────────────────────
@@ -367,15 +372,77 @@
     return { x: pt.x * MAP.zoom + MAP.offset.x, y: pt.y * MAP.zoom + MAP.offset.y };
   }
 
+  // ── Road-snap: fetch nearby walkable OSM nodes ─────────────────────────────
+  function fetchRoadNodes(lat, lng, callback) {
+    var now = Date.now();
+    // Serve from cache if still fresh and centred close enough
+    if (ROAD_SNAP_CACHE.nodes.length &&
+        haversine(lat, lng, ROAD_SNAP_CACHE.lat, ROAD_SNAP_CACHE.lng) < ROAD_SNAP_RADIUS_M / 2 &&
+        now - ROAD_SNAP_CACHE.ts < ROAD_SNAP_TTL_MS) {
+      callback(ROAD_SNAP_CACHE.nodes);
+      return;
+    }
+    if (ROAD_SNAP_CACHE.loading) {
+      callback(ROAD_SNAP_CACHE.nodes); // return stale/empty while loading
+      return;
+    }
+    ROAD_SNAP_CACHE.loading = true;
+    var cosLat   = Math.cos(lat * Math.PI / 180);
+    var latDelta = ROAD_SNAP_RADIUS_M / 111111;
+    var lngDelta = ROAD_SNAP_RADIUS_M / (111320 * cosLat);
+    var bbox = (lat - latDelta).toFixed(6) + ',' +
+               (lng - lngDelta).toFixed(6) + ',' +
+               (lat + latDelta).toFixed(6) + ',' +
+               (lng + lngDelta).toFixed(6);
+    var query = '[out:json][timeout:10];' +
+      'way[highway~"^(footway|path|pedestrian|sidewalk|cycleway|residential|' +
+      'living_street|service|tertiary|secondary|primary|unclassified|track)$"]' +
+      '(' + bbox + ');node(w);out body;';
+    fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        ROAD_SNAP_CACHE.loading = false;
+        ROAD_SNAP_CACHE.ts  = Date.now();
+        ROAD_SNAP_CACHE.lat = lat;
+        ROAD_SNAP_CACHE.lng = lng;
+        ROAD_SNAP_CACHE.nodes = (data.elements || [])
+          .filter(function(e) { return e.type === 'node'; })
+          .map(function(e) { return { lat: e.lat, lng: e.lon }; });
+        callback(ROAD_SNAP_CACHE.nodes);
+      })
+      .catch(function() {
+        ROAD_SNAP_CACHE.loading = false;
+        callback([]);
+      });
+  }
+
   // ── Bone spawning ──────────────────────────────────────────────────────────
-  function spawnBone(refLat, refLng) {
+  function spawnBone(refLat, refLng, roadNodes) {
     if (BONES_SPAWNED >= MAX_BONES_EVER) return;
-    var dist  = BONE_SPREAD_MIN + Math.random() * (BONE_SPREAD_MAX - BONE_SPREAD_MIN);
-    var angle = Math.random() * 2 * Math.PI;
-    var dLat  = (dist * Math.cos(angle)) / 111111;
-    var dLng  = (dist * Math.sin(angle)) / (111320 * Math.cos(refLat * Math.PI / 180));
-    var bLat  = refLat + dLat;
-    var bLng  = refLng + dLng;
+    var bLat, bLng;
+
+    // Filter road nodes that fall within the spawn spread ring
+    var inRange = (roadNodes || []).filter(function(n) {
+      var d = haversine(refLat, refLng, n.lat, n.lng);
+      return d >= BONE_SPREAD_MIN && d <= BONE_SPREAD_MAX;
+    });
+
+    if (inRange.length) {
+      // Pick a random walkable node so the bone lands on a road/sidewalk
+      var pick = inRange[Math.floor(Math.random() * inRange.length)];
+      bLat = pick.lat;
+      bLng = pick.lng;
+    } else {
+      // Fallback: pure random placement (e.g. no network, rural area)
+      var dist  = BONE_SPREAD_MIN + Math.random() * (BONE_SPREAD_MAX - BONE_SPREAD_MIN);
+      var angle = Math.random() * 2 * Math.PI;
+      bLat = refLat + (dist * Math.cos(angle)) / 111111;
+      bLng = refLng + (dist * Math.sin(angle)) / (111320 * Math.cos(refLat * Math.PI / 180));
+    }
+
     var local = gpsToLocal(bLat, bLng);
     BONES.push({ id: BONE_ID_SEQ++, lat: bLat, lng: bLng, mx: local.x, my: local.y, collected: false });
     BONES_SPAWNED++;
@@ -384,10 +451,15 @@
   function fillBones() {
     if (!LAST_POS) return;
     var active = BONES.filter(function(b){ return !b.collected; }).length;
-    while (active < BONE_COUNT) {
-      spawnBone(LAST_POS.lat, LAST_POS.lng);
-      active++;
-    }
+    if (active >= BONE_COUNT) return;
+    fetchRoadNodes(LAST_POS.lat, LAST_POS.lng, function(nodes) {
+      var active2 = BONES.filter(function(b){ return !b.collected; }).length;
+      while (active2 < BONE_COUNT) {
+        spawnBone(LAST_POS.lat, LAST_POS.lng, nodes);
+        active2++;
+      }
+      redraw();
+    });
   }
 
   // ── Compass HUD ────────────────────────────────────────────────────────────
@@ -640,6 +712,7 @@
     RUNNING = false; BONES = []; BONE_ID_SEQ = 0; BONES_SPAWNED = 0;
     PATH = []; TOTAL_DIST = 0; LAST_POS = null; ORIGIN = null;
     SCORE = 0; CUR_SPEED = 0; unlockedAch = {}; START_TS = null;
+    ROAD_SNAP_CACHE.nodes = []; ROAD_SNAP_CACHE.ts = 0; ROAD_SNAP_CACHE.loading = false;
     stopBtn.disabled = true; centerBtn.disabled = true;
     document.getElementById('score-val').textContent = '0';
     document.getElementById('sb-score').textContent  = '0';
