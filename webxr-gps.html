@@ -608,6 +608,14 @@ function resyncAllWaypoints() {
 }
 
 /* ─────────────────────────────────────────────────
+   Convert heading degrees to cardinal direction label
+───────────────────────────────────────────────── */
+function headingToCardinal(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+
+/* ─────────────────────────────────────────────────
    Haversine distance in metres between two GPS points
 ───────────────────────────────────────────────── */
 function haversineDistance(lat1, lng1, lat2, lng2) {
@@ -717,8 +725,8 @@ function onDeviceOrientation(e) {
 
   if (heading === null) return;
   compassHeading = heading;
-  pillCompass.textContent = `Compass: ${Math.round(heading)}°`;
-  hudHeading.textContent  = `${Math.round(heading)}°`;
+  pillCompass.textContent = `Compass: ${Math.round(heading)}° ${headingToCardinal(heading)}`;
+  hudHeading.textContent  = `${Math.round(heading)}° ${headingToCardinal(heading)}`;
   resyncAllWaypoints();
 }
 
@@ -803,7 +811,7 @@ function updateHUD() {
     ? `${(totalDist / 1000).toFixed(2)} km`
     : `${Math.round(totalDist)} m`;
   hudPts.textContent     = waypoints.length;
-  hudHeading.textContent = `${Math.round(compassHeading)}°`;
+  hudHeading.textContent = `${Math.round(compassHeading)}° ${headingToCardinal(compassHeading)}`;
 }
 
 /* ─────────────────────────────────────────────────

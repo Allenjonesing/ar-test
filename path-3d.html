@@ -421,13 +421,18 @@ function onGPSError(err) {
 }
 
 /* ── Heading ───────────────────────────────────────────────────────────── */
+function headingToCardinal(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+
 function onOrientation(evt) {
   let h = null;
   if (evt.webkitCompassHeading != null) h = evt.webkitCompassHeading;
   else if (evt.absolute && evt.alpha != null) h = (360 - evt.alpha) % 360;
   if (h == null) return;
   STATE.heading = h;
-  document.getElementById('hud-heading').textContent = Math.round(h) + '°';
+  document.getElementById('hud-heading').textContent = Math.round(h) + '° ' + headingToCardinal(h);
 }
 
 function setupCompass() {
