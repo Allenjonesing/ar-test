@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>GPS Dog Walk Games — AR Lab</title>
+  <title>GPS Walk Games + Concepts — AR Lab</title>
   <link rel="icon" href="favicon.ico">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -137,6 +137,7 @@
     .badge-dog    { background: rgba(255,136,204,0.13); color: #ff88cc; border: 1px solid rgba(255,136,204,0.28); }
     .badge-gps    { background: rgba(0,255,136,0.12);   color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
     .badge-amber  { background: rgba(255,204,68,0.12);  color: #ffcc44; border: 1px solid rgba(255,204,68,0.25); }
+    .badge-concept{ background: rgba(0,204,255,0.13);   color: #00ccff; border: 1px solid rgba(0,204,255,0.25); }
 
     /* ── NEW badge ── */
     .new-pill {
@@ -166,6 +167,8 @@
       letter-spacing: 0.04em; align-self: flex-start;
     }
     .card:hover .play-btn { background: #ffaadd; }
+    .concept-btn { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.78); }
+    .card:hover .concept-btn { background: rgba(255,255,255,0.16); }
 
     /* ── Capability panel ── */
     #capability-panel {
@@ -237,11 +240,12 @@
     <a href="index.html">← AR Lab</a>
   </div>
 
-  <span class="top-badge">🐾 GPS Dog Walk Games</span>
-  <h1>Pick a Game<br>& Go Walk Your Dog</h1>
+  <span class="top-badge">🐾 GPS Walk Games + New Concepts</span>
+  <h1>Keep the Dog Walk Games<br>and Build Better Ones</h1>
   <p class="subtitle">
-    All games run right in your mobile browser — no app install needed.
-    They use GPS to make your dog walks more fun: collect bones, paint the map with paw prints, or fill territory grids. Just press Play and head outside.
+    We kept the two dog walk games that work best, removed most of the rest,
+    and grouped the next ideas into clear categories. Everything is browser-first
+    and designed around real outdoor movement.
   </p>
 
   <!-- ── Capability Status ── -->
@@ -255,7 +259,7 @@
   </div>
 
   <!-- ── Dog Walk Games ── -->
-  <div class="section-label">🐾 Dog Walk Games — Play in Browser · HTTPS · GPS required</div>
+  <div class="section-label">🐾 Dog Walk Games — Live Now · HTTPS · GPS required</div>
   <div class="cards">
 
     <a class="card" href="web-lab/experiments/experiment-g/index.html">
@@ -288,63 +292,59 @@
       <span class="play-btn">🐾 Play now →</span>
     </a>
 
-    <a class="card" href="web-lab/experiments/experiment-f/index.html">
-      <div class="card-icon">🗺️</div>
-      <span class="runtime-badge badge-gps">GPS · Territory · Grid</span>
-      <h2>GPS Territory Grid</h2>
+  </div>
+
+  <!-- ── Street + Sidewalk Concepts ── -->
+  <div class="section-label">🛣️ Street + Sidewalk Games — Concept Category</div>
+  <div class="cards">
+    <article class="card">
+      <div class="card-icon">🪙</div>
+      <span class="runtime-badge badge-concept">Concept · GPS · Roads + Sidewalks</span>
+      <h2>Sidewalk Coin Dash</h2>
       <p class="card-desc">
-        Fill in a GPS grid as you explore — every cell you walk lights up with your speed colour. Try to cover as much territory as possible on each walk. Unlock achievements for coverage milestones.
+        Render nearby roads and sidewalks, then spawn coin pickups on sidewalks
+        (not roads). Players collect chains of coins while walking normal routes.
       </p>
       <div class="card-meta">
-        <strong>Requires:</strong> GPS only · Any mobile browser · HTTPS<br>
-        <strong>Best for:</strong> Mapping your neighbourhood on daily walks<br>
-        <strong>Cell sizes:</strong> 5 m, 10 m, 20 m, or 50 m
+        <strong>Goal:</strong> Better use of map geometry + safer placements<br>
+        <strong>Status:</strong> Concept ready for prototype
       </div>
-      <span class="play-btn">▶ Play →</span>
-    </a>
+      <span class="play-btn concept-btn">Concept</span>
+    </article>
+  </div>
 
-    <a class="card" href="web-lab/experiments/experiment-c/index.html">
-      <div class="card-icon">📡</div>
-      <span class="runtime-badge badge-gps">GPS · Live Stats</span>
-      <h2>Walk Stats Live</h2>
+  <!-- ── Chase Concepts ── -->
+  <div class="section-label">👾 Chase Games — Concept Category</div>
+  <div class="cards">
+    <article class="card">
+      <div class="card-icon">🔴</div>
+      <span class="runtime-badge badge-concept">Concept · GPS · Survival</span>
+      <h2>Red Dot Monster Chase</h2>
       <p class="card-desc">
-        Real-time walk dashboard with live speed, distance, max speed, heading compass and a colour-coded path canvas. Great for tracking how far and fast you walk the dog each day.
+        Red-dot monster sprites spawn and chase the player at human jog pace.
+        If any monster gets too close, the run ends. Keep moving to survive.
       </p>
       <div class="card-meta">
-        <strong>Requires:</strong> GPS only · Any mobile browser · HTTPS<br>
-        <strong>Best for:</strong> Tracking your daily dog walk distance and pace
+        <strong>Goal:</strong> Encourage real running pace and route changes<br>
+        <strong>Status:</strong> Concept ready for prototype
       </div>
-      <span class="play-btn">▶ Play →</span>
-    </a>
+      <span class="play-btn concept-btn">Concept</span>
+    </article>
 
-    <a class="card" href="web-lab/experiments/experiment-e/index.html">
-      <div class="card-icon">🎬</div>
-      <span class="runtime-badge badge-gps">GPS · Replay · Cinema</span>
-      <h2>Walk Cinema</h2>
+    <article class="card">
+      <div class="card-icon">🧭</div>
+      <span class="runtime-badge badge-concept">Concept · Heading HUD</span>
+      <h2>Facing Fix + Chase HUD</h2>
       <p class="card-desc">
-        Record your dog walk then watch a cinematic replay of your route. Speed is colour-coded; scrub through the timeline to jump to any moment. Perfect for reviewing your favourite walks.
+        Improve heading visibility with a clearer direction header (N/NE/E…)
+        and relative monster indicators so players always know which way they face.
       </p>
       <div class="card-meta">
-        <strong>Requires:</strong> GPS only · Any mobile browser · HTTPS<br>
-        <strong>Best for:</strong> Sharing walk routes with friends and family
+        <strong>Goal:</strong> Fix orientation clarity before adding harder modes<br>
+        <strong>Status:</strong> Concept ready for implementation
       </div>
-      <span class="play-btn">▶ Play →</span>
-    </a>
-
-    <a class="card" href="web-lab/experiments/experiment-d/index.html">
-      <div class="card-icon">🏚️</div>
-      <span class="runtime-badge badge-gps">GPS · 3D World</span>
-      <h2>Waypoint Room Builder</h2>
-      <p class="card-desc">
-        Walk a loop, drop GPS waypoints, then step inside a 3D first-person world built from your dog walk route — explore the corridors of your own neighbourhood using gyroscope tilt controls.
-      </p>
-      <div class="card-meta">
-        <strong>Requires:</strong> GPS · Any mobile browser with gyroscope · HTTPS<br>
-        <strong>Best for:</strong> Visualising your favourite dog walks in 3D
-      </div>
-      <span class="play-btn">▶ Play →</span>
-    </a>
-
+      <span class="play-btn concept-btn">Concept</span>
+    </article>
   </div>
 
   <!-- ── Tips ── -->
@@ -357,7 +357,7 @@
       </li>
       <li>
         <span class="tip-icon">🌳</span>
-        <span>GPS accuracy is best in open areas. Urban canyons and dense tree cover can reduce accuracy to 10–20 m — choose the 20 m cell size in territory games for reliability.</span>
+        <span>GPS accuracy is best in open areas. Urban canyons and dense tree cover can reduce accuracy to 10–20 m, so concepts should prefer larger pickup/chase radii.</span>
       </li>
       <li>
         <span class="tip-icon">🔋</span>
@@ -365,11 +365,11 @@
       </li>
       <li>
         <span class="tip-icon">🦴</span>
-        <span>In Fetch Quest, bones are placed on nearby roads and pavements so they're always reachable — the compass arrow guides you straight to them.</span>
+        <span>In Fetch Quest, bones are currently placed on nearby roads and pavements. Future concepts should prioritize sidewalk placement where possible.</span>
       </li>
       <li>
-        <span class="tip-icon">🗺️</span>
-        <span>Use the GPS Territory Grid to discover new routes — try to fill in unexplored cells on each walk to keep things fresh for your dog.</span>
+        <span class="tip-icon">🧭</span>
+        <span>For chase modes, a clear heading/facing indicator is critical so players can react quickly when monsters appear behind or beside them.</span>
       </li>
     </ul>
   </div>
@@ -377,7 +377,7 @@
 </div><!-- /#landing -->
 
 <footer>
-  🐾 GPS Dog Walk Games — Part of <a href="index.html">AR Lab</a> · Open Experiments · © 2025
+  🐾 GPS Walk Games + Concepts — Part of <a href="index.html">AR Lab</a> · Open Experiments · © 2025
 </footer>
 
 <script>
