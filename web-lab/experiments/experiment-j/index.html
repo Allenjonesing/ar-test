@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Red Dot Monster Chase — GPS Survival Game | AR Lab</title>
+  <link rel="icon" href="../../../favicon.ico">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#050810;--red:#ff4455;--amber:#ffcc44;--text:rgba(255,255,255,.88);--dim:rgba(255,255,255,.38)}
+    html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden}
+    #app{display:flex;flex-direction:column;width:100%;height:100%}
+    #top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(0,0,0,.82);border-bottom:1px solid rgba(255,68,85,.26)}
+    #back{color:var(--red);text-decoration:none;font-size:.78rem}#back:hover{text-decoration:underline}
+    #title{font-size:.86rem;font-weight:700;flex:1;text-align:center}
+    .badge{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:10px;font-weight:700;background:rgba(255,68,85,.14);color:var(--red);border:1px solid rgba(255,68,85,.3)}
+    #map-wrap{position:relative;flex:1;min-height:0;overflow:hidden}#map{display:block;width:100%;height:100%}
+    #hud{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:5px;z-index:20;pointer-events:none}.chip{background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 10px;font-size:.7rem}.chip strong{font-size:.95rem;color:var(--red)}
+    #radar{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.78);border:1px solid rgba(255,68,85,.3);border-radius:10px;padding:6px 9px;z-index:20;font-size:.66rem;text-align:right;line-height:1.45;pointer-events:none}
+    #toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%) translateY(60px);background:rgba(0,0,0,.88);border:1px solid rgba(255,68,85,.4);border-radius:10px;padding:8px 16px;font-size:.78rem;color:var(--red);transition:transform .3s;z-index:200;pointer-events:none}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+    #gameover{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,8,16,.88);z-index:120}
+    #go-card{background:rgba(0,0,0,.9);border:1px solid rgba(255,68,85,.4);border-radius:14px;padding:20px 22px;text-align:center;max-width:300px}
+    #go-card h3{font-size:1.2rem;color:var(--red);margin-bottom:8px}#go-card p{font-size:.82rem;color:var(--dim);line-height:1.5;margin-bottom:14px}
+    #stats{display:grid;grid-template-columns:repeat(4,1fr);background:rgba(0,0,0,.9);border-top:1px solid rgba(255,68,85,.12)}
+    .cell{padding:9px 6px 7px;text-align:center;border-right:1px solid rgba(255,255,255,.06)}.cell:last-child{border-right:none}.lbl{display:block;font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}.val{display:block;font-size:1.05rem;font-weight:800;color:var(--red)}.unit{display:block;font-size:.52rem;color:var(--dim)}
+    #controls{display:flex;gap:8px;padding:10px 12px;background:rgba(0,0,0,.9);border-top:1px solid rgba(255,255,255,.06)}.btn{flex:1;padding:12px 6px;border:none;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}.ghost{background:rgba(255,255,255,.07);color:var(--text);border:1px solid rgba(255,255,255,.12)}.btn:disabled{opacity:.3;pointer-events:none}
+    #intro{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,8,16,.97);padding:28px;text-align:center;z-index:100}
+    #intro h2{font-size:1.3rem;font-weight:800;margin-bottom:10px;color:var(--red)}#intro p{font-size:.84rem;color:var(--dim);line-height:1.6;max-width:330px;margin-bottom:16px}
+    #start{padding:14px 40px;border-radius:14px;border:none;background:var(--red);color:#000;font-size:1rem;font-weight:800;cursor:pointer}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="top"><a id="back" href="../../../games.html">← Games</a><span id="title">🔴 Red Dot Monster Chase</span><span class="badge">GPS · Survival</span></div>
+  <div id="map-wrap">
+    <canvas id="map"></canvas>
+    <div id="hud"><div class="chip">⏱ Survived <strong id="surv">0s</strong></div><div class="chip">👾 Monsters <strong id="mcount">0</strong></div><div class="chip">📏 Walked <strong id="walked">0 m</strong></div></div>
+    <div id="radar">Heading: <strong id="heading">---</strong><br>Nearest: <strong id="nearest">---</strong></div>
+    <div id="toast"></div>
+    <div id="intro"><div style="font-size:3.2rem;margin-bottom:12px">🔴</div><h2>Red Dot Monster Chase</h2><p>Monsters spawn around you and close in at jogging pace. Keep moving and changing route. If one reaches 9 m, the run ends.</p><button id="start">Start Survival</button></div>
+    <div id="gameover"><div id="go-card"><h3>Caught!</h3><p id="go-text">You survived 0 seconds.</p><button class="btn ghost" id="retry">Try Again</button></div></div>
+  </div>
+  <div id="stats"><div class="cell"><span class="lbl">Time</span><span class="val" id="s-time">0</span><span class="unit">seconds</span></div><div class="cell"><span class="lbl">Distance</span><span class="val" id="s-dist">0</span><span class="unit" id="s-dist-u">m</span></div><div class="cell"><span class="lbl">Speed</span><span class="val" id="s-speed">0.0</span><span class="unit">km/h</span></div><div class="cell"><span class="lbl">Best</span><span class="val" id="s-best">0</span><span class="unit">seconds</span></div></div>
+  <div id="controls"><button class="btn ghost" id="stop" disabled>⏹ Stop</button><button class="btn ghost" id="center" disabled>⌖ Centre</button><button class="btn ghost" id="reset">↺ Reset</button></div>
+</div>
+<script>
+(function(){'use strict';
+var MON_COUNT=4,SPAWN_MIN=45,SPAWN_MAX=120,CHASE_MPS=2.0,CATCH_M=9;
+var RUN=false,DEAD=false,WID=null,TICK=null,LAST=null,ORIGIN=null,DIST=0,SPEED=0,HEADING=null,START=0,BEST=0,PATH=[],MON=[];
+var MAP={zoom:4,offset:{x:0,y:0},drag:false,last:null,auto:true};
+var cv=document.getElementById('map'),ctx=cv.getContext('2d'),toast=document.getElementById('toast');
+function hav(a,b,c,d){var dl=(c-a)*Math.PI/180,dg=(d-b)*Math.PI/180,x=Math.sin(dl/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dg/2)**2;return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function bear(a,b,c,d){var dg=(d-b)*Math.PI/180,y=Math.sin(dg)*Math.cos(c*Math.PI/180),x=Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180)-Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos(dg);return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+function gps2l(lat,lng){if(!ORIGIN)ORIGIN={lat:lat,lng:lng};return{x:(lng-ORIGIN.lng)*Math.cos(ORIGIN.lat*Math.PI/180)*111320,y:-(lat-ORIGIN.lat)*111111};}
+function l2gps(x,y){if(!ORIGIN)return null;return{lat:ORIGIN.lat+(-y/111111),lng:ORIGIN.lng+(x/(111320*Math.cos(ORIGIN.lat*Math.PI/180)))};}
+function w2s(p){return{x:p.x*MAP.zoom+MAP.offset.x,y:p.y*MAP.zoom+MAP.offset.y};}
+function headingLabel(d){if(d===null||isNaN(d))return '---';var dirs=['N','NE','E','SE','S','SW','W','NW'];return dirs[Math.round(d/45)%8]+' · '+Math.round(d)+'°';}
+function say(m){toast.textContent=m;toast.classList.add('show');clearTimeout(say.t);say.t=setTimeout(function(){toast.classList.remove('show');},2400);}
+function spawnMonsters(){if(!LAST||!ORIGIN)return;MON=[];for(var i=0;i<MON_COUNT;i++){var d=SPAWN_MIN+Math.random()*(SPAWN_MAX-SPAWN_MIN),a=Math.random()*Math.PI*2;var x=gps2l(LAST.lat,LAST.lng).x+d*Math.cos(a),y=gps2l(LAST.lat,LAST.lng).y+d*Math.sin(a);var g=l2gps(x,y);MON.push({id:i,x:x,y:y,lat:g.lat,lng:g.lng});}document.getElementById('mcount').textContent=MON.length;}
+function moveMonsters(dt){if(!LAST||!MON.length)return;var me=gps2l(LAST.lat,LAST.lng);MON.forEach(function(m){var dx=me.x-m.x,dy=me.y-m.y,dist=Math.hypot(dx,dy)||1,step=Math.min(dist,CHASE_MPS*dt);m.x+=dx/dist*step;m.y+=dy/dist*step;var g=l2gps(m.x,m.y);m.lat=g.lat;m.lng=g.lng;});}
+function nearestMonster(){if(!LAST||!MON.length)return null;var best=null,bd=Infinity;MON.forEach(function(m){var d=hav(LAST.lat,LAST.lng,m.lat,m.lng);if(d<bd){bd=d;best=m;}});if(!best)return null;return{m:best,d:bd};}
+function checkCaught(){var n=nearestMonster();if(!n)return false;document.getElementById('nearest').textContent=Math.round(n.d)+' m';if(n.d<=CATCH_M){gameOver();return true;}return false;}
+function gameOver(){if(DEAD)return;DEAD=true;RUN=false;if(WID!==null){navigator.geolocation.clearWatch(WID);WID=null;}clearInterval(TICK);var secs=Math.floor((Date.now()-START)/1000);BEST=Math.max(BEST,secs);document.getElementById('s-best').textContent=BEST;document.getElementById('go-text').textContent='You survived '+secs+' seconds and walked '+(DIST>=1000?(DIST/1000).toFixed(2)+' km':Math.round(DIST)+' m')+'.';document.getElementById('gameover').style.display='flex';say('🔴 You were caught');draw();}
+function fit(){var pts=PATH.slice();MON.forEach(function(m){pts.push({x:m.x,y:m.y});});if(!pts.length)return;var W=cv.width,H=cv.height,minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;pts.forEach(function(p){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});var pad=60,rX=maxX-minX||30,rY=maxY-minY||30;MAP.zoom=Math.max(1,Math.min(65,Math.min((W-pad*2)/rX,(H-pad*2)/rY)));MAP.offset.x=W/2-(minX+rX/2)*MAP.zoom;MAP.offset.y=H/2-(minY+rY/2)*MAP.zoom;}
+function draw(){var W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#050810';ctx.fillRect(0,0,W,H);if(!RUN&&!PATH.length&&!MON.length)return;if(MAP.auto&&(PATH.length||MON.length))fit();if(PATH.length>1){ctx.beginPath();var p0=w2s(PATH[0]);ctx.moveTo(p0.x,p0.y);for(var i=1;i<PATH.length;i++){var p=w2s(PATH[i]);ctx.lineTo(p.x,p.y);}ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=2;ctx.stroke();}
+MON.forEach(function(m){var p=w2s({x:m.x,y:m.y});ctx.save();ctx.shadowBlur=15;ctx.shadowColor='rgba(255,68,85,.9)';ctx.fillStyle='#ff4455';ctx.beginPath();ctx.arc(p.x,p.y,Math.max(6,Math.min(14,MAP.zoom*1.7)),0,Math.PI*2);ctx.fill();ctx.restore();ctx.fillStyle='rgba(255,68,85,.9)';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('👾',p.x,p.y-12);});
+if(LAST){var me=w2s(gps2l(LAST.lat,LAST.lng));ctx.save();ctx.shadowBlur=18;ctx.shadowColor='#ffcc44';ctx.fillStyle='#ffcc44';ctx.beginPath();ctx.arc(me.x,me.y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(me.x,me.y,4,0,Math.PI*2);ctx.fill();ctx.restore();}
+ctx.fillStyle='rgba(255,68,85,.42)';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(Math.round(50/MAP.zoom)+'m scale',W-8,H-8);
+}
+function updateUI(){var secs=START?Math.floor((Date.now()-START)/1000):0;document.getElementById('surv').textContent=secs+'s';document.getElementById('s-time').textContent=secs;document.getElementById('s-speed').textContent=SPEED.toFixed(1);document.getElementById('walked').textContent=DIST>=1000?(DIST/1000).toFixed(2)+' km':Math.round(DIST)+' m';document.getElementById('s-dist').textContent=DIST>=1000?(DIST/1000).toFixed(2):Math.round(DIST);document.getElementById('s-dist-u').textContent=DIST>=1000?'km':'m';document.getElementById('heading').textContent=headingLabel(HEADING);}
+function onGPS(pos){if(!RUN)return;var lat=pos.coords.latitude,lng=pos.coords.longitude,ts=pos.timestamp;var spd=0;if(pos.coords.speed!==null&&pos.coords.speed>=0){spd=pos.coords.speed*3.6;}else if(LAST){var d=hav(LAST.lat,LAST.lng,lat,lng),dt=(ts-LAST.ts)/1000;spd=dt>0?(d/dt)*3.6:0;}SPEED=spd;
+if(pos.coords.heading!==null&&!isNaN(pos.coords.heading)){HEADING=pos.coords.heading;}else if(LAST){HEADING=bear(LAST.lat,LAST.lng,lat,lng);}if(LAST){var delta=hav(LAST.lat,LAST.lng,lat,lng);DIST+=delta;moveMonsters(Math.max(.2,(ts-LAST.ts)/1000));}
+LAST={lat:lat,lng:lng,ts:ts};var me=gps2l(lat,lng);PATH.push({x:me.x,y:me.y});if(PATH.length>3000)PATH.shift();MON.forEach(function(m){var g=l2gps(m.x,m.y);m.lat=g.lat;m.lng=g.lng;});if(!MON.length&&ORIGIN)spawnMonsters();if(!checkCaught()){updateUI();MAP.auto=true;draw();}}
+function onErr(e){say('GPS: '+e.message);}function resize(){var w=document.getElementById('map-wrap');cv.width=w.offsetWidth;cv.height=w.offsetHeight;draw();}
+function start(){if(!navigator.geolocation){alert('Geolocation not available.');return;}document.getElementById('intro').style.display='none';document.getElementById('gameover').style.display='none';RUN=true;DEAD=false;START=Date.now();DIST=0;SPEED=0;HEADING=null;LAST=null;ORIGIN=null;PATH=[];MON=[];document.getElementById('mcount').textContent='0';document.getElementById('nearest').textContent='---';document.getElementById('stop').disabled=false;document.getElementById('center').disabled=false;WID=navigator.geolocation.watchPosition(onGPS,onErr,{enableHighAccuracy:true,maximumAge:2000,timeout:15000});TICK=setInterval(function(){if(RUN){moveMonsters(1);checkCaught();updateUI();draw();}},1000);say('👾 Survive the chase');}
+document.getElementById('start').addEventListener('click',start);document.getElementById('retry').addEventListener('click',start);
+document.getElementById('stop').addEventListener('click',function(){if(WID!==null){navigator.geolocation.clearWatch(WID);WID=null;}clearInterval(TICK);RUN=false;this.disabled=true;say('Run stopped');draw();});
+document.getElementById('center').addEventListener('click',function(){MAP.auto=true;draw();say('Re-centred');});
+document.getElementById('reset').addEventListener('click',function(){if(WID!==null){navigator.geolocation.clearWatch(WID);WID=null;}clearInterval(TICK);RUN=false;DEAD=false;LAST=null;ORIGIN=null;DIST=0;SPEED=0;HEADING=null;PATH=[];MON=[];START=0;document.getElementById('intro').style.display='';document.getElementById('gameover').style.display='none';document.getElementById('mcount').textContent='0';document.getElementById('nearest').textContent='---';document.getElementById('surv').textContent='0s';document.getElementById('s-time').textContent='0';document.getElementById('s-dist').textContent='0';document.getElementById('s-dist-u').textContent='m';document.getElementById('s-speed').textContent='0.0';document.getElementById('walked').textContent='0 m';document.getElementById('heading').textContent='---';document.getElementById('stop').disabled=true;document.getElementById('center').disabled=true;MAP.auto=true;draw();});
+var lpd=null;cv.addEventListener('touchstart',function(e){if(e.touches.length===1){MAP.drag=true;MAP.auto=false;MAP.last={x:e.touches[0].clientX,y:e.touches[0].clientY};}},{passive:true});cv.addEventListener('touchmove',function(e){if(e.touches.length===2){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(lpd){MAP.zoom=Math.max(1,Math.min(90,MAP.zoom*d/lpd));draw();}lpd=d;return;}lpd=null;if(!MAP.drag||!MAP.last)return;MAP.offset.x+=e.touches[0].clientX-MAP.last.x;MAP.offset.y+=e.touches[0].clientY-MAP.last.y;MAP.last={x:e.touches[0].clientX,y:e.touches[0].clientY};draw();},{passive:true});cv.addEventListener('touchend',function(){MAP.drag=false;MAP.last=null;lpd=null;},{passive:true});cv.addEventListener('wheel',function(e){e.preventDefault();MAP.zoom=Math.max(1,Math.min(90,MAP.zoom*(e.deltaY>0?0.85:1.18)));MAP.auto=false;draw();},{passive:false});window.addEventListener('resize',resize);resize();
+}());
+</script>
+</body>
+</html>
