@@ -123,16 +123,7 @@
     #ach-title { font-size: 1.05rem; font-weight: 800; color: var(--amber); margin-top: 8px; }
     #ach-desc  { font-size: 0.8rem; color: var(--dim); margin-top: 5px; }
 
-    /* ── Stats bar ── */
-    #stats-bar {
-      flex-shrink: 0; display: grid; grid-template-columns: repeat(4, 1fr);
-      background: rgba(0,0,0,0.9); border-top: 1px solid rgba(255,204,68,0.12);
-    }
-    .sb-cell { padding: 9px 6px 7px; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
-    .sb-cell:last-child { border-right: none; }
-    .sb-lbl { display: block; font-size: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
-    .sb-val { display: block; font-size: 1.05rem; font-weight: 800; color: var(--amber); }
-    .sb-unit { display: block; font-size: 0.52rem; color: var(--dim); }
+
 
     /* ── Controls ── */
     #controls {
@@ -196,6 +187,7 @@
     <div id="score-hud">
       <div class="score-chip">🦴 Fetched <strong id="score-val">0</strong></div>
       <div class="score-chip">📏 Walked <strong id="dist-val">0 m</strong></div>
+      <div class="score-chip">🧭 <strong id="heading-chip">---</strong></div>
     </div>
 
     <!-- Compass arrow HUD -->
@@ -249,29 +241,7 @@
     </div>
   </div>
 
-  <!-- Stats bar -->
-  <div id="stats-bar">
-    <div class="sb-cell">
-      <span class="sb-lbl">Distance</span>
-      <span class="sb-val" id="sb-dist">0</span>
-      <span class="sb-unit" id="sb-dist-u">m</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Speed</span>
-      <span class="sb-val" id="sb-speed">0.0</span>
-      <span class="sb-unit">km/h</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Fetched</span>
-      <span class="sb-val" id="sb-score">0</span>
-      <span class="sb-unit">bones</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Time</span>
-      <span class="sb-val" id="sb-time">0:00</span>
-      <span class="sb-unit">min</span>
-    </div>
-  </div>
+  <!-- Stats bar removed — key stats shown in map HUD chips -->
 
   <!-- Controls -->
   <div id="controls">
@@ -316,6 +286,7 @@
   var ORIGIN       = null;
   var TOTAL_DIST   = 0;
   var CUR_SPEED    = 0;
+  var CUR_HEADING  = null;
   var SCORE        = 0;
   var BONES        = [];   // { id, lat, lng, mx, my, collected }
   var BONE_ID_SEQ  = 0;
@@ -511,7 +482,6 @@
       flashEl.classList.add('show');
       setTimeout(function(){ flashEl.classList.remove('show'); }, 200);
       document.getElementById('score-val').textContent = SCORE;
-      document.getElementById('sb-score').textContent  = SCORE;
       showToast('🦴 Fetched! (' + SCORE + ' total)');
       checkAchievements();
       // Refill after short delay
@@ -598,10 +568,30 @@
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(pp.x, pp.y, 4, 0, Math.PI*2); ctx.fill();
       ctx.restore();
+      // Heading arrow
+      if (CUR_HEADING !== null && !isNaN(CUR_HEADING)) {
+        ctx.save();
+        ctx.translate(pp.x, pp.y);
+        ctx.rotate((CUR_HEADING - 90) * Math.PI / 180);
+        ctx.beginPath();
+        ctx.moveTo(20, 0); ctx.lineTo(9, -7); ctx.lineTo(11, 0); ctx.lineTo(9, 7);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.shadowBlur = 8; ctx.shadowColor = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+      }
       // Paw label
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '11px sans-serif';
       ctx.textAlign = 'center'; ctx.fillText('🐾', pp.x, pp.y - 14);
     }
+
+    // N↑ indicator
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText('N↑', W - 8, 8);
+    ctx.restore();
 
     // Scale
     ctx.fillStyle = 'rgba(255,204,68,0.4)'; ctx.font = '9px monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
@@ -623,6 +613,13 @@
       spd = dt > 0 ? (d2 / dt) * 3.6 : 0;
     }
     CUR_SPEED = spd;
+
+    // Heading
+    if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
+      CUR_HEADING = pos.coords.heading;
+    } else if (LAST_POS) {
+      CUR_HEADING = bearing(LAST_POS.lat, LAST_POS.lng, lat, lng);
+    }
 
     if (LAST_POS) TOTAL_DIST += haversine(LAST_POS.lat, LAST_POS.lng, lat, lng);
     LAST_POS = { lat: lat, lng: lng, ts: ts };
@@ -666,13 +663,16 @@
   }
 
   // ── Stats ──────────────────────────────────────────────────────────────────
+  function cardinalLabel(h) {
+    if (h === null || isNaN(h)) return '---';
+    var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(h / 45) % 8] + ' ' + Math.round(h) + '°';
+  }
+
   function updateStats() {
     var d = TOTAL_DIST;
-    document.getElementById('sb-dist').textContent   = d >= 1000 ? (d/1000).toFixed(2) : Math.round(d);
-    document.getElementById('sb-dist-u').textContent = d >= 1000 ? 'km' : 'm';
-    document.getElementById('sb-speed').textContent  = CUR_SPEED.toFixed(1);
     document.getElementById('dist-val').textContent  = d >= 1000 ? (d/1000).toFixed(2)+' km' : Math.round(d)+' m';
-    if (START_TS) document.getElementById('sb-time').textContent = formatTime(Date.now() - START_TS);
+    document.getElementById('heading-chip').textContent = cardinalLabel(CUR_HEADING);
   }
 
   // ── Resize ─────────────────────────────────────────────────────────────────
@@ -690,16 +690,15 @@
     RUNNING = true; START_TS = Date.now();
     BONES = []; BONE_ID_SEQ = 0; BONES_SPAWNED = 0;
     PATH = []; TOTAL_DIST = 0; LAST_POS = null; ORIGIN = null;
-    SCORE = 0; CUR_SPEED = 0; unlockedAch = {};
+    SCORE = 0; CUR_SPEED = 0; CUR_HEADING = null; unlockedAch = {};
     document.getElementById('score-val').textContent = '0';
-    document.getElementById('sb-score').textContent  = '0';
+    document.getElementById('dist-val').textContent  = '0 m';
+    document.getElementById('heading-chip').textContent = '---';
     stopBtn.disabled = false; centerBtn.disabled = false;
     GPS_WATCH_ID = navigator.geolocation.watchPosition(onGPS, onGPSError, {
       enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
     });
-    STATE_TICK = setInterval(function(){
-      if (START_TS) document.getElementById('sb-time').textContent = formatTime(Date.now() - START_TS);
-    }, 1000);
+    STATE_TICK = setInterval(updateStats, 1000);
     showToast('🐾 Walk started — find those bones!');
   });
 
@@ -720,16 +719,12 @@
     clearInterval(STATE_TICK);
     RUNNING = false; BONES = []; BONE_ID_SEQ = 0; BONES_SPAWNED = 0;
     PATH = []; TOTAL_DIST = 0; LAST_POS = null; ORIGIN = null;
-    SCORE = 0; CUR_SPEED = 0; unlockedAch = {}; START_TS = null;
+    SCORE = 0; CUR_SPEED = 0; CUR_HEADING = null; unlockedAch = {}; START_TS = null;
     ROAD_SNAP_CACHE.nodes = []; ROAD_SNAP_CACHE.ts = 0; ROAD_SNAP_CACHE.loading = false; ROAD_SNAP_CACHE.pending = [];
     stopBtn.disabled = true; centerBtn.disabled = true;
     document.getElementById('score-val').textContent = '0';
-    document.getElementById('sb-score').textContent  = '0';
     document.getElementById('dist-val').textContent  = '0 m';
-    document.getElementById('sb-dist').textContent   = '0';
-    document.getElementById('sb-dist-u').textContent = 'm';
-    document.getElementById('sb-speed').textContent  = '0.0';
-    document.getElementById('sb-time').textContent   = '0:00';
+    document.getElementById('heading-chip').textContent = '---';
     introOvl.style.display = '';
     MAP.autoFit = true; redraw();
   });

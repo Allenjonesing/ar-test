@@ -62,23 +62,33 @@
     /* ── Compass ring ── */
     #compass-wrap {
       position: absolute; top: 10px; right: 10px;
-      width: 58px; text-align: center;
+      width: 66px; text-align: center;
       pointer-events: none; z-index: 20;
     }
     #heading-ring {
-      width: 58px; height: 58px;
-      background: rgba(0,0,0,0.78); border: 1px solid rgba(255,136,204,0.3);
+      width: 66px; height: 66px;
+      background: rgba(0,0,0,0.82); border: 1.5px solid rgba(255,136,204,0.4);
       border-radius: 50%; display: flex; align-items: center; justify-content: center;
       position: relative;
     }
+    /* N/S/E/W labels on the ring */
+    #heading-ring .ring-n, #heading-ring .ring-s, #heading-ring .ring-e, #heading-ring .ring-w {
+      position: absolute; font-size: 0.45rem; font-weight: 700;
+      color: rgba(255,136,204,0.65); line-height: 1;
+    }
+    #heading-ring .ring-n { top: 3px; left: 50%; transform: translateX(-50%); }
+    #heading-ring .ring-s { bottom: 3px; left: 50%; transform: translateX(-50%); }
+    #heading-ring .ring-e { right: 3px; top: 50%; transform: translateY(-50%); }
+    #heading-ring .ring-w { left: 3px; top: 50%; transform: translateY(-50%); }
     #heading-needle {
-      position: absolute; width: 2px; height: 20px;
+      position: absolute; width: 2px; height: 22px;
       background: var(--paw); border-radius: 1px;
       top: 50%; left: 50%; transform-origin: bottom center;
       transform: translateX(-50%) translateY(-100%);
       transition: transform 0.4s ease;
     }
     #heading-label { font-size: 0.55rem; color: var(--dim); margin-top: 3px; z-index: 1; }
+    #heading-cardinal { font-size: 0.62rem; font-weight: 700; color: var(--paw); margin-top: 2px; }
 
     /* ── Achievement toast ── */
     #achieve-toast {
@@ -106,16 +116,7 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
 
-    /* ── Stats bar ── */
-    #stats-bar {
-      flex-shrink: 0; display: grid; grid-template-columns: repeat(4, 1fr);
-      background: rgba(0,0,0,0.9); border-top: 1px solid rgba(255,136,204,0.12);
-    }
-    .sb-cell { padding: 9px 6px 7px; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
-    .sb-cell:last-child { border-right: none; }
-    .sb-lbl  { display: block; font-size: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
-    .sb-val  { display: block; font-size: 1.05rem; font-weight: 800; color: var(--paw); }
-    .sb-unit { display: block; font-size: 0.52rem; color: var(--dim); }
+
 
     /* ── Controls ── */
     #controls {
@@ -184,10 +185,14 @@
     <!-- Heading compass -->
     <div id="compass-wrap">
       <div id="heading-ring">
+        <span class="ring-n">N</span>
+        <span class="ring-s">S</span>
+        <span class="ring-e">E</span>
+        <span class="ring-w">W</span>
         <div id="heading-needle"></div>
         <span id="heading-label" style="margin-top:22px; position:relative; z-index:1; font-size:0.55rem; color:rgba(255,136,204,0.7);">N</span>
       </div>
-      <div id="heading-label-txt" style="font-size:0.55rem; color:var(--dim); margin-top:3px; text-align:center;">heading</div>
+      <div id="heading-cardinal">---</div>
     </div>
 
     <!-- Achievement toast -->
@@ -230,29 +235,7 @@
     </div>
   </div>
 
-  <!-- Stats bar -->
-  <div id="stats-bar">
-    <div class="sb-cell">
-      <span class="sb-lbl">Distance</span>
-      <span class="sb-val" id="sb-dist">0</span>
-      <span class="sb-unit" id="sb-dist-u">m</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Speed</span>
-      <span class="sb-val" id="sb-speed">0.0</span>
-      <span class="sb-unit">km/h</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Paw prints</span>
-      <span class="sb-val" id="sb-paws">0</span>
-      <span class="sb-unit">steps</span>
-    </div>
-    <div class="sb-cell">
-      <span class="sb-lbl">Time</span>
-      <span class="sb-val" id="sb-time">0:00</span>
-      <span class="sb-unit">min</span>
-    </div>
-  </div>
+  <!-- Stats bar removed — key stats shown in map HUD chips -->
 
   <!-- Controls -->
   <div id="controls">
@@ -422,9 +405,29 @@
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(pp.x, pp.y, 4, 0, Math.PI*2); ctx.fill();
       ctx.restore();
+      // Heading arrow on map
+      if (CUR_HEADING !== null && !isNaN(CUR_HEADING)) {
+        ctx.save();
+        ctx.translate(pp.x, pp.y);
+        ctx.rotate((CUR_HEADING - 90) * Math.PI / 180);
+        ctx.beginPath();
+        ctx.moveTo(21, 0); ctx.lineTo(9, -7); ctx.lineTo(11, 0); ctx.lineTo(9, 7);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.shadowBlur = 8; ctx.shadowColor = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '12px sans-serif';
       ctx.textAlign = 'center'; ctx.fillText('🐕', pp.x, pp.y - 16);
     }
+
+    // N↑ indicator
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText('N↑', W - 8, 8);
+    ctx.restore();
 
     // Scale
     ctx.fillStyle = 'rgba(255,136,204,0.4)'; ctx.font = '9px monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
@@ -450,10 +453,6 @@
     // Heading
     if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
       CUR_HEADING = pos.coords.heading;
-      needleEl.style.transform = 'translateX(-50%) translateY(-100%) rotate(0deg)';
-      var headingDeg = CUR_HEADING;
-      document.getElementById('heading-needle').style.transform =
-        'translateX(-50%) translateY(-100%) rotate(' + headingDeg + 'deg)';
     } else if (LAST_POS) {
       // Derive heading from movement
       var dLng = (lng - LAST_POS.lng) * Math.PI / 180;
@@ -461,6 +460,13 @@
       var x2 = Math.cos(LAST_POS.lat*Math.PI/180)*Math.sin(lat*Math.PI/180) -
                Math.sin(LAST_POS.lat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.cos(dLng);
       CUR_HEADING = (Math.atan2(y2, x2) * 180 / Math.PI + 360) % 360;
+    }
+    if (CUR_HEADING !== null) {
+      needleEl.style.transform = 'translateX(-50%) translateY(-100%) rotate(' + CUR_HEADING + 'deg)';
+      var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+      var cardDir = dirs[Math.round(CUR_HEADING / 45) % 8];
+      document.getElementById('heading-label').textContent = cardDir;
+      document.getElementById('heading-cardinal').textContent = cardDir + ' ' + Math.round(CUR_HEADING) + '°';
     }
 
     var dist = LAST_POS ? haversine(LAST_POS.lat, LAST_POS.lng, lat, lng) : 0;
@@ -514,13 +520,8 @@
   // ── Stats ──────────────────────────────────────────────────────────────────
   function updateStats() {
     var d = TOTAL_DIST;
-    document.getElementById('sb-dist').textContent   = d >= 1000 ? (d/1000).toFixed(2) : Math.round(d);
-    document.getElementById('sb-dist-u').textContent = d >= 1000 ? 'km' : 'm';
-    document.getElementById('sb-speed').textContent  = CUR_SPEED.toFixed(1);
-    document.getElementById('sb-paws').textContent   = PAW_PRINTS.length;
     document.getElementById('paw-count').textContent = PAW_PRINTS.length;
     document.getElementById('dist-chip').textContent = d >= 1000 ? (d/1000).toFixed(2)+' km' : Math.round(d)+' m';
-    if (START_TS) document.getElementById('sb-time').textContent = formatTime(Date.now() - START_TS);
   }
 
   // ── Resize ─────────────────────────────────────────────────────────────────
@@ -540,15 +541,13 @@
     LAST_POS = null; ORIGIN = null; CUR_SPEED = 0; CUR_HEADING = null;
     unlockedAch = {};
     document.getElementById('paw-count').textContent = '0';
-    document.getElementById('sb-paws').textContent   = '0';
     document.getElementById('dist-chip').textContent = '0 m';
+    document.getElementById('heading-cardinal').textContent = '---';
     stopBtn.disabled = false; centerBtn.disabled = false;
     GPS_WATCH_ID = navigator.geolocation.watchPosition(onGPS, onGPSError, {
       enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
     });
-    STATE_TICK = setInterval(function(){
-      if (START_TS) document.getElementById('sb-time').textContent = formatTime(Date.now() - START_TS);
-    }, 1000);
+    STATE_TICK = setInterval(updateStats, 1000);
     showToast('🐾 Walkies started — go explore!');
   });
 
@@ -573,12 +572,10 @@
     unlockedAch = {}; START_TS = null;
     stopBtn.disabled = true; centerBtn.disabled = true;
     document.getElementById('paw-count').textContent = '0';
-    document.getElementById('sb-paws').textContent   = '0';
     document.getElementById('dist-chip').textContent = '0 m';
-    document.getElementById('sb-dist').textContent   = '0';
-    document.getElementById('sb-dist-u').textContent = 'm';
-    document.getElementById('sb-speed').textContent  = '0.0';
-    document.getElementById('sb-time').textContent   = '0:00';
+    document.getElementById('heading-cardinal').textContent = '---';
+    document.getElementById('heading-label').textContent = 'N';
+    needleEl.style.transform = 'translateX(-50%) translateY(-100%) rotate(0deg)';
     introOvl.style.display = '';
     MAP.autoFit = true; redraw();
   });
