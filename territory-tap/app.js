@@ -74,6 +74,9 @@ var currentTileId = null;
 /** Geolocation watchId so we can stop watching when needed. */
 var watchId = null;
 
+/** Timer ID for the auto-hiding toast notification. */
+var toastTimer = null;
+
 // ══════════════════════════════════════════════════════════════════════════════
 // localStorage helpers
 // ══════════════════════════════════════════════════════════════════════════════
@@ -607,8 +610,8 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.remove('toast-hidden');
   toast.classList.add('toast-show');
-  clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(function () {
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
     toast.classList.remove('toast-show');
     toast.classList.add('toast-hidden');
   }, 2000);
