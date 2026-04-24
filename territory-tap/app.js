@@ -71,6 +71,12 @@ var currentPos = null;
  */
 var currentTileId = null;
 
+/**
+ * The player's current GPS heading in degrees (0=N, 90=E), or null if unavailable.
+ * @type {number | null}
+ */
+var currentHeading = null;
+
 /** Geolocation watchId so we can stop watching when needed. */
 var watchId = null;
 
@@ -215,12 +221,14 @@ function onPositionSuccess(position) {
   var lat = position.coords.latitude;
   var lng = position.coords.longitude;
   var acc = position.coords.accuracy;       // metres
+  var hdg = position.coords.heading;        // degrees, null if unavailable
 
   var newTileId = latLngToTileId(lat, lng);
   var tileChanged = (newTileId !== currentTileId);
 
-  currentPos    = { lat: lat, lng: lng };
-  currentTileId = newTileId;
+  currentPos     = { lat: lat, lng: lng };
+  currentTileId  = newTileId;
+  currentHeading = (hdg !== null && !isNaN(hdg)) ? hdg : currentHeading;
 
   // Update coordinate display
   document.getElementById('gps-coords').textContent =
@@ -499,6 +507,24 @@ function drawMap() {
       ctx.fillText(state.tiles[c.id].claimCount, x + cell / 2, y + cell / 2);
     }
   });
+
+  // Draw player position dot + heading arrow on top of the tile grid
+  if (currentPos && currentTileId) {
+    var playerParts = currentTileId.split(':');
+    var playerRow   = parseInt(playerParts[0], 10);
+    var playerCol   = parseInt(playerParts[1], 10);
+
+    // Sub-tile precision: fractional offset within the tile
+    var colFrac = (currentPos.lng / TILE_SIZE) - playerCol;          // 0=W edge … 1=E edge
+    var rowFrac = (currentPos.lat / TILE_SIZE) - playerRow;          // 0=S edge … 1=N edge
+
+    // Canvas y increases downward, so north edge = smaller y (1 - rowFrac for top-of-tile offset)
+    var dotX = offsetX + (playerCol - minCol) * cell + colFrac * cell;
+    var dotY = offsetY + (playerRow - minRow) * cell + (1 - rowFrac) * cell;
+    var dotR = Math.max(4, Math.min(8, cell * 0.18));
+
+    CanvasMap.drawPlayerDot(ctx, dotX, dotY, currentHeading, '#00ccff', dotR);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

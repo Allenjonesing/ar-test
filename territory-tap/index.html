@@ -50,7 +50,7 @@
     <h2>Your Territory</h2>
     <!-- Canvas used as a simple tile grid; drawn via JS -->
     <canvas id="map-canvas" width="360" height="360"></canvas>
-    <p class="map-hint">Walk around — tiles claim automatically as you enter them. Red = current tile.</p>
+    <p class="map-hint">Walk around — tiles claim automatically as you enter them. Red = current tile · Blue dot = you (arrow = heading).</p>
   </section>
 
   <!-- ── Owned tiles list ── -->
@@ -78,6 +78,7 @@
     <p>Territory Tap MVP · localStorage only · No backend</p>
   </footer>
 
+  <script src="../shared/canvas-map.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
