@@ -3,535 +3,358 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>AR Lab — Honest Architecture for Location-Aware Experiments</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>GPS Game Lab</title>
   <link rel="icon" href="favicon.ico">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body {
       margin: 0; padding: 0;
-      width: 100%;
-      min-height: 100%;
-      overflow-x: hidden;
-      overflow-y: auto;
-      background: #000;
+      width: 100%; min-height: 100%;
+      background: #050810;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
       color: #fff;
+      overflow-x: hidden;
     }
 
-    #canvas-bg {
-      position: fixed; inset: 0;
-      display: block; width: 100%; height: 100%;
-      pointer-events: none;
-    }
-
-    /* ── Page wrapper ──────────────────────────────────────────────────────── */
-    #landing {
-      position: relative;
-      min-height: 100vh;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-start;
-      z-index: 10;
+    #page {
+      max-width: 760px;
+      margin: 0 auto;
       padding: 48px 20px 80px;
-      text-align: center;
     }
 
-    /* ── Header ────────────────────────────────────────────────────────────── */
-    .top-badge {
+    /* ── Header ── */
+    .tag {
       display: inline-block;
-      font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+      font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase;
       color: #00ff88; border: 1px solid rgba(0,255,136,0.4);
       padding: 4px 12px; border-radius: 20px;
-      margin-bottom: 20px;
       background: rgba(0,255,136,0.06);
+      margin-bottom: 18px;
     }
 
     h1 {
       margin: 0 0 10px;
-      font-size: clamp(2.8rem, 8vw, 5rem);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      line-height: 1.05;
+      font-size: clamp(2.2rem, 7vw, 3.8rem);
+      font-weight: 800; letter-spacing: -0.02em; line-height: 1.08;
       background: linear-gradient(135deg, #ffffff 0%, #00ff88 60%, #00ccff 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
-    .subtitle {
-      max-width: 580px;
-      font-size: clamp(0.9rem, 2.5vw, 1.05rem);
-      color: rgba(255,255,255,0.5);
-      line-height: 1.65;
-      margin: 0 0 48px;
+    .sub {
+      font-size: clamp(0.85rem, 2.4vw, 0.98rem);
+      color: rgba(255,255,255,0.45);
+      line-height: 1.65; margin: 0 0 48px;
+      max-width: 520px;
     }
 
-    /* ── Section labels ────────────────────────────────────────────────────── */
+    /* ── Section heading ── */
     .section-label {
-      width: 100%; max-width: 960px;
-      text-align: left;
-      font-size: 0.65rem; font-weight: 700;
+      font-size: 0.62rem; font-weight: 700;
       letter-spacing: 0.2em; text-transform: uppercase;
       color: rgba(0,255,136,0.6);
-      padding: 0 0 10px 4px;
+      padding-bottom: 10px;
       border-bottom: 1px solid rgba(0,255,136,0.12);
       margin-bottom: 16px;
     }
 
-    /* ── Card grids ────────────────────────────────────────────────────────── */
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-      gap: 16px;
-      width: 100%;
-      max-width: 960px;
-      margin-bottom: 40px;
-      text-align: left;
-    }
-
-    .card {
-      position: relative;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 18px; padding: 24px 22px 20px;
-      text-decoration: none; color: inherit;
-      transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
-      cursor: pointer;
-      display: flex; flex-direction: column;
-    }
-
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(0,255,136,0.45);
-      background: rgba(0,255,136,0.06);
-    }
-
-    .card-icon { font-size: 2rem; margin-bottom: 12px; }
-
-    .card h2 {
-      margin: 0 0 6px;
-      font-size: 1.05rem; font-weight: 700;
-      color: #fff; line-height: 1.3;
-    }
-
-    .card .card-desc {
-      font-size: 0.82rem;
-      color: rgba(255,255,255,0.5);
-      line-height: 1.55;
-      margin-bottom: 12px;
-      flex: 1;
-    }
-
-    /* ── Runtime badge ─────────────────────────────────────────────────────── */
-    .runtime-badge {
-      display: inline-block;
-      font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
-      padding: 3px 10px; border-radius: 12px;
-      font-weight: 700; margin-bottom: 10px;
-      align-self: flex-start;
-    }
-
-    .badge-browser { background: rgba(0,204,255,0.15); color: #00ccff; border: 1px solid rgba(0,204,255,0.25); }
-    .badge-gps     { background: rgba(0,255,136,0.13); color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
-    .badge-native  { background: rgba(255,140,0,0.15); color: #ffaa44; border: 1px solid rgba(255,140,0,0.25); }
-    .badge-vps     { background: rgba(180,100,255,0.15); color: #cc88ff; border: 1px solid rgba(180,100,255,0.25); }
-    .badge-gis     { background: rgba(255,80,200,0.15); color: #ff55cc; border: 1px solid rgba(255,80,200,0.25); }
-
-    /* ── Metadata rows inside card ─────────────────────────────────────────── */
-    .card-meta {
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.38);
-      line-height: 1.6;
-      border-top: 1px solid rgba(255,255,255,0.07);
-      padding-top: 10px;
-      margin-top: auto;
-    }
-    .card-meta strong { color: rgba(255,255,255,0.6); }
-
-    .drift-pill {
-      display: inline-block;
-      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
-      padding: 2px 8px; border-radius: 10px;
-      background: rgba(255,60,60,0.18);
-      color: #ff8888;
-      border: 1px solid rgba(255,60,60,0.3);
-      margin-left: 4px;
-      vertical-align: middle;
-    }
-
-    /* ── Coming-soon overlay ───────────────────────────────────────────────── */
-    .card-disabled {
-      pointer-events: none;
-      cursor: default;
-    }
-    .card-disabled:hover {
-      transform: none;
-      border-color: rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.04);
-    }
-
-    .coming-soon-overlay {
-      position: absolute; inset: 0;
-      border-radius: 18px;
-      background: rgba(0,0,0,0.55);
-      display: flex; align-items: center; justify-content: center;
-      backdrop-filter: blur(2px);
-    }
-
-    .coming-soon-label {
-      background: rgba(0,0,0,0.7);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 20px;
-      padding: 6px 16px;
-      font-size: 0.68rem; font-weight: 700;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: rgba(255,255,255,0.6);
-    }
-
-    /* ── Capability panel ──────────────────────────────────────────────────── */
-    #capability-panel {
-      width: 100%; max-width: 960px;
+    /* ── Capability panel ── */
+    #cap-panel {
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px;
-      padding: 20px 24px;
+      border-radius: 14px; padding: 18px 20px;
       margin-bottom: 40px;
-      text-align: left;
     }
-
-    #capability-panel h3 {
-      font-size: 0.72rem; font-weight: 700;
-      letter-spacing: 0.15em; text-transform: uppercase;
-      color: rgba(0,255,136,0.7);
-      margin: 0 0 14px;
+    #cap-panel h3 {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: rgba(0,255,136,0.7); margin: 0 0 12px;
     }
-
-    .cap-grid {
-      display: flex; flex-wrap: wrap; gap: 10px;
-    }
-
+    .cap-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .cap-item {
       display: flex; align-items: center; gap: 7px;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px; padding: 7px 14px;
-      font-size: 0.75rem;
+      border-radius: 10px; padding: 6px 12px; font-size: 0.74rem;
     }
-
     .cap-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: #555; flex-shrink: 0;
-      transition: background 0.3s;
+      background: #444; flex-shrink: 0; transition: background 0.3s;
     }
     .cap-dot.pass    { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.5); }
     .cap-dot.fail    { background: #ff4444; }
     .cap-dot.unknown { background: #ffaa00; }
+    .cap-label { color: rgba(255,255,255,0.62); }
 
-    .cap-label { color: rgba(255,255,255,0.65); }
-
-    /* ── Legacy section ────────────────────────────────────────────────────── */
-    .legacy-note {
-      width: 100%; max-width: 960px;
-      text-align: left;
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.3);
-      margin-bottom: 10px;
-      padding-left: 4px;
+    /* ── Shared library cards ── */
+    .lib-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+      gap: 12px; margin-bottom: 48px;
+    }
+    .lib-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px; padding: 20px 18px;
+    }
+    .lib-card h4 {
+      margin: 0 0 6px; font-size: 0.95rem; font-weight: 700; color: #00ff88;
+    }
+    .lib-card .lib-file {
+      font-size: 0.7rem; font-family: monospace;
+      color: rgba(0,255,136,0.6); margin-bottom: 10px;
+    }
+    .lib-card p {
+      font-size: 0.8rem; color: rgba(255,255,255,0.48);
+      line-height: 1.55; margin: 0 0 10px;
+    }
+    .lib-card ul {
+      margin: 0; padding-left: 1.1em;
+      font-size: 0.75rem; color: rgba(255,255,255,0.38);
+      line-height: 1.7;
+    }
+    .lib-tag {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 8px; margin-bottom: 8px;
+      background: rgba(0,255,136,0.1); color: #00ff88;
+      border: 1px solid rgba(0,255,136,0.25);
     }
 
-    /* ── Footer ────────────────────────────────────────────────────────────── */
+    /* ── GPS console / scratchpad ── */
+    #gps-console {
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(0,255,136,0.2);
+      border-radius: 14px; padding: 18px 20px;
+      margin-bottom: 40px;
+    }
+    #gps-console h3 {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: rgba(0,255,136,0.7); margin: 0 0 12px;
+    }
+    .gps-row {
+      display: flex; gap: 8px; align-items: center;
+      font-size: 0.78rem; color: rgba(255,255,255,0.5);
+      padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .gps-row:last-child { border-bottom: none; }
+    .gps-key { color: rgba(0,255,136,0.6); min-width: 90px; font-family: monospace; font-size: 0.72rem; }
+    .gps-val { color: #fff; font-family: monospace; font-size: 0.8rem; }
+    #gps-btn {
+      margin-top: 14px; padding: 10px 24px;
+      background: rgba(0,255,136,0.12); color: #00ff88;
+      border: 1px solid rgba(0,255,136,0.35); border-radius: 10px;
+      font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+    #gps-btn:hover { background: rgba(0,255,136,0.22); }
+    #gps-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Sandbox note ── */
+    .sandbox-note {
+      background: rgba(0,204,255,0.05);
+      border: 1px solid rgba(0,204,255,0.15);
+      border-radius: 14px; padding: 18px 20px;
+      font-size: 0.82rem; color: rgba(255,255,255,0.45);
+      line-height: 1.7; margin-bottom: 40px;
+    }
+    .sandbox-note strong { color: rgba(0,204,255,0.9); }
+
     footer {
-      position: relative;
-      padding: 20px 0 32px;
-      text-align: center;
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.2);
-      z-index: 10;
+      font-size: 0.68rem; color: rgba(255,255,255,0.16);
+      text-align: center; padding-top: 20px;
     }
   </style>
 </head>
 <body>
+<div id="page">
 
-<canvas id="canvas-bg"></canvas>
-
-<div id="landing">
-
-  <span class="top-badge">Location-Aware AR Research Platform</span>
-  <h1>AR Lab</h1>
-  <p class="subtitle">
-    Honest architecture for location-aware experiments. Each experiment
-    labels its tracking approach, expected accuracy, drift risk, and
-    limitations — no marketing, just real numbers.
+  <span class="tag">GPS Game Lab — Fresh Start</span>
+  <h1>GPS Game Lab</h1>
+  <p class="sub">
+    Clean slate. All previous experiments have been archived.
+    Shared GPS and canvas-map libraries are ready. Build one great GPS game.
   </p>
 
-  <!-- ── 🐾 GPS Dog Walk Games Feature ────────────────────────────────────── -->
-  <a href="games.html" style="
-    width:100%; max-width:960px; display:flex; align-items:center; gap:18px;
-    background:linear-gradient(135deg,rgba(255,136,204,0.1) 0%,rgba(255,204,68,0.08) 100%);
-    border:1px solid rgba(255,136,204,0.35); border-radius:18px;
-    padding:22px 26px; margin-bottom:32px; text-decoration:none; color:#fff;
-    transition:transform 0.2s ease, border-color 0.2s ease;
-  " onmouseover="this.style.transform='translateY(-3px)';this.style.borderColor='rgba(255,136,204,0.65)'"
-     onmouseout="this.style.transform='';this.style.borderColor='rgba(255,136,204,0.35)'">
-    <div style="font-size:3rem; flex-shrink:0;">🐾</div>
-    <div style="flex:1; text-align:left;">
-      <div style="font-size:0.62rem; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:#ff88cc; margin-bottom:6px;">🆕 Now Available</div>
-      <div style="font-size:1.08rem; font-weight:800; margin-bottom:5px;">GPS Dog Walk Games — 5 Playable Modes</div>
-      <div style="font-size:0.82rem; color:rgba(255,255,255,0.48); line-height:1.5;">Curated and expanded to five playable GPS games, including Sidewalk Coin Dash, Red Dot Monster Chase, and Pack Radar Run.</div>
-    </div>
-    <div style="font-size:1.5rem; flex-shrink:0; color:#ff88cc;">→</div>
-  </a>
-
-  <!-- ── Capability Status Panel ──────────────────────────────────────────── -->
-  <div id="capability-panel">
-    <h3>◈ Capability Status — This Device</h3>
-    <div class="cap-grid" id="cap-grid">
+  <!-- ── Capability check ── -->
+  <div id="cap-panel">
+    <h3>◈ Device Capabilities</h3>
+    <div class="cap-grid">
       <div class="cap-item"><div class="cap-dot" id="cap-https"></div><span class="cap-label">HTTPS</span></div>
-      <div class="cap-item"><div class="cap-dot" id="cap-camera"></div><span class="cap-label">Camera</span></div>
-      <div class="cap-item"><div class="cap-dot" id="cap-geo"></div><span class="cap-label">Geolocation</span></div>
-      <div class="cap-item"><div class="cap-dot" id="cap-webxr"></div><span class="cap-label">WebXR AR</span></div>
-      <div class="cap-item"><div class="cap-dot" id="cap-motion"></div><span class="cap-label">Motion Sensors</span></div>
+      <div class="cap-item"><div class="cap-dot" id="cap-geo"></div><span class="cap-label">GPS / Geolocation</span></div>
+      <div class="cap-item"><div class="cap-dot" id="cap-motion"></div><span class="cap-label">Motion / Orientation</span></div>
     </div>
   </div>
 
-  <!-- ── Browser Experiments ──────────────────────────────────────────────── -->
-  <div class="section-label">Browser Experiments — No Install Required</div>
-  <div class="cards">
+  <!-- ── Shared libraries ── -->
+  <div class="section-label">Shared Libraries</div>
+  <div class="lib-grid">
 
-    <a class="card" href="web-lab/experiments/experiment-a/index.html">
-      <div class="card-icon">🔲</div>
-      <span class="runtime-badge badge-browser">WebXR · Local Only</span>
-      <h2>Browser Baseline World Tracking</h2>
-      <p class="card-desc">
-        Tap-to-place AR anchors using WebXR immersive-AR. Anchors are relative
-        to session origin and persist only within the session.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> Room-scale only — resets on restart<br>
-        <strong>Use case:</strong> AR anchor placement baseline; device capability check<br>
-        <strong>Drift:</strong> High <span class="drift-pill">⚠ DRIFT</span><br>
-        <strong>Requires:</strong> Chrome Android + ARCore + HTTPS
-      </div>
-    </a>
+    <div class="lib-card">
+      <span class="lib-tag">GPS Utilities</span>
+      <div class="lib-file">shared/gps.js → window.GPS</div>
+      <h4>GPS</h4>
+      <p>Core GPS math and device API wrapper. All the functions you'll need for a location-based game.</p>
+      <ul>
+        <li>GPS.haversine(lat1,lng1, lat2,lng2) → m</li>
+        <li>GPS.bearing(lat1,lng1, lat2,lng2) → 0–360°</li>
+        <li>GPS.gpsToLocal(lat,lng, origin) → {x,y}</li>
+        <li>GPS.localToGps(x,y, origin) → {lat,lng}</li>
+        <li>GPS.headingLabel(deg) → "NE · 45°"</li>
+        <li>GPS.speedColor(kph) → hex color</li>
+        <li>GPS.watch(onFix, onError) → watchId</li>
+        <li>GPS.stopWatch(watchId)</li>
+        <li>GPS.getCurrentPosition() → Promise</li>
+        <li>GPS.fetchRoadNodes(lat,lng,opts,cb)</li>
+        <li>GPS.randomRoadPoint(lat,lng,nodes,min,max)</li>
+      </ul>
+    </div>
 
-    <a class="card" href="web-lab/experiments/experiment-b/index.html">
-      <div class="card-icon">🗺️</div>
-      <span class="runtime-badge badge-gps">GPS · Map · Browser</span>
-      <h2>Browser Map + GPS Visualization</h2>
-      <p class="card-desc">
-        Live GPS on a Leaflet map with accuracy circle. Add POI markers and
-        see bearing + distance to each. Optional camera compass overlay.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> ~5–15 m GPS only<br>
-        <strong>Use case:</strong> Outdoor POI navigation; GPS accuracy assessment<br>
-        <strong>Drift:</strong> Low (GPS dependent)<br>
-        <strong>Requires:</strong> Any browser · HTTPS · Geolocation permission
-      </div>
-    </a>
+    <div class="lib-card">
+      <span class="lib-tag">Canvas Map</span>
+      <div class="lib-file">shared/canvas-map.js → window.CanvasMap</div>
+      <h4>CanvasMap</h4>
+      <p>2-D canvas map rendering: viewport management, interaction, and drawing utilities.</p>
+      <ul>
+        <li>CanvasMap.createState() → map state</li>
+        <li>CanvasMap.worldToScreen(pt, map)</li>
+        <li>CanvasMap.autoFit(points, canvas, map)</li>
+        <li>CanvasMap.addInteraction(canvas, map, draw)</li>
+        <li>CanvasMap.resizeToWrapper(canvas, wrap, draw)</li>
+        <li>CanvasMap.drawPlayerDot(ctx,sx,sy,hdg,color)</li>
+        <li>CanvasMap.drawPath(ctx,points,map)</li>
+        <li>CanvasMap.drawPickup(ctx,sx,sy,r,color,emoji)</li>
+        <li>CanvasMap.drawPaw(ctx,sx,sy,angle,color,size)</li>
+        <li>CanvasMap.drawNorth(ctx, canvas)</li>
+        <li>CanvasMap.drawScale(ctx, canvas, map)</li>
+      </ul>
+    </div>
 
-  </div>
+    <div class="lib-card">
+      <span class="lib-tag">Capability Check</span>
+      <div class="lib-file">web-lab/shared/capability-check.js → window.CapabilityChecker</div>
+      <h4>CapabilityChecker</h4>
+      <p>Async device capability detection for HTTPS, camera, geolocation, WebXR, and motion sensors.</p>
+      <ul>
+        <li>CapabilityChecker.checkAll() → Promise</li>
+        <li>CapabilityChecker.checkGeolocation()</li>
+        <li>CapabilityChecker.checkMotionSensors()</li>
+        <li>CapabilityChecker.checkWebXR()</li>
+      </ul>
+    </div>
 
-  <!-- ── GPS Experiments ───────────────────────────────────────────────────── -->
-  <div class="section-label">GPS Experiments — Mobile Browser · No Install</div>
-  <div class="cards">
-
-    <a class="card" href="web-lab/experiments/experiment-c/index.html">
-      <div class="card-icon">📡</div>
-      <span class="runtime-badge badge-gps">GPS · Live · Browser</span>
-      <h2>GPS Journey Live Dashboard</h2>
-      <p class="card-desc">
-        Real-time journey tracker with live speed, distance, max speed,
-        heading compass and a colour-coded path canvas. Speed is painted
-        green → amber → red as you move faster.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> ~5–15 m GPS · speed calculated from fixes<br>
-        <strong>Use case:</strong> Live walk/run stats; path visualisation<br>
-        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
-      </div>
-    </a>
-
-    <a class="card" href="web-lab/experiments/experiment-d/index.html">
-      <div class="card-icon">🏚️</div>
-      <span class="runtime-badge badge-gps">GPS · World Gen · Browser</span>
-      <h2>Waypoint Room Builder</h2>
-      <p class="card-desc">
-        Walk a loop and drop up to 12 GPS waypoints. After validation the
-        app builds a dungeon-style corridor map from your real-world path —
-        only where you've already walked. Then step inside a full 3D virtual
-        world of your route and explore it first-person using gyroscope tilt
-        controls on your phone.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> ~5–15 m GPS · min 5 m waypoint spacing<br>
-        <strong>Use case:</strong> GPS world generation; 3D virtual walkthroughs<br>
-        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
-      </div>
-    </a>
-
-    <a class="card" href="web-lab/experiments/experiment-e/index.html">
-      <div class="card-icon">🎬</div>
-      <span class="runtime-badge badge-gps">GPS · Replay · Cinema</span>
-      <h2>GPS Trail Cinema</h2>
-      <p class="card-desc">
-        Record your walk then watch a cinematic replay of your route.
-        Speed is colour-coded; scrub through the timeline to jump to
-        any moment. Live stats: distance, max speed, avg speed, duration.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> ~5–15 m GPS<br>
-        <strong>Use case:</strong> Route review; speed analysis; sharing<br>
-        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
-      </div>
-    </a>
-
-    <a class="card" href="web-lab/experiments/experiment-f/index.html">
-      <div class="card-icon">🗺️</div>
-      <span class="runtime-badge badge-gps">GPS · Territory · Game</span>
-      <h2>GPS Territory Grid</h2>
-      <p class="card-desc">
-        Fill in a GPS grid as you explore — every cell you walk lights up.
-        Speed-coded colours (green → red), visit-count overlays,
-        achievement unlocks, and a coverage donut tracker.
-      </p>
-      <div class="card-meta">
-        <strong>Accuracy:</strong> ~5–15 m GPS · configurable cell size (5–50 m)<br>
-        <strong>Use case:</strong> Gamified exploration; territory coverage<br>
-        <strong>Requires:</strong> Any mobile browser · HTTPS · Geolocation
-      </div>
-    </a>
+    <div class="lib-card">
+      <span class="lib-tag">Debug HUD</span>
+      <div class="lib-file">web-lab/shared/debug-hud.js → window.DebugHUD</div>
+      <h4>DebugHUD</h4>
+      <p>Floating overlay for displaying real-time debug values during development.</p>
+      <ul>
+        <li>DebugHUD.create('container-id')</li>
+        <li>DebugHUD.update({ gpsAccuracy: '8 m', ... })</li>
+        <li>DebugHUD.show() / hide() / toggle()</li>
+      </ul>
+    </div>
 
   </div>
 
-  <!-- ── Legacy Experiments ────────────────────────────────────────────────── -->
-  <div class="section-label">Legacy Experiments</div>
-  <div class="legacy-note">
-    Pre-refactor experiments — kept for reference. <strong style="color:rgba(255,100,100,0.8)">None of these work reliably:</strong>
-    waypoints follow the user instead of staying fixed, heading drift causes severe misalignment,
-    and the A-Frame GPS AR always renders markers on or behind the camera.
-    The Three.js viewers are functional as offline visualisers but have no correct GPS anchoring.
-  </div>
-  <div class="cards">
-
-    <a class="card" href="world-walk.html">
-      <div class="card-icon">🌍</div>
-      <span class="runtime-badge badge-gps">GPS · Three.js · First-Person</span>
-      <h2>GPS World Walker</h2>
-      <p class="card-desc">Walk around recording your GPS trail, then enter a first-person
-         3D corridor world generated from your exact GPS path.</p>
-    </a>
-
-    <a class="card" href="aframe-vr-world.html">
-      <div class="card-icon">🥽</div>
-      <span class="runtime-badge badge-native">A-Frame · VR · GPS</span>
-      <h2>A-Frame GPS VR World</h2>
-      <p class="card-desc">Record your GPS trail, then immerse yourself in a VR scene
-         built from it using A-Frame. Gyroscope-driven look-around.</p>
-    </a>
-
-    <a class="card" href="ar-gps.html">
-      <div class="card-icon">🌐</div>
-      <span class="runtime-badge badge-gps">A-Frame · AR.js · GPS</span>
-      <h2>A-Frame GPS AR Trail</h2>
-      <p class="card-desc">Location-based AR via A-Frame + AR.js. Coloured sphere
-         markers anchored to GPS coordinates in the live camera view.</p>
-    </a>
-
-    <a class="card" href="webxr-gps.html">
-      <div class="card-icon">📡</div>
-      <span class="runtime-badge badge-browser">WebXR · Three.js · GPS</span>
-      <h2>WebXR GPS Anchor AR</h2>
-      <p class="card-desc">WebXR AR session with GPS-anchored 3D pillar markers.
-         Compass + motion-derived heading calibration. Fallback 3D preview.</p>
-    </a>
-
-    <a class="card" href="path-3d.html">
-      <div class="card-icon">🔭</div>
-      <span class="runtime-badge badge-gps">Three.js · GPS · 3D Map</span>
-      <h2>3D GPS Path Viewer</h2>
-      <p class="card-desc">Three.js bird's-eye 3D visualisation of your GPS trail.
-         Orbit, zoom, rotate. Real-time GPS updates with waypoint markers.</p>
-    </a>
-
+  <!-- ── Live GPS scratchpad ── -->
+  <div class="section-label">Live GPS Scratchpad</div>
+  <div id="gps-console">
+    <h3>◈ GPS.watch() — Test Fixture</h3>
+    <div class="gps-row"><span class="gps-key">status</span><span class="gps-val" id="gs-status">idle</span></div>
+    <div class="gps-row"><span class="gps-key">lat</span><span class="gps-val" id="gs-lat">—</span></div>
+    <div class="gps-row"><span class="gps-key">lng</span><span class="gps-val" id="gs-lng">—</span></div>
+    <div class="gps-row"><span class="gps-key">accuracy</span><span class="gps-val" id="gs-acc">—</span></div>
+    <div class="gps-row"><span class="gps-key">speed</span><span class="gps-val" id="gs-spd">—</span></div>
+    <div class="gps-row"><span class="gps-key">heading</span><span class="gps-val" id="gs-hdg">—</span></div>
+    <div class="gps-row"><span class="gps-key">fixes</span><span class="gps-val" id="gs-fixes">0</span></div>
+    <button id="gps-btn">▶ Start GPS Watch</button>
   </div>
 
-</div><!-- /#landing -->
+  <!-- ── Sandbox note ── -->
+  <div class="sandbox-note">
+    <strong>Next step:</strong> Build a new GPS game in <code>web-lab/experiments/</code>.
+    Load <code>shared/gps.js</code> and <code>shared/canvas-map.js</code> via
+    <code>&lt;script src="../../../shared/gps.js"&gt;&lt;/script&gt;</code> —
+    then use <code>GPS.watch()</code>, <code>GPS.gpsToLocal()</code>, and
+    <code>CanvasMap.*</code> to build the map loop. No external dependencies needed.
+  </div>
 
-<footer>AR Lab — Honest Architecture · Open Experiments · © 2025</footer>
+  <footer>GPS Game Lab · Clean Slate · © 2026</footer>
+</div>
 
+<!-- ── Shared libraries ── -->
+<script src="shared/gps.js"></script>
+<script src="shared/canvas-map.js"></script>
 <script src="web-lab/shared/capability-check.js"></script>
+
 <script>
-  (function () {
-    'use strict';
+(function () {
+  'use strict';
 
-    // ── Starfield ──────────────────────────────────────────────────────────
-    var canvas = document.getElementById('canvas-bg');
-    var ctx = canvas.getContext('2d');
-    var W, H, stars = [];
+  // ── Capability dots ────────────────────────────────────────────────────────
+  function setDot(id, state) {
+    var el = document.getElementById(id);
+    if (el) el.className = 'cap-dot ' + state;
+  }
 
-    function resize() {
-      W = canvas.width  = window.innerWidth;
-      H = canvas.height = window.innerHeight;
+  setDot('cap-https',
+    location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      ? 'pass' : 'fail');
+
+  setDot('cap-geo',    navigator.geolocation ? 'pass' : 'fail');
+  setDot('cap-motion', typeof DeviceOrientationEvent !== 'undefined' ? 'unknown' : 'fail');
+
+  // ── GPS scratchpad ─────────────────────────────────────────────────────────
+  var watchId   = null;
+  var fixCount  = 0;
+  var btn       = document.getElementById('gps-btn');
+  var gsStatus  = document.getElementById('gs-status');
+
+  function set(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  btn.addEventListener('click', function () {
+    if (watchId !== null) {
+      GPS.stopWatch(watchId);
+      watchId = null;
+      fixCount = 0;
+      btn.textContent = '▶ Start GPS Watch';
+      gsStatus.textContent = 'stopped';
+      return;
     }
 
-    function initStars(n) {
-      stars = [];
-      for (var i = 0; i < n; i++) {
-        stars.push({
-          x: Math.random() * W,
-          y: Math.random() * H,
-          r: Math.random() * 1.2 + 0.2,
-          a: Math.random(),
-          da: (Math.random() - 0.5) * 0.004,
-          dx: (Math.random() - 0.5) * 0.08,
-          dy: (Math.random() - 0.5) * 0.08
-        });
+    if (!navigator.geolocation) {
+      gsStatus.textContent = 'unavailable';
+      return;
+    }
+
+    gsStatus.textContent = 'waiting for fix…';
+    btn.textContent = '⏹ Stop GPS Watch';
+
+    watchId = GPS.watch(
+      function (fix) {
+        fixCount++;
+        gsStatus.textContent = 'active';
+        set('gs-lat',   fix.lat.toFixed(7));
+        set('gs-lng',   fix.lng.toFixed(7));
+        set('gs-acc',   fix.accuracy.toFixed(1) + ' m');
+        set('gs-spd',   fix.speed.toFixed(1) + ' km/h');
+        set('gs-hdg',   GPS.headingLabel(fix.heading));
+        set('gs-fixes', fixCount);
+      },
+      function (err) {
+        gsStatus.textContent = 'error: ' + err.message;
       }
-    }
+    );
+  });
 
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      for (var i = 0; i < stars.length; i++) {
-        var s = stars[i];
-        s.a = Math.max(0.05, Math.min(1, s.a + s.da));
-        if (s.a <= 0.05 || s.a >= 1) s.da *= -1;
-        s.x = (s.x + s.dx + W) % W;
-        s.y = (s.y + s.dy + H) % H;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(180,255,220,' + (s.a * 0.7) + ')';
-        ctx.fill();
-      }
-      requestAnimationFrame(draw);
-    }
-
-    window.addEventListener('resize', function () { resize(); initStars(220); });
-    resize();
-    initStars(220);
-    draw();
-
-    // ── Capability check ───────────────────────────────────────────────────
-    function setDot(id, status) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.className = 'cap-dot ' + status;
-    }
-
-    if (window.CapabilityChecker) {
-      CapabilityChecker.checkAll().then(function (report) {
-        setDot('cap-https',  report.https.status);
-        setDot('cap-camera', report.camera.status);
-        setDot('cap-geo',    report.geolocation.status);
-        setDot('cap-webxr',  report.webxr.status);
-        setDot('cap-motion', report.motionSensors.status);
-      });
-    }
-
-  }());
+}());
 </script>
 </body>
 </html>
