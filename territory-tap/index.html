@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Territory Tap</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <h1>📍 Territory Tap</h1>
+    <p class="subtitle">Claim the world, one tile at a time.</p>
+  </header>
+
+  <!-- ── Status bar ── -->
+  <section id="status-bar">
+    <div class="stat">
+      <span class="stat-label">Score</span>
+      <span class="stat-value" id="score-display">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Tiles Owned</span>
+      <span class="stat-value" id="tile-count-display">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Current Tile</span>
+      <span class="stat-value" id="current-tile-display">—</span>
+    </div>
+  </section>
+
+  <!-- ── GPS info ── -->
+  <section id="gps-info">
+    <p id="gps-coords">Waiting for location…</p>
+    <p id="gps-error" class="error-msg" hidden></p>
+  </section>
+
+  <!-- ── Action buttons ── -->
+  <section id="actions">
+    <button id="btn-locate" class="btn btn-primary">📡 Get Current Location</button>
+    <button id="btn-claim" class="btn btn-claim" disabled>🚩 Claim Tile</button>
+  </section>
+
+  <!-- ── Mini grid map ── -->
+  <section id="map-section">
+    <h2>Your Territory</h2>
+    <!-- Canvas used as a simple tile grid; drawn via JS -->
+    <canvas id="map-canvas" width="360" height="360"></canvas>
+    <p class="map-hint">Each square = one tile you own. Red border = current tile.</p>
+  </section>
+
+  <!-- ── Owned tiles list ── -->
+  <section id="tiles-section">
+    <h2>Tile Log</h2>
+    <div id="tiles-list">
+      <p class="empty-msg">No tiles claimed yet.</p>
+    </div>
+  </section>
+
+  <!-- ── Data management ── -->
+  <section id="data-section">
+    <h2>Save Data</h2>
+    <div id="data-buttons">
+      <button id="btn-export" class="btn btn-secondary">💾 Export Save JSON</button>
+      <button id="btn-import" class="btn btn-secondary">📂 Import Save JSON</button>
+      <button id="btn-reset"  class="btn btn-danger">🗑️ Reset Local Save</button>
+    </div>
+    <!-- Hidden file input for import -->
+    <input type="file" id="import-file-input" accept=".json,application/json" hidden />
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>Territory Tap MVP · localStorage only · No backend</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
