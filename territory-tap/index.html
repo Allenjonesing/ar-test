@@ -39,15 +39,18 @@
   <!-- ── Action buttons ── -->
   <section id="actions">
     <button id="btn-locate" class="btn btn-primary">📡 Get Current Location</button>
-    <button id="btn-claim" class="btn btn-claim" disabled>🚩 Claim Tile</button>
+    <button id="btn-claim" class="btn btn-claim" disabled>⚡ Boost Tile (+1 pt)</button>
   </section>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast toast-hidden" aria-live="polite"></div>
 
   <!-- ── Mini grid map ── -->
   <section id="map-section">
     <h2>Your Territory</h2>
     <!-- Canvas used as a simple tile grid; drawn via JS -->
     <canvas id="map-canvas" width="360" height="360"></canvas>
-    <p class="map-hint">Each square = one tile you own. Red border = current tile.</p>
+    <p class="map-hint">Walk around — tiles claim automatically as you enter them. Red = current tile.</p>
   </section>
 
   <!-- ── Owned tiles list ── -->

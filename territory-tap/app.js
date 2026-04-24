@@ -74,6 +74,9 @@ var currentTileId = null;
 /** Geolocation watchId so we can stop watching when needed. */
 var watchId = null;
 
+/** Timer ID for the auto-hiding toast notification. */
+var toastTimer = null;
+
 // ══════════════════════════════════════════════════════════════════════════════
 // localStorage helpers
 // ══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +208,7 @@ function getPositionOnce() {
 
 /**
  * Called whenever a new GPS fix arrives.
+ * Auto-claims the tile when the player walks into a new one.
  * @param {GeolocationPosition} position
  */
 function onPositionSuccess(position) {
@@ -212,8 +216,11 @@ function onPositionSuccess(position) {
   var lng = position.coords.longitude;
   var acc = position.coords.accuracy;       // metres
 
+  var newTileId = latLngToTileId(lat, lng);
+  var tileChanged = (newTileId !== currentTileId);
+
   currentPos    = { lat: lat, lng: lng };
-  currentTileId = latLngToTileId(lat, lng);
+  currentTileId = newTileId;
 
   // Update coordinate display
   document.getElementById('gps-coords').textContent =
@@ -224,7 +231,40 @@ function onPositionSuccess(position) {
   document.getElementById('btn-claim').disabled = false;
 
   hideError();
+
+  // Auto-claim the tile when we walk into a new one
+  if (tileChanged) {
+    autoClaimTile();
+  }
+
   renderUI();
+}
+
+/**
+ * Automatically claim the current tile when the player walks into it.
+ * Shows a toast notification for feedback.
+ */
+function autoClaimTile() {
+  if (!currentTileId) { return; }
+
+  var now = new Date().toISOString();
+  var existing = state.tiles[currentTileId];
+
+  if (existing) {
+    existing.claimCount   += 1;
+    existing.lastVisitedAt = now;
+    showToast('📍 Revisited tile  +' + POINTS_REVISIT + ' pt');
+  } else {
+    state.tiles[currentTileId] = {
+      tileId:        currentTileId,
+      claimedAt:     now,
+      lastVisitedAt: now,
+      claimCount:    1
+    };
+    showToast('🚩 New tile claimed!  +' + POINTS_NEW_TILE + ' pts');
+  }
+
+  saveState();
 }
 
 /**
@@ -255,9 +295,8 @@ function onPositionError(err) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Claim or revisit the current tile.
- * - First visit: creates a new TileRecord with claimCount = 1.
- * - Revisit: increments claimCount and updates lastVisitedAt.
+ * Manually boost the current tile (adds a revisit point).
+ * Tiles are auto-claimed on entry, so manual taps are for extra points.
  */
 function claimCurrentTile() {
   if (!currentTileId) {
@@ -269,11 +308,11 @@ function claimCurrentTile() {
   var existing = state.tiles[currentTileId];
 
   if (existing) {
-    // Revisiting an owned tile
+    // Boost: add a revisit point
     existing.claimCount   += 1;
     existing.lastVisitedAt = now;
   } else {
-    // Brand-new tile
+    // No auto-claim yet (GPS hasn't fired after entering tile) — claim it now
     state.tiles[currentTileId] = {
       tileId:        currentTileId,
       claimedAt:     now,
@@ -284,11 +323,12 @@ function claimCurrentTile() {
 
   saveState();
   renderUI();
+  showToast(existing ? '⚡ Boosted! +' + POINTS_REVISIT + ' pt' : '🚩 Claimed! +' + POINTS_NEW_TILE + ' pts');
 
   // Brief visual feedback on the button
   var btn = document.getElementById('btn-claim');
   var originalText = btn.textContent;
-  btn.textContent = existing ? '✅ Revisited!' : '🎉 Claimed!';
+  btn.textContent = existing ? '✅ Boosted!' : '🎉 Claimed!';
   btn.disabled = true;
   setTimeout(function () {
     btn.textContent = originalText;
@@ -558,6 +598,23 @@ function hideError() {
   var el = document.getElementById('gps-error');
   el.hidden = true;
   el.textContent = '';
+}
+
+/**
+ * Show a brief toast notification that fades out automatically.
+ * @param {string} msg
+ */
+function showToast(msg) {
+  var toast = document.getElementById('toast');
+  if (!toast) { return; }
+  toast.textContent = msg;
+  toast.classList.remove('toast-hidden');
+  toast.classList.add('toast-show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    toast.classList.remove('toast-show');
+    toast.classList.add('toast-hidden');
+  }, 2000);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

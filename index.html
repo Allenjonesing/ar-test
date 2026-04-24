@@ -89,6 +89,47 @@
     .cap-dot.unknown { background: #ffaa00; }
     .cap-label { color: rgba(255,255,255,0.62); }
 
+    /* ── Game card link ── */
+    .game-card {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: rgba(0,255,136,0.05);
+      border: 1.5px solid rgba(0,255,136,0.25);
+      border-radius: 16px;
+      padding: 20px 22px;
+      margin-bottom: 40px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .game-card:hover {
+      background: rgba(0,255,136,0.1);
+      border-color: rgba(0,255,136,0.5);
+    }
+    .game-card-icon {
+      font-size: 2.2rem;
+      flex-shrink: 0;
+    }
+    .game-card-body { flex: 1; }
+    .game-card-body h3 {
+      margin: 0 0 5px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #00ff88;
+    }
+    .game-card-body p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.5);
+      line-height: 1.5;
+    }
+    .game-card-arrow {
+      font-size: 1.4rem;
+      color: rgba(0,255,136,0.6);
+      flex-shrink: 0;
+    }
+
     /* ── Shared library cards ── */
     .lib-grid {
       display: grid;
@@ -172,11 +213,10 @@
 <body>
 <div id="page">
 
-  <span class="tag">GPS Game Lab — Fresh Start</span>
+  <span class="tag">GPS Game Lab</span>
   <h1>GPS Game Lab</h1>
   <p class="sub">
-    Clean slate. All previous experiments have been archived.
-    Shared GPS and canvas-map libraries are ready. Build one great GPS game.
+    Walk around to claim GPS tiles, build territory, and score points — all in your browser with no backend or API keys needed.
   </p>
 
   <!-- ── Capability check ── -->
@@ -188,6 +228,17 @@
       <div class="cap-item"><div class="cap-dot" id="cap-motion"></div><span class="cap-label">Motion / Orientation</span></div>
     </div>
   </div>
+
+  <!-- ── Territory Tap game link ── -->
+  <div class="section-label">Play Now</div>
+  <a href="territory-tap/" class="game-card">
+    <div class="game-card-icon">📍</div>
+    <div class="game-card-body">
+      <h3>Territory Tap</h3>
+      <p>Walk around to automatically claim GPS tiles and build your territory. Score points, revisit tiles, and track your coverage on the mini-map.</p>
+    </div>
+    <div class="game-card-arrow">→</div>
+  </a>
 
   <!-- ── Shared libraries ── -->
   <div class="section-label">Shared Libraries</div>
