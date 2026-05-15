@@ -2,5 +2,12 @@
   "version": "2.0.0",
   "updatedAt": "2026-04-24T00:00:00Z",
   "note": "Purged. All previous experiments removed. New GPS game project starting fresh.",
-  "experiments": []
+  "experiments": [
+    {
+      "id": "dead-zone-gps",
+      "title": "Dead Zone GPS",
+      "path": "experiments/dead-zone-gps/index.html",
+      "description": "GPS roguelite survival prototype with fake-walk desktop debug mode."
+    }
+  ]
 }

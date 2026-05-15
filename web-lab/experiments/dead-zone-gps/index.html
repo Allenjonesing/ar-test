@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dead Zone GPS</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <p class="eyebrow">GPS Roguelite Survival Prototype</p>
+      <h1>☢️ Dead Zone GPS</h1>
+      <p class="subtitle">Scavenge supply caches, avoid expanding danger zones, and use fake-walk controls on desktop.</p>
+    </header>
+
+    <section class="hud-grid" aria-label="Run stats">
+      <article class="hud-card">
+        <span class="hud-label">HP</span>
+        <span class="hud-value" id="hp">100</span>
+      </article>
+      <article class="hud-card">
+        <span class="hud-label">Supplies</span>
+        <span class="hud-value" id="supplies">0</span>
+      </article>
+      <article class="hud-card">
+        <span class="hud-label">Mode</span>
+        <span class="hud-value" id="mode">GPS</span>
+      </article>
+      <article class="hud-card">
+        <span class="hud-label">Accuracy</span>
+        <span class="hud-value" id="accuracy">--</span>
+      </article>
+    </section>
+
+    <section class="controls" aria-label="Map controls">
+      <button id="reset" type="button">New Run</button>
+      <button id="autofit" type="button">Auto-fit</button>
+      <p class="controls-note">Desktop: WASD / arrow keys. Hold Shift for larger fake-walk steps.</p>
+    </section>
+
+    <section id="map-wrap" class="map-wrap" aria-label="World map">
+      <canvas id="map"></canvas>
+    </section>
+
+    <section class="log-panel" aria-live="polite">
+      <h2>Field Log</h2>
+      <div id="log" class="log-list"></div>
+    </section>
+  </main>
+
+  <script src="../../../shared/canvas-map.js"></script>
+  <script src="../../../shared/gps.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
