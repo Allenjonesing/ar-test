@@ -150,8 +150,9 @@
   }
 
   function save() {
+    const playerForSave = { ...state.player, lat: null, lon: null };
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      player: state.player,
+      player: playerForSave,
       caches: state.caches,
       dangers: state.dangers,
       logs: state.logs,
